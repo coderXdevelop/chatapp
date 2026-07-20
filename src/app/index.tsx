@@ -1,9 +1,12 @@
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
+import { Title } from "../components/title";
+import Profile from "../pages/profile";
 
 export default function Index() {
   return (
     <View style={styles.container}>
-      <Text>Chat App</Text>
+      <Title>Welcome to the Chat-App</Title>
+      <Profile />
     </View>
   );
 }
