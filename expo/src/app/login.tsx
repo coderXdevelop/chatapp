@@ -56,10 +56,12 @@ export default function LoginScreen() {
     }
 
     // Fallback ApplicationVerifier for Native & Test Phone Numbers
+    // Note: Firebase Auth internally calls `verifier._reset()` in _verifyPhoneNumber line 8125
     return {
       type: 'recaptcha',
       verify: async () => 'mock-recaptcha-token',
-    };
+      _reset: () => {},
+    } as any;
   };
 
   const handleSendOTP = async () => {
