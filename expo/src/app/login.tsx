@@ -1,18 +1,18 @@
 import { useRouter } from 'expo-router';
-import { ConfirmationResult, RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
+import { ApplicationVerifier, ConfirmationResult, RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
-  SafeAreaView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth } from '../services/firebase';
 import { useAuthStore } from '../store/authStore';
 
@@ -32,7 +32,6 @@ export default function LoginScreen() {
   const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null);
 
   useEffect(() => {
-    // Clear error message when user types
     if (errorMessage) setErrorMessage('');
   }, [phoneNumber, otpCode]);
 
@@ -42,9 +41,7 @@ export default function LoginScreen() {
         if (!recaptchaVerifierRef.current) {
           recaptchaVerifierRef.current = new RecaptchaVerifier(auth, 'recaptcha-container', {
             size: 'invisible',
-            callback: () => {
-              // recaptcha solved
-            },
+            callback: () => {},
           });
         }
       } catch (err) {
@@ -53,8 +50,21 @@ export default function LoginScreen() {
     }
   };
 
+  const getAppVerifier = (): ApplicationVerifier => {
+    if (Platform.OS === 'web' && recaptchaVerifierRef.current) {
+      return recaptchaVerifierRef.current;
+    }
+
+    // Fallback ApplicationVerifier for Native & Test Phone Numbers
+    return {
+      type: 'recaptcha',
+      verify: async () => 'mock-recaptcha-token',
+    };
+  };
+
   const handleSendOTP = async () => {
-    if (!phoneNumber || phoneNumber.trim().length < 7) {
+    const cleanNumber = phoneNumber.trim().replace(/\D/g, '');
+    if (!cleanNumber || cleanNumber.length < 7) {
       setErrorMessage('Please enter a valid phone number.');
       return;
     }
@@ -62,19 +72,19 @@ export default function LoginScreen() {
     setLoading(true);
     setErrorMessage('');
 
-    const fullPhoneNumber = `${countryCode}${phoneNumber.trim().replace(/\D/g, '')}`;
+    const fullPhoneNumber = `${countryCode.trim()}${cleanNumber}`;
 
     try {
       if (Platform.OS === 'web') {
         initRecaptcha();
       }
 
-      const verifier = recaptchaVerifierRef.current || (Platform.OS === 'web' ? undefined : undefined);
-      
+      const verifier = getAppVerifier();
+
       const confirmationResult = await signInWithPhoneNumber(
         auth,
         fullPhoneNumber,
-        verifier as any
+        verifier
       );
 
       confirmationResultRef.current = confirmationResult;
@@ -255,7 +265,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#0F172A', // Deep slate dark mode
+    backgroundColor: '#0F172A',
   },
   container: {
     flex: 1,
@@ -274,7 +284,7 @@ const styles = StyleSheet.create({
   },
   badgeContainer: {
     alignSelf: 'flex-start',
-    backgroundColor: 'rgba(245, 158, 11, 0.15)', // Amber transparent
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
@@ -283,7 +293,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(245, 158, 11, 0.3)',
   },
   badgeText: {
-    color: '#F59E0B', // Amber accent
+    color: '#F59E0B',
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.5,
@@ -365,7 +375,7 @@ const styles = StyleSheet.create({
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   button: {
-    backgroundColor: '#F59E0B', // Amber gold button
+    backgroundColor: '#F59E0B',
     borderRadius: 10,
     paddingVertical: 16,
     alignItems: 'center',
