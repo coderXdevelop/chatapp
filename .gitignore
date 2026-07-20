@@ -41,3 +41,8 @@ example
 # generated native folders
 /ios
 /android
+
+# Ignore all env files
+.env
+*.env
+server/.env
