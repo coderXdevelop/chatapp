@@ -15,12 +15,12 @@ ChatConnect is a WhatsApp-style real-time messaging app.
 - **Database**: MongoDB (Atlas free tier)
 - **Cache / presence**: Redis (Upstash free tier)
 - **Real-time**: Socket.io
-- **Auth**: Firebase Phone Auth (OTP) + custom JWT session on top
+- **Auth**: Self-built email OTP (Redis-cached code + Resend or Gmail SMTP) + JWT session
 - **Media storage**: Cloudinary
 - **Push notifications**: Expo Notifications
 - **Hosting**: Render (backend), EAS / local builds (client)
 
-Everything runs on free tiers. Do not introduce paid services, paid API tiers, or dependencies that require a credit card, without asking first.
+Everything runs on free tiers. Do not introduce paid services, paid API tiers, or dependencies that require a credit card, without asking first. **In particular: do not add SMS-based phone auth (Firebase Phone Auth, Twilio, MSG91, etc.) — these require a billing account and charge per message from the first send, with no meaningful free tier for phone verification specifically.** Auth uses email-based OTP instead.
 
 ## Repository Layout
 
@@ -43,12 +43,12 @@ Everything runs on free tiers. Do not introduce paid services, paid API tiers, o
 3. **Match the existing dark-mode finance-adjacent aesthetic** already used in the client: deep slate backgrounds, amber/gold accents, Sora (headings) and DM Mono (numeric/mono content) fonts, and the shared utility class system. Don't introduce a new design system without asking.
 4. **Stay within the free-tier stack.** Don't add packages or services that require payment (e.g. don't swap Firebase Auth for Twilio, don't add a paid DB tier) without flagging it to the user first and explaining why.
 5. **Persist all messages to MongoDB**, never rely on Socket.io alone for message durability. Socket.io is for real-time delivery; MongoDB is the source of truth.
-6. **JWT handling**: access tokens are short-lived; refresh tokens are used for renewal. Never store tokens in AsyncStorage — always `expo-secure-store`.
+6. **JWT handling**: access tokens are short-lived; refresh tokens are used for renewal. Never store tokens in AsyncStorage — always `expo-secure-store`. OTP codes live only in Redis with a short TTL — never store them in MongoDB or log them.
 7. **Follow the phased build order** in the project roadmap doc (ChatConnect_Roadmap.docx). Don't jump ahead to later-phase features (e.g. E2E encryption, groups) while earlier-phase work (e.g. core 1:1 messaging) is incomplete or untested, unless the user explicitly asks for that feature.
 8. **Write TypeScript, not JavaScript**, for both client and server. Type all API request/response shapes.
 9. **Keep Socket.io events and REST routes documented** as you add them — maintain a running list (either in this file or a linked `API.md`) of event names and endpoint signatures so nothing is duplicated or renamed inconsistently.
 10. **Ask before large refactors.** If a task seems to require touching more than ~5 files or restructuring folders, confirm with the user first.
-11. **Test auth flows manually against Firebase's test phone numbers** during development, not real SMS sends, to avoid burning the free quota.
+11. **Never send real OTP emails during automated tests.** Mock the email-send step in tests/CI to avoid burning the free email quota; only send real emails during manual/local testing.
 12. **When in doubt about scope, do less.** Implement exactly what was asked; note follow-up suggestions separately rather than building them unprompted.
 
 ## Environment Variables (names only — do not hardcode values)
@@ -61,9 +61,11 @@ MONGODB_URI
 REDIS_URL
 JWT_ACCESS_SECRET
 JWT_REFRESH_SECRET
-FIREBASE_PROJECT_ID
-FIREBASE_CLIENT_EMAIL
-FIREBASE_PRIVATE_KEY
+RESEND_API_KEY
+EMAIL_FROM_ADDRESS
+# If using Gmail SMTP instead of Resend:
+# GMAIL_USER
+# GMAIL_APP_PASSWORD
 CLOUDINARY_CLOUD_NAME
 CLOUDINARY_API_KEY
 CLOUDINARY_API_SECRET
@@ -74,18 +76,14 @@ EXPO_ACCESS_TOKEN
 
 ```
 EXPO_PUBLIC_API_URL
-EXPO_PUBLIC_FIREBASE_API_KEY
-EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN
-EXPO_PUBLIC_FIREBASE_PROJECT_ID
-EXPO_PUBLIC_FIREBASE_APP_ID
 ```
 
 ## Current Status
 
 *Update this section as the project progresses so any agent picking up the repo has current context.*
 
-- [x] Phase 0 — Project Setup
-- [x] Phase 1 — OTP Authentication (Firebase)
+- [ ] Phase 0 — Project Setup
+- [ ] Phase 1 — OTP Authentication (Email)
 - [ ] Phase 2 — Contacts & User Discovery
 - [ ] Phase 3 — Core 1:1 Messaging
 - [ ] Phase 4 — Presence & Notifications
