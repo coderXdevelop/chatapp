@@ -22,6 +22,7 @@ export default function ProfileScreen() {
   const { user, logout, updateProfile, removeAvatar, isLoading } = useAuthStore();
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
   const [newDisplayName, setNewDisplayName] = useState(user?.displayName || '');
   const [newAge, setNewAge] = useState(user?.age ? String(user.age) : '');
   const [newStatus, setNewStatus] = useState(user?.status || '');
@@ -134,29 +135,20 @@ export default function ProfileScreen() {
 
         {/* Profile Card */}
         <View style={styles.profileCard}>
-          <TouchableOpacity style={styles.avatarContainer} onPress={handlePickAvatar} disabled={isLoading}>
+          <TouchableOpacity style={styles.avatarContainer} onPress={() => setIsAvatarModalOpen(true)} disabled={isLoading}>
             {user.avatarUrl ? (
               <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
             ) : (
               <Text style={styles.avatarInitial}>{initial}</Text>
             )}
             <View style={styles.avatarCameraBadge}>
-              <Text style={styles.avatarCameraIcon}>📷</Text>
+              <Text style={styles.avatarCameraIcon}>🔍</Text>
             </View>
           </TouchableOpacity>
 
-          <View style={styles.avatarActionRow}>
-            <TouchableOpacity onPress={handlePickAvatar} disabled={isLoading}>
-              <Text style={styles.avatarActionText}>
-                {user.avatarUrl ? 'Change Photo' : '+ Upload Photo'}
-              </Text>
-            </TouchableOpacity>
-            {user.avatarUrl ? (
-              <TouchableOpacity onPress={handleRemoveAvatar} disabled={isLoading}>
-                <Text style={styles.avatarRemoveText}>Remove Photo</Text>
-              </TouchableOpacity>
-            ) : null}
-          </View>
+          <TouchableOpacity style={styles.avatarActionRow} onPress={() => setIsAvatarModalOpen(true)}>
+            <Text style={styles.avatarActionText}>View / Manage Profile Picture</Text>
+          </TouchableOpacity>
 
           <Text style={styles.displayName}>{user.displayName}</Text>
           <Text style={styles.emailText}>{user.email}</Text>
@@ -289,6 +281,64 @@ export default function ProfileScreen() {
                   <Text style={styles.saveModalText}>Save Changes</Text>
                 )}
               </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Avatar View & Action Modal */}
+      <Modal visible={isAvatarModalOpen} animationType="fade" transparent onRequestClose={() => setIsAvatarModalOpen(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.avatarModalContent}>
+            <View style={styles.avatarModalHeader}>
+              <Text style={styles.avatarModalTitle}>Profile Picture</Text>
+              <TouchableOpacity onPress={() => setIsAvatarModalOpen(false)} style={styles.closeModalBtn}>
+                <Text style={styles.closeModalText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Avatar Preview */}
+            <View style={styles.avatarFullPreviewContainer}>
+              {user.avatarUrl ? (
+                <Image source={{ uri: user.avatarUrl }} style={styles.avatarFullImage} resizeMode="cover" />
+              ) : (
+                <View style={styles.avatarFullPlaceholder}>
+                  <Text style={styles.avatarFullInitial}>{initial}</Text>
+                </View>
+              )}
+            </View>
+
+            {/* Action Buttons inside Modal */}
+            <View style={styles.avatarModalActions}>
+              <TouchableOpacity
+                style={styles.avatarModalUploadBtn}
+                onPress={async () => {
+                  setIsAvatarModalOpen(false);
+                  setTimeout(() => {
+                    handlePickAvatar();
+                  }, 300);
+                }}
+                disabled={isLoading}
+              >
+                <Text style={styles.avatarModalUploadText}>
+                  {user.avatarUrl ? '📷 Upload New Avatar' : '+ Upload Avatar'}
+                </Text>
+              </TouchableOpacity>
+
+              {user.avatarUrl ? (
+                <TouchableOpacity
+                  style={styles.avatarModalRemoveBtn}
+                  onPress={async () => {
+                    setIsAvatarModalOpen(false);
+                    setTimeout(() => {
+                      handleRemoveAvatar();
+                    }, 300);
+                  }}
+                  disabled={isLoading}
+                >
+                  <Text style={styles.avatarModalRemoveText}>🗑️ Remove Avatar</Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
           </View>
         </View>
@@ -592,5 +642,93 @@ const styles = StyleSheet.create({
   saveModalText: {
     color: '#0F172A',
     fontWeight: '700',
+  },
+  avatarModalContent: {
+    backgroundColor: '#1E293B',
+    borderRadius: 24,
+    padding: 24,
+    width: '90%',
+    maxWidth: 380,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  avatarModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: 20,
+  },
+  avatarModalTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#F8FAFC',
+  },
+  closeModalBtn: {
+    padding: 4,
+  },
+  closeModalText: {
+    fontSize: 20,
+    color: '#94A3B8',
+    fontWeight: '700',
+  },
+  avatarFullPreviewContainer: {
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: '#0F172A',
+    borderWidth: 3,
+    borderColor: '#F59E0B',
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+    marginBottom: 24,
+  },
+  avatarFullImage: {
+    width: '100%',
+    height: '100%',
+  },
+  avatarFullPlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#F59E0B',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarFullInitial: {
+    fontSize: 80,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  avatarModalActions: {
+    width: '100%',
+    gap: 12,
+  },
+  avatarModalUploadBtn: {
+    backgroundColor: '#F59E0B',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    width: '100%',
+  },
+  avatarModalUploadText: {
+    color: '#0F172A',
+    fontWeight: '800',
+    fontSize: 15,
+  },
+  avatarModalRemoveBtn: {
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.4)',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    width: '100%',
+  },
+  avatarModalRemoveText: {
+    color: '#EF4444',
+    fontWeight: '700',
+    fontSize: 15,
   },
 });
