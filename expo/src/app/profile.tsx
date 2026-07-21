@@ -87,7 +87,7 @@ export default function ProfileScreen() {
           </View>
 
           <Text style={styles.displayName}>{user.displayName}</Text>
-          <Text style={styles.phoneNumber}>{user.phoneNumber}</Text>
+          <Text style={styles.emailText}>{user.email}</Text>
 
           <View style={styles.statusBox}>
             <Text style={styles.statusLabel}>STATUS</Text>
@@ -114,7 +114,7 @@ export default function ProfileScreen() {
 
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Auth Method</Text>
-            <Text style={styles.detailValue}>Firebase Phone OTP</Text>
+            <Text style={styles.detailValue}>Email OTP</Text>
           </View>
 
           <View style={styles.divider} />
@@ -269,7 +269,7 @@ const styles = StyleSheet.create({
     color: '#F8FAFC',
     marginBottom: 4,
   },
-  phoneNumber: {
+  emailText: {
     fontSize: 14,
     color: '#F59E0B',
     fontWeight: '600',

@@ -4,7 +4,7 @@ import { getItem, removeItem, setItem } from '../services/storage';
 
 export interface UserProfile {
   id: string;
-  phoneNumber: string;
+  email: string;
   displayName: string;
   status: string;
   avatarUrl?: string;
@@ -17,7 +17,8 @@ interface AuthState {
   isLoading: boolean;
   isInitialized: boolean;
 
-  loginWithFirebaseToken: (idToken: string, displayName?: string) => Promise<boolean>;
+  sendOtp: (email: string) => Promise<{ success: boolean; message?: string }>;
+  verifyOtp: (email: string, otp: string, displayName?: string) => Promise<boolean>;
   checkAuth: () => Promise<void>;
   updateProfile: (data: { displayName?: string; status?: string; avatarUrl?: string }) => Promise<boolean>;
   logout: () => Promise<void>;
@@ -29,11 +30,26 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   isLoading: false,
   isInitialized: false,
 
-  loginWithFirebaseToken: async (idToken: string, displayName?: string) => {
+  sendOtp: async (email: string) => {
     set({ isLoading: true });
     try {
-      const response = await api.post('/api/auth/firebase-login', {
-        idToken,
+      const response = await api.post('/api/auth/send-otp', { email });
+      set({ isLoading: false });
+      return { success: true, message: response.data.message };
+    } catch (error: any) {
+      console.error('Send OTP error:', error?.response?.data || error.message);
+      const msg = error?.response?.data?.message || 'Failed to send OTP code.';
+      set({ isLoading: false });
+      return { success: false, message: msg };
+    }
+  },
+
+  verifyOtp: async (email: string, otp: string, displayName?: string) => {
+    set({ isLoading: true });
+    try {
+      const response = await api.post('/api/auth/verify-otp', {
+        email,
+        otp,
         displayName,
       });
 
@@ -46,7 +62,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ user, token, isLoading: false, isInitialized: true });
       return true;
     } catch (error: any) {
-      console.error('Login error:', error?.response?.data || error.message);
+      console.error('Verify OTP error:', error?.response?.data || error.message);
       set({ isLoading: false });
       return false;
     }

@@ -1,22 +1,22 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IUser extends Document {
-  phoneNumber: string;
+  email: string;
   displayName: string;
   avatarUrl?: string;
   status: string;
-  firebaseUid?: string;
   createdAt: Date;
   updatedAt: Date;
 }
 
 const UserSchema: Schema = new Schema(
   {
-    phoneNumber: {
+    email: {
       type: String,
       required: true,
       unique: true,
       trim: true,
+      lowercase: true,
       index: true,
     },
     displayName: {
@@ -31,10 +31,6 @@ const UserSchema: Schema = new Schema(
     status: {
       type: String,
       default: 'Hey there! I am using ChatConnect.',
-    },
-    firebaseUid: {
-      type: String,
-      sparse: true,
     },
   },
   {

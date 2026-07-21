@@ -1,6 +1,5 @@
 import { useRouter } from 'expo-router';
-import { ApplicationVerifier, ConfirmationResult, RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -13,91 +12,49 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { auth } from '../services/firebase';
 import { useAuthStore } from '../store/authStore';
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { loginWithFirebaseToken, isLoading: isAuthLoading } = useAuthStore();
+  const { sendOtp, verifyOtp, isLoading: isAuthLoading } = useAuthStore();
 
-  const [countryCode, setCountryCode] = useState('+91');
-  const [phoneNumber, setPhoneNumber] = useState('');
+  const [email, setEmail] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [otpCode, setOtpCode] = useState('');
-  const [step, setStep] = useState<'PHONE' | 'OTP'>('PHONE');
+  const [step, setStep] = useState<'EMAIL' | 'OTP'>('EMAIL');
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  const confirmationResultRef = useRef<ConfirmationResult | null>(null);
-  const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null);
-
   useEffect(() => {
     if (errorMessage) setErrorMessage('');
-  }, [phoneNumber, otpCode]);
-
-  const initRecaptcha = () => {
-    if (Platform.OS === 'web') {
-      try {
-        if (!recaptchaVerifierRef.current) {
-          recaptchaVerifierRef.current = new RecaptchaVerifier(auth, 'recaptcha-container', {
-            size: 'invisible',
-            callback: () => {},
-          });
-        }
-      } catch (err) {
-        console.warn('Recaptcha init warning:', err);
-      }
-    }
-  };
-
-  const getAppVerifier = (): ApplicationVerifier => {
-    if (Platform.OS === 'web' && recaptchaVerifierRef.current) {
-      return recaptchaVerifierRef.current;
-    }
-
-    // Fallback ApplicationVerifier for Native & Test Phone Numbers
-    // Note: Firebase Auth internally calls `verifier._reset()` in _verifyPhoneNumber line 8125
-    return {
-      type: 'recaptcha',
-      verify: async () => 'mock-recaptcha-token',
-      _reset: () => {},
-    } as any;
-  };
+  }, [email, otpCode]);
 
   const handleSendOTP = async () => {
-    const cleanNumber = phoneNumber.trim().replace(/\D/g, '');
-    if (!cleanNumber || cleanNumber.length < 7) {
-      setErrorMessage('Please enter a valid phone number.');
+    const cleanEmail = email.trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!cleanEmail || !emailRegex.test(cleanEmail)) {
+      setErrorMessage('Please enter a valid email address.');
       return;
     }
 
     setLoading(true);
     setErrorMessage('');
 
-    const fullPhoneNumber = `${countryCode.trim()}${cleanNumber}`;
-
     try {
-      if (Platform.OS === 'web') {
-        initRecaptcha();
+      const res = await sendOtp(cleanEmail);
+
+      if (res.success) {
+        setStep('OTP');
+      } else {
+        setErrorMessage(res.message || 'Failed to send OTP code.');
       }
-
-      const verifier = getAppVerifier();
-
-      const confirmationResult = await signInWithPhoneNumber(
-        auth,
-        fullPhoneNumber,
-        verifier
-      );
-
-      confirmationResultRef.current = confirmationResult;
-      setStep('OTP');
-      setLoading(false);
     } catch (err: any) {
       console.error('Send OTP error:', err);
-      setLoading(false);
-      const msg = err.message || 'Failed to send OTP. Please check phone number.';
+      const msg = err.message || 'Failed to send OTP. Please check email address.';
       setErrorMessage(msg);
       Alert.alert('Authentication Error', msg);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -107,29 +64,20 @@ export default function LoginScreen() {
       return;
     }
 
-    if (!confirmationResultRef.current) {
-      setErrorMessage('Session expired. Please request OTP again.');
-      setStep('PHONE');
-      return;
-    }
-
     setLoading(true);
     setErrorMessage('');
 
     try {
-      const userCredential = await confirmationResultRef.current.confirm(otpCode.trim());
-      const idToken = await userCredential.user.getIdToken();
-
-      const success = await loginWithFirebaseToken(idToken, displayName.trim() || undefined);
+      const success = await verifyOtp(email.trim().toLowerCase(), otpCode.trim(), displayName.trim() || undefined);
 
       if (success) {
         router.replace('/profile' as any);
       } else {
-        setErrorMessage('Failed to establish server session. Please try again.');
+        setErrorMessage('Invalid or expired OTP code. Please try again.');
       }
     } catch (err: any) {
       console.error('Verify OTP error:', err);
-      setErrorMessage(err.message || 'Invalid OTP code. Please try again.');
+      setErrorMessage(err.message || 'Verification failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -141,9 +89,6 @@ export default function LoginScreen() {
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        {/* Invisible Recaptcha container for Web */}
-        {Platform.OS === 'web' && <div id="recaptcha-container" />}
-
         <View style={styles.content}>
           {/* Header section */}
           <View style={styles.header}>
@@ -151,12 +96,12 @@ export default function LoginScreen() {
               <Text style={styles.badgeText}>ChatConnect Auth</Text>
             </View>
             <Text style={styles.title}>
-              {step === 'PHONE' ? 'Sign In with Phone' : 'Enter Security Code'}
+              {step === 'EMAIL' ? 'Sign In with Email' : 'Enter Security Code'}
             </Text>
             <Text style={styles.subtitle}>
-              {step === 'PHONE'
-                ? 'Enter your mobile number to receive a secure OTP code.'
-                : `Enter the 6-digit verification code sent to ${countryCode} ${phoneNumber}`}
+              {step === 'EMAIL'
+                ? 'Enter your email address to receive a 6-digit security code.'
+                : `Enter the 6-digit code sent to ${email.trim()}`}
             </Text>
           </View>
 
@@ -168,7 +113,7 @@ export default function LoginScreen() {
               </View>
             ) : null}
 
-            {step === 'PHONE' ? (
+            {step === 'EMAIL' ? (
               <>
                 <View style={styles.inputGroup}>
                   <Text style={styles.label}>DISPLAY NAME (OPTIONAL)</Text>
@@ -183,24 +128,18 @@ export default function LoginScreen() {
                 </View>
 
                 <View style={styles.inputGroup}>
-                  <Text style={styles.label}>MOBILE PHONE NUMBER</Text>
-                  <View style={styles.phoneInputRow}>
-                    <TextInput
-                      style={[styles.input, styles.countryInput]}
-                      value={countryCode}
-                      onChangeText={setCountryCode}
-                      keyboardType="phone-pad"
-                    />
-                    <TextInput
-                      style={[styles.input, styles.flexInput]}
-                      placeholder="9480397504"
-                      placeholderTextColor="#64748B"
-                      value={phoneNumber}
-                      onChangeText={setPhoneNumber}
-                      keyboardType="phone-pad"
-                      autoFocus
-                    />
-                  </View>
+                  <Text style={styles.label}>EMAIL ADDRESS</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="alex@example.com"
+                    placeholderTextColor="#64748B"
+                    value={email}
+                    onChangeText={setEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    autoFocus
+                  />
                 </View>
 
                 <TouchableOpacity
@@ -211,7 +150,7 @@ export default function LoginScreen() {
                   {loading || isAuthLoading ? (
                     <ActivityIndicator color="#0F172A" />
                   ) : (
-                    <Text style={styles.buttonText}>Send OTP Code →</Text>
+                    <Text style={styles.buttonText}>Send Security Code →</Text>
                   )}
                 </TouchableOpacity>
               </>
@@ -245,10 +184,10 @@ export default function LoginScreen() {
 
                 <TouchableOpacity
                   style={styles.secondaryButton}
-                  onPress={() => setStep('PHONE')}
+                  onPress={() => setStep('EMAIL')}
                   disabled={loading}
                 >
-                  <Text style={styles.secondaryButtonText}>← Change Phone Number</Text>
+                  <Text style={styles.secondaryButtonText}>← Change Email Address</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -256,7 +195,7 @@ export default function LoginScreen() {
 
           {/* Footer */}
           <Text style={styles.footerText}>
-            Secured by Firebase Phone Auth & MongoDB Session Encryption
+            Secured by Email OTP & JWT Session Encryption
           </Text>
         </View>
       </KeyboardAvoidingView>
@@ -356,18 +295,6 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     color: '#F8FAFC',
     fontSize: 16,
-  },
-  phoneInputRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  countryInput: {
-    width: 80,
-    textAlign: 'center',
-    fontWeight: '600',
-  },
-  flexInput: {
-    flex: 1,
   },
   otpInput: {
     textAlign: 'center',

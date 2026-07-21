@@ -1,39 +1,68 @@
 import type { Request, Response } from 'express';
 import type { AuthenticatedRequest } from '../middleware/auth.middleware.js';
 import User from '../models/User.js';
-import { verifyFirebaseIdToken } from '../services/firebase.service.js';
+import { sendOTPEmail } from '../services/email.service.js';
 import { generateAccessToken, generateRefreshToken, verifyRefreshToken } from '../services/jwt.service.js';
+import { generateOTP, storeOTP, verifyOTP } from '../services/otp.service.js';
 
-export async function firebaseLogin(req: Request, res: Response) {
+export async function sendOTP(req: Request, res: Response) {
   try {
-    const { idToken, displayName } = req.body;
+    const { email } = req.body;
 
-    if (!idToken) {
-      return res.status(400).json({ message: 'idToken is required' });
+    if (!email || typeof email !== 'string') {
+      return res.status(400).json({ message: 'Valid email address is required' });
     }
 
-    const decodedToken = await verifyFirebaseIdToken(idToken);
-    const phoneNumber = decodedToken.phone_number;
-
-    if (!phoneNumber) {
-      return res.status(400).json({ message: 'Firebase token does not contain a phone number' });
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      return res.status(400).json({ message: 'Invalid email address format' });
     }
 
-    let user = await User.findOne({ phoneNumber });
+    const normalizedEmail = email.trim().toLowerCase();
+    const otp = generateOTP();
+
+    await storeOTP(normalizedEmail, otp, 300);
+    await sendOTPEmail(normalizedEmail, otp);
+
+    return res.status(200).json({
+      message: 'Verification code sent successfully to your email.',
+    });
+  } catch (error: any) {
+    console.error('Send OTP error:', error);
+    return res.status(500).json({ message: error.message || 'Failed to send verification code' });
+  }
+}
+
+export async function verifyOTPHandler(req: Request, res: Response) {
+  try {
+    const { email, otp, displayName } = req.body;
+
+    if (!email || !otp) {
+      return res.status(400).json({ message: 'Email and OTP code are required' });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const isValid = await verifyOTP(normalizedEmail, otp.trim());
+
+    if (!isValid) {
+      return res.status(400).json({ message: 'Invalid or expired verification code' });
+    }
+
+    let user = await User.findOne({ email: normalizedEmail });
 
     if (!user) {
+      const defaultName = displayName?.trim() || normalizedEmail.split('@')[0] || 'ChatConnect User';
       user = await User.create({
-        phoneNumber,
-        displayName: displayName || `User_${phoneNumber.slice(-4)}`,
-        firebaseUid: decodedToken.uid,
+        email: normalizedEmail,
+        displayName: defaultName,
         status: 'Hey there! I am using ChatConnect.',
       });
-    } else if (displayName && user.displayName !== displayName) {
-      user.displayName = displayName;
+    } else if (displayName && displayName.trim() && user.displayName !== displayName.trim()) {
+      user.displayName = displayName.trim();
       await user.save();
     }
 
-    const payload = { userId: (user._id as any).toString(), phoneNumber: user.phoneNumber };
+    const payload = { userId: (user._id as any).toString(), email: user.email };
     const accessToken = generateAccessToken(payload);
     const refreshToken = generateRefreshToken(payload);
 
@@ -43,7 +72,7 @@ export async function firebaseLogin(req: Request, res: Response) {
       refreshToken,
       user: {
         id: user._id,
-        phoneNumber: user.phoneNumber,
+        email: user.email,
         displayName: user.displayName,
         status: user.status,
         avatarUrl: user.avatarUrl,
@@ -51,7 +80,7 @@ export async function firebaseLogin(req: Request, res: Response) {
       },
     });
   } catch (error: any) {
-    console.error('Firebase login error:', error);
+    console.error('Verify OTP error:', error);
     return res.status(500).json({ message: error.message || 'Authentication failed' });
   }
 }
@@ -70,7 +99,7 @@ export async function refreshSession(req: Request, res: Response) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    const newPayload = { userId: (user._id as any).toString(), phoneNumber: user.phoneNumber };
+    const newPayload = { userId: (user._id as any).toString(), email: user.email };
     const newAccessToken = generateAccessToken(newPayload);
     const newRefreshToken = generateRefreshToken(newPayload);
 
@@ -95,7 +124,7 @@ export async function getMe(req: AuthenticatedRequest, res: Response) {
     return res.status(200).json({
       user: {
         id: user._id,
-        phoneNumber: user.phoneNumber,
+        email: user.email,
         displayName: user.displayName,
         status: user.status,
         avatarUrl: user.avatarUrl,
@@ -127,7 +156,7 @@ export async function updateProfile(req: AuthenticatedRequest, res: Response) {
       message: 'Profile updated successfully',
       user: {
         id: user._id,
-        phoneNumber: user.phoneNumber,
+        email: user.email,
         displayName: user.displayName,
         status: user.status,
         avatarUrl: user.avatarUrl,
