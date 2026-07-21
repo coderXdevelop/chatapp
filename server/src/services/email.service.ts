@@ -17,7 +17,7 @@ if (GMAIL_USER && GMAIL_APP_PASSWORD) {
 }
 
 function parseFromAddress(fromStr: string): { name: string; email: string } {
-  const match = fromStr.match(/^(?:"?([^"]*)"?\s)?<([^>]+)>$/);
+  const match = fromStr.match(/^(?:"?([^<"]*)"?\s*)?<([^>]+)>$/);
   if (match && match[2]) {
     return { name: match[1]?.trim() || 'ChatConnect', email: match[2].trim() };
   }
@@ -38,59 +38,66 @@ export async function sendOTPEmail(email: string, otp: string): Promise<void> {
     </div>
   `;
 
-  // Always log in development for convenience
-  console.log(`[AUTH OTP] Code for ${normalizedEmail}: ${otp}`);
+  // Always log prominently in terminal for local development & app testing
+  console.log('\n==================================================');
+  console.log(`🔑 [AUTH OTP] Verification Code for ${normalizedEmail}: ${otp}`);
+  console.log('==================================================\n');
 
   if (process.env.NODE_ENV === 'test') {
     // Rule 11: Never send real OTP emails during automated tests
     return;
   }
 
-  if (BREVO_API_KEY) {
-    try {
-      const sender = parseFromAddress(EMAIL_FROM_ADDRESS);
-      const response = await fetch('https://api.brevo.com/v3/smtp/email', {
-        method: 'POST',
-        headers: {
-          'accept': 'application/json',
-          'api-key': BREVO_API_KEY,
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({
-          sender,
-          to: [{ email: normalizedEmail }],
-          subject,
-          htmlContent,
-        }),
-      });
+  try {
+    if (BREVO_API_KEY) {
+      try {
+        const sender = parseFromAddress(EMAIL_FROM_ADDRESS);
+        const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+          method: 'POST',
+          headers: {
+            'accept': 'application/json',
+            'api-key': BREVO_API_KEY,
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({
+            sender,
+            to: [{ email: normalizedEmail }],
+            subject,
+            htmlContent,
+          }),
+        });
 
-      if (response.ok) {
-        console.log(`[Brevo] OTP email sent successfully to ${normalizedEmail}`);
-        return;
-      } else {
-        const errorText = await response.text();
-        console.error(`[Brevo] Failed to send OTP email (${response.status}):`, errorText);
+        if (response.ok) {
+          console.log(`[Brevo] OTP email sent successfully to ${normalizedEmail}`);
+          return;
+        } else {
+          const errorText = await response.text();
+          console.error(`[Brevo] Failed to send OTP email (${response.status}):`, errorText);
+        }
+      } catch (e: any) {
+        console.error(`[Brevo] Error sending OTP email to ${normalizedEmail}:`, e.message);
       }
-    } catch (e: any) {
-      console.error(`[Brevo] Error sending OTP email to ${normalizedEmail}:`, e.message);
     }
-  }
 
-  if (smtpTransporter) {
-    try {
-      await smtpTransporter.sendMail({
-        from: EMAIL_FROM_ADDRESS,
-        to: normalizedEmail,
-        subject,
-        html: htmlContent,
-      });
-      console.log(`[SMTP] OTP email sent to ${normalizedEmail}`);
-      return;
-    } catch (e: any) {
-      console.error(`[SMTP] Failed to send OTP email to ${normalizedEmail}:`, e.message);
+    if (smtpTransporter) {
+      try {
+        await smtpTransporter.sendMail({
+          from: EMAIL_FROM_ADDRESS,
+          to: normalizedEmail,
+          subject,
+          html: htmlContent,
+        });
+        console.log(`[SMTP] OTP email sent to ${normalizedEmail}`);
+        return;
+      } catch (e: any) {
+        console.error(`[SMTP] Failed to send OTP email to ${normalizedEmail}:`, e.message);
+      }
     }
-  }
 
-  // Fallback if no email provider is configured
-  console.log(`[Email Service] No active email provider configured (BREVO_API_KEY or GMAIL credentials). OTP code '${otp}' was printed above.`);
+    if (!BREVO_API_KEY && !smtpTransporter) {
+      console.log(`[Email Service] No active email provider configured. OTP code '${otp}' was printed to terminal.`);
+    }
+  } catch (globalErr: any) {
+    console.error(`[Email Service] Unexpected error attempting email delivery:`, globalErr.message);
+  }
 }
