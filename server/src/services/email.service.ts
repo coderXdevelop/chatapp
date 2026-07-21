@@ -38,11 +38,6 @@ export async function sendOTPEmail(email: string, otp: string): Promise<void> {
     </div>
   `;
 
-  // Always log prominently in terminal for local development & app testing
-  console.log('\n==================================================');
-  console.log(`🔑 [AUTH OTP] Verification Code for ${normalizedEmail}: ${otp}`);
-  console.log('==================================================\n');
-
   if (process.env.NODE_ENV === 'test') {
     // Rule 11: Never send real OTP emails during automated tests
     return;

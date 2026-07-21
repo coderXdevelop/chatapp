@@ -1,14 +1,29 @@
 import { Redis } from 'ioredis';
 
-const REDIS_URL = process.env.REDIS_URL;
+let redisUrl = process.env.REDIS_URL;
+const redisToken = process.env.REDIS_TOKEN;
+
+if (redisUrl && (redisUrl.startsWith('http://') || redisUrl.startsWith('https://'))) {
+  try {
+    const host = new URL(redisUrl).hostname;
+    if (host && redisToken) {
+      redisUrl = `rediss://default:${redisToken}@${host}:6379`;
+    }
+  } catch {}
+}
+
 let redisClient: Redis | null = null;
 const memoryStore = new Map<string, { code: string; expiresAt: number }>();
 
-if (REDIS_URL) {
+if (redisUrl && (redisUrl.startsWith('redis://') || redisUrl.startsWith('rediss://'))) {
   try {
-    redisClient = new Redis(REDIS_URL, {
+    redisClient = new Redis(redisUrl, {
       maxRetriesPerRequest: 3,
       lazyConnect: true,
+      retryStrategy(times) {
+        if (times > 3) return null;
+        return Math.min(times * 200, 1000);
+      },
     });
     redisClient.on('error', (err: any) => {
       console.warn('Redis client error, falling back to in-memory OTP store:', err.message);
