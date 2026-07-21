@@ -9,6 +9,7 @@ export interface UserProfile {
   age?: number;
   status: string;
   avatarUrl?: string;
+  avatarPublicId?: string;
   createdAt?: string;
 }
 
@@ -33,6 +34,7 @@ interface AuthState {
   verifyOtp: (email: string, otp: string, displayName?: string) => Promise<boolean>;
   checkAuth: () => Promise<void>;
   updateProfile: (data: { displayName?: string; age?: number; status?: string; avatarUrl?: string }) => Promise<boolean>;
+  removeAvatar: () => Promise<boolean>;
   logout: () => Promise<void>;
 }
 
@@ -189,6 +191,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return true;
     } catch (error: any) {
       console.error('Update profile error:', error?.response?.data || error.message);
+      set({ isLoading: false });
+      return false;
+    }
+  },
+
+  removeAvatar: async () => {
+    set({ isLoading: true });
+    try {
+      const response = await api.delete('/api/auth/avatar');
+      set({ user: response.data.user, isLoading: false });
+      return true;
+    } catch (error: any) {
+      console.error('Remove avatar error:', error?.response?.data || error.message);
       set({ isLoading: false });
       return false;
     }

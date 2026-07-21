@@ -1,8 +1,10 @@
 import { useRouter } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Modal,
   Platform,
   ScrollView,
@@ -17,7 +19,7 @@ import { useAuthStore } from '../store/authStore';
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { user, logout, updateProfile, isLoading } = useAuthStore();
+  const { user, logout, updateProfile, removeAvatar, isLoading } = useAuthStore();
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [newDisplayName, setNewDisplayName] = useState(user?.displayName || '');
@@ -48,6 +50,48 @@ export default function ProfileScreen() {
     } else {
       Alert.alert('Error', 'Failed to update profile details.');
     }
+  };
+
+  const handlePickAvatar = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets[0]) {
+        const asset = result.assets[0];
+        const base64Data = asset.base64
+          ? `data:${asset.mimeType || 'image/jpeg'};base64,${asset.base64}`
+          : asset.uri;
+        const ok = await updateProfile({ avatarUrl: base64Data });
+        if (!ok) {
+          Alert.alert('Error', 'Failed to update profile picture.');
+        }
+      }
+    } catch (err: any) {
+      console.error('Pick avatar error:', err);
+      Alert.alert('Error', 'Could not open image library.');
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    Alert.alert('Remove Avatar', 'Are you sure you want to remove your profile picture?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: async () => {
+          const ok = await removeAvatar();
+          if (!ok) {
+            Alert.alert('Error', 'Failed to remove profile picture.');
+          }
+        },
+      },
+    ]);
   };
 
   const handleLogout = async () => {
@@ -90,8 +134,28 @@ export default function ProfileScreen() {
 
         {/* Profile Card */}
         <View style={styles.profileCard}>
-          <View style={styles.avatarContainer}>
-            <Text style={styles.avatarInitial}>{initial}</Text>
+          <TouchableOpacity style={styles.avatarContainer} onPress={handlePickAvatar} disabled={isLoading}>
+            {user.avatarUrl ? (
+              <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
+            ) : (
+              <Text style={styles.avatarInitial}>{initial}</Text>
+            )}
+            <View style={styles.avatarCameraBadge}>
+              <Text style={styles.avatarCameraIcon}>📷</Text>
+            </View>
+          </TouchableOpacity>
+
+          <View style={styles.avatarActionRow}>
+            <TouchableOpacity onPress={handlePickAvatar} disabled={isLoading}>
+              <Text style={styles.avatarActionText}>
+                {user.avatarUrl ? 'Change Photo' : '+ Upload Photo'}
+              </Text>
+            </TouchableOpacity>
+            {user.avatarUrl ? (
+              <TouchableOpacity onPress={handleRemoveAvatar} disabled={isLoading}>
+                <Text style={styles.avatarRemoveText}>Remove Photo</Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
 
           <Text style={styles.displayName}>{user.displayName}</Text>
@@ -193,6 +257,19 @@ export default function ProfileScreen() {
               />
             </View>
 
+            <View style={styles.modalAvatarActions}>
+              <TouchableOpacity style={styles.modalAvatarBtn} onPress={handlePickAvatar}>
+                <Text style={styles.modalAvatarBtnText}>
+                  {user.avatarUrl ? '📷 Change Profile Picture' : '+ Upload Profile Picture'}
+                </Text>
+              </TouchableOpacity>
+              {user.avatarUrl ? (
+                <TouchableOpacity style={styles.modalAvatarRemoveBtn} onPress={handleRemoveAvatar}>
+                  <Text style={styles.modalAvatarRemoveText}>🗑️ Remove Profile Picture</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={styles.cancelModalButton}
@@ -281,9 +358,43 @@ const styles = StyleSheet.create({
     backgroundColor: '#F59E0B',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 8,
     borderWidth: 3,
     borderColor: '#78350F',
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  avatarCameraBadge: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    backgroundColor: '#0F172A',
+    borderRadius: 12,
+    padding: 3,
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+  },
+  avatarCameraIcon: {
+    fontSize: 12,
+  },
+  avatarActionRow: {
+    flexDirection: 'row',
+    gap: 16,
+    marginBottom: 16,
+  },
+  avatarActionText: {
+    color: '#F59E0B',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  avatarRemoveText: {
+    color: '#EF4444',
+    fontSize: 13,
+    fontWeight: '600',
   },
   avatarInitial: {
     fontSize: 36,
@@ -429,6 +540,34 @@ const styles = StyleSheet.create({
     padding: 12,
     color: '#F8FAFC',
     fontSize: 15,
+  },
+  modalAvatarActions: {
+    marginBottom: 16,
+    gap: 8,
+  },
+  modalAvatarBtn: {
+    backgroundColor: '#334155',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  modalAvatarBtnText: {
+    color: '#F59E0B',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  modalAvatarRemoveBtn: {
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  modalAvatarRemoveText: {
+    color: '#EF4444',
+    fontSize: 13,
+    fontWeight: '600',
   },
   modalActions: {
     flexDirection: 'row',

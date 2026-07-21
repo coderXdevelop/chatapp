@@ -1,8 +1,10 @@
 import { useRouter } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -32,6 +34,7 @@ export default function LoginScreen() {
   const [displayName, setDisplayName] = useState('');
   const [age, setAge] = useState('');
   const [status, setStatus] = useState('Hey there! I am using ChatConnect.');
+  const [avatarUri, setAvatarUri] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -152,6 +155,7 @@ export default function LoginScreen() {
         displayName: displayName.trim(),
         age: age ? Number(age) : undefined,
         status: status.trim() || undefined,
+        avatarUrl: avatarUri || undefined,
       });
 
       if (success) {
@@ -364,6 +368,71 @@ export default function LoginScreen() {
                   {/* Register Step 3: Profile Setup */}
                   {registerStep === 'PROFILE' && (
                     <>
+                      {/* Optional Avatar Picker */}
+                      <View style={styles.avatarPickerContainer}>
+                        <TouchableOpacity style={styles.avatarCircle} onPress={async () => {
+                          try {
+                            const result = await ImagePicker.launchImageLibraryAsync({
+                              mediaTypes: ['images'],
+                              allowsEditing: true,
+                              aspect: [1, 1],
+                              quality: 0.7,
+                              base64: true,
+                            });
+                            if (!result.canceled && result.assets && result.assets[0]) {
+                              const asset = result.assets[0];
+                              const base64Data = asset.base64
+                                ? `data:${asset.mimeType || 'image/jpeg'};base64,${asset.base64}`
+                                : asset.uri;
+                              setAvatarUri(base64Data);
+                            }
+                          } catch (e: any) {
+                            Alert.alert('Error', 'Could not open image library.');
+                          }
+                        }}>
+                          {avatarUri ? (
+                            <Image source={{ uri: avatarUri }} style={styles.avatarImagePreview} />
+                          ) : (
+                            <View style={styles.avatarPlaceholder}>
+                              <Text style={styles.avatarPlaceholderIcon}>📷</Text>
+                              <Text style={styles.avatarPlaceholderText}>Add Photo</Text>
+                            </View>
+                          )}
+                        </TouchableOpacity>
+
+                        <View style={styles.avatarActionRow}>
+                          <TouchableOpacity onPress={async () => {
+                            try {
+                              const result = await ImagePicker.launchImageLibraryAsync({
+                                mediaTypes: ['images'],
+                                allowsEditing: true,
+                                aspect: [1, 1],
+                                quality: 0.7,
+                                base64: true,
+                              });
+                              if (!result.canceled && result.assets && result.assets[0]) {
+                                const asset = result.assets[0];
+                                const base64Data = asset.base64
+                                  ? `data:${asset.mimeType || 'image/jpeg'};base64,${asset.base64}`
+                                  : asset.uri;
+                                setAvatarUri(base64Data);
+                              }
+                            } catch (e: any) {
+                              Alert.alert('Error', 'Could not open image library.');
+                            }
+                          }}>
+                            <Text style={styles.avatarActionText}>
+                              {avatarUri ? 'Change Avatar' : '+ Choose Profile Picture (Optional)'}
+                            </Text>
+                          </TouchableOpacity>
+                          {avatarUri ? (
+                            <TouchableOpacity onPress={() => setAvatarUri(null)}>
+                              <Text style={styles.avatarRemoveText}>Remove</Text>
+                            </TouchableOpacity>
+                          ) : null}
+                        </View>
+                      </View>
+
                       <View style={styles.inputGroup}>
                         <Text style={styles.label}>FULL NAME / DISPLAY NAME *</Text>
                         <TextInput
@@ -560,6 +629,54 @@ const styles = StyleSheet.create({
     color: '#FCA5A5',
     fontSize: 13,
     textAlign: 'center',
+  },
+  avatarPickerContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  avatarCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#0F172A',
+    borderWidth: 2,
+    borderColor: '#F59E0B',
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  avatarImagePreview: {
+    width: '100%',
+    height: '100%',
+  },
+  avatarPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarPlaceholderIcon: {
+    fontSize: 24,
+    marginBottom: 2,
+  },
+  avatarPlaceholderText: {
+    color: '#94A3B8',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  avatarActionRow: {
+    flexDirection: 'row',
+    gap: 16,
+    alignItems: 'center',
+  },
+  avatarActionText: {
+    color: '#F59E0B',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  avatarRemoveText: {
+    color: '#EF4444',
+    fontSize: 13,
+    fontWeight: '600',
   },
   inputGroup: {
     marginBottom: 18,

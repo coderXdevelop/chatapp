@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import type { Request, Response } from 'express';
 import type { AuthenticatedRequest } from '../middleware/auth.middleware.js';
 import User from '../models/User.js';
+import { deleteAvatar, uploadAvatar } from '../services/cloudinary.service.js';
 import { sendOTPEmail } from '../services/email.service.js';
 import { generateAccessToken, generateRefreshToken, verifyRefreshToken } from '../services/jwt.service.js';
 import { generateOTP, storeOTP, verifyOTP } from '../services/otp.service.js';
@@ -99,10 +100,21 @@ export async function completeRegistration(req: Request, res: Response) {
       password: hashedPassword,
       displayName: displayName?.trim() || normalizedEmail.split('@')[0] || 'ChatConnect User',
       status: status?.trim() || 'Hey there! I am using ChatConnect.',
-      avatarUrl: avatarUrl?.trim() || '',
+      avatarUrl: '',
+      avatarPublicId: '',
     };
     if (age !== undefined && age !== '' && age !== null) {
       userData.age = Number(age);
+    }
+
+    if (avatarUrl && typeof avatarUrl === 'string' && avatarUrl.trim()) {
+      try {
+        const uploaded = await uploadAvatar(avatarUrl.trim());
+        userData.avatarUrl = uploaded.url;
+        userData.avatarPublicId = uploaded.publicId;
+      } catch (e) {
+        console.warn('Failed to upload avatar during registration, proceeding without avatar:', e);
+      }
     }
 
     user = await User.create(userData);
@@ -122,6 +134,7 @@ export async function completeRegistration(req: Request, res: Response) {
         age: user.age,
         status: user.status,
         avatarUrl: user.avatarUrl,
+        avatarPublicId: user.avatarPublicId,
         createdAt: user.createdAt,
       },
     });
@@ -330,7 +343,19 @@ export async function updateProfile(req: AuthenticatedRequest, res: Response) {
       user.age = (age !== '' && age !== null) ? Number(age) : undefined;
     }
     if (status !== undefined) user.status = status;
-    if (avatarUrl !== undefined) user.avatarUrl = avatarUrl;
+
+    if (avatarUrl !== undefined && avatarUrl !== user.avatarUrl) {
+      if (avatarUrl && typeof avatarUrl === 'string' && avatarUrl.trim()) {
+        // Delete old avatar from Cloudinary if it exists
+        if (user.avatarPublicId) {
+          await deleteAvatar(user.avatarPublicId);
+        }
+        // Upload new avatar to Cloudinary
+        const uploaded = await uploadAvatar(avatarUrl.trim());
+        user.avatarUrl = uploaded.url;
+        user.avatarPublicId = uploaded.publicId;
+      }
+    }
 
     await user.save();
 
@@ -343,11 +368,48 @@ export async function updateProfile(req: AuthenticatedRequest, res: Response) {
         age: user.age,
         status: user.status,
         avatarUrl: user.avatarUrl,
+        avatarPublicId: user.avatarPublicId,
         createdAt: user.createdAt,
       },
     });
   } catch (error: any) {
+    console.error('Update profile error:', error);
     return res.status(500).json({ message: 'Failed to update profile' });
+  }
+}
+
+export async function removeAvatar(req: AuthenticatedRequest, res: Response) {
+  try {
+    const userId = req.user?.userId;
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (user.avatarPublicId) {
+      await deleteAvatar(user.avatarPublicId);
+    }
+
+    user.avatarUrl = '';
+    user.avatarPublicId = '';
+    await user.save();
+
+    return res.status(200).json({
+      message: 'Avatar removed successfully',
+      user: {
+        id: user._id,
+        email: user.email,
+        displayName: user.displayName,
+        age: user.age,
+        status: user.status,
+        avatarUrl: user.avatarUrl,
+        avatarPublicId: user.avatarPublicId,
+        createdAt: user.createdAt,
+      },
+    });
+  } catch (error: any) {
+    console.error('Remove avatar error:', error);
+    return res.status(500).json({ message: 'Failed to remove avatar' });
   }
 }
 

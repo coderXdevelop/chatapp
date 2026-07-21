@@ -6,6 +6,7 @@ export interface IUser extends Document {
   displayName: string;
   age?: number | undefined;
   avatarUrl?: string;
+  avatarPublicId?: string;
   status: string;
   createdAt: Date;
   updatedAt: Date;
@@ -34,6 +35,10 @@ const UserSchema: Schema = new Schema(
       type: Number,
     },
     avatarUrl: {
+      type: String,
+      default: '',
+    },
+    avatarPublicId: {
       type: String,
       default: '',
     },

@@ -5,6 +5,7 @@ import {
   login,
   refreshSession,
   registerInit,
+  removeAvatar,
   sendOTP,
   updateProfile,
   verifyOTPHandler,
@@ -26,5 +27,6 @@ router.post('/verify-otp', verifyOTPHandler);
 router.post('/refresh', refreshSession);
 router.get('/me', authenticateJWT, getMe);
 router.put('/profile', authenticateJWT, updateProfile);
+router.delete('/avatar', authenticateJWT, removeAvatar);
 
 export default router;
