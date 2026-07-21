@@ -2,7 +2,9 @@ import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IUser extends Document {
   email: string;
+  password?: string;
   displayName: string;
+  age?: number | undefined;
   avatarUrl?: string;
   status: string;
   createdAt: Date;
@@ -19,10 +21,17 @@ const UserSchema: Schema = new Schema(
       lowercase: true,
       index: true,
     },
+    password: {
+      type: String,
+      select: false,
+    },
     displayName: {
       type: String,
       default: 'ChatConnect User',
       trim: true,
+    },
+    age: {
+      type: Number,
     },
     avatarUrl: {
       type: String,

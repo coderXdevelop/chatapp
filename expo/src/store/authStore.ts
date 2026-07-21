@@ -6,6 +6,7 @@ export interface UserProfile {
   id: string;
   email: string;
   displayName: string;
+  age?: number;
   status: string;
   avatarUrl?: string;
   createdAt?: string;
@@ -17,10 +18,21 @@ interface AuthState {
   isLoading: boolean;
   isInitialized: boolean;
 
+  login: (email: string, password: string) => Promise<{ success: boolean; message?: string }>;
+  registerInit: (email: string, password: string) => Promise<{ success: boolean; message?: string }>;
+  verifyRegisterOtp: (email: string, otp: string) => Promise<{ success: boolean; message?: string }>;
+  completeRegistration: (data: {
+    email: string;
+    password: string;
+    displayName: string;
+    age?: number;
+    status?: string;
+    avatarUrl?: string;
+  }) => Promise<boolean>;
   sendOtp: (email: string) => Promise<{ success: boolean; message?: string }>;
   verifyOtp: (email: string, otp: string, displayName?: string) => Promise<boolean>;
   checkAuth: () => Promise<void>;
-  updateProfile: (data: { displayName?: string; status?: string; avatarUrl?: string }) => Promise<boolean>;
+  updateProfile: (data: { displayName?: string; age?: number; status?: string; avatarUrl?: string }) => Promise<boolean>;
   logout: () => Promise<void>;
 }
 
@@ -29,6 +41,71 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   token: null,
   isLoading: false,
   isInitialized: false,
+
+  login: async (email: string, password: string) => {
+    set({ isLoading: true });
+    try {
+      const response = await api.post('/api/auth/login', { email, password });
+      const { token, refreshToken, user } = response.data;
+      await setItem('access_token', token);
+      if (refreshToken) {
+        await setItem('refresh_token', refreshToken);
+      }
+      set({ user, token, isLoading: false, isInitialized: true });
+      return { success: true };
+    } catch (error: any) {
+      console.error('Login error:', error?.response?.data || error.message);
+      const msg = error?.response?.data?.message || 'Login failed. Please check your credentials.';
+      set({ isLoading: false });
+      return { success: false, message: msg };
+    }
+  },
+
+  registerInit: async (email: string, password: string) => {
+    set({ isLoading: true });
+    try {
+      const response = await api.post('/api/auth/register-init', { email, password });
+      set({ isLoading: false });
+      return { success: true, message: response.data.message };
+    } catch (error: any) {
+      console.error('Register init error:', error?.response?.data || error.message);
+      const msg = error?.response?.data?.message || 'Failed to initialize registration.';
+      set({ isLoading: false });
+      return { success: false, message: msg };
+    }
+  },
+
+  verifyRegisterOtp: async (email: string, otp: string) => {
+    set({ isLoading: true });
+    try {
+      const response = await api.post('/api/auth/verify-register-otp', { email, otp });
+      set({ isLoading: false });
+      return { success: true, message: response.data.message };
+    } catch (error: any) {
+      console.error('Verify register OTP error:', error?.response?.data || error.message);
+      const msg = error?.response?.data?.message || 'Invalid or expired OTP code.';
+      set({ isLoading: false });
+      return { success: false, message: msg };
+    }
+  },
+
+  completeRegistration: async (data) => {
+    set({ isLoading: true });
+    try {
+      const response = await api.post('/api/auth/complete-registration', data);
+      const { token, refreshToken, user } = response.data;
+      await setItem('access_token', token);
+      if (refreshToken) {
+        await setItem('refresh_token', refreshToken);
+      }
+      set({ user, token, isLoading: false, isInitialized: true });
+      return true;
+    } catch (error: any) {
+      console.error('Complete registration error:', error?.response?.data || error.message);
+      set({ isLoading: false });
+      return false;
+    }
+  },
 
   sendOtp: async (email: string) => {
     set({ isLoading: true });

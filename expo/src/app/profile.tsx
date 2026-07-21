@@ -21,17 +21,25 @@ export default function ProfileScreen() {
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [newDisplayName, setNewDisplayName] = useState(user?.displayName || '');
+  const [newAge, setNewAge] = useState(user?.age ? String(user.age) : '');
   const [newStatus, setNewStatus] = useState(user?.status || '');
 
   const handleOpenEdit = () => {
     setNewDisplayName(user?.displayName || '');
+    setNewAge(user?.age ? String(user.age) : '');
     setNewStatus(user?.status || '');
     setIsEditModalOpen(true);
   };
 
   const handleSaveProfile = async () => {
+    if (newAge && (isNaN(Number(newAge)) || Number(newAge) < 1 || Number(newAge) > 120)) {
+      Alert.alert('Invalid Age', 'Please enter a valid age between 1 and 120.');
+      return;
+    }
+
     const success = await updateProfile({
       displayName: newDisplayName.trim(),
+      age: newAge ? Number(newAge) : undefined,
       status: newStatus.trim(),
     });
 
@@ -113,8 +121,15 @@ export default function ProfileScreen() {
           <View style={styles.divider} />
 
           <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Age</Text>
+            <Text style={styles.detailValue}>{user.age ? `${user.age} years old` : 'Not specified'}</Text>
+          </View>
+
+          <View style={styles.divider} />
+
+          <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Auth Method</Text>
-            <Text style={styles.detailValue}>Email OTP</Text>
+            <Text style={styles.detailValue}>Email OTP + JWT Session</Text>
           </View>
 
           <View style={styles.divider} />
@@ -151,6 +166,18 @@ export default function ProfileScreen() {
                 onChangeText={setNewDisplayName}
                 placeholder="Display Name"
                 placeholderTextColor="#64748B"
+              />
+            </View>
+
+            <View style={styles.modalInputGroup}>
+              <Text style={styles.modalLabel}>AGE</Text>
+              <TextInput
+                style={styles.modalInput}
+                value={newAge}
+                onChangeText={setNewAge}
+                placeholder="Age (e.g. 24)"
+                placeholderTextColor="#64748B"
+                keyboardType="number-pad"
               />
             </View>
 
