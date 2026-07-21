@@ -15,7 +15,7 @@ ChatConnect is a WhatsApp-style real-time messaging app.
 - **Database**: MongoDB (Atlas free tier)
 - **Cache / presence**: Redis (Upstash free tier)
 - **Real-time**: Socket.io
-- **Auth**: Self-built email OTP (Redis-cached code + Resend or Gmail SMTP) + JWT session
+- **Auth**: Self-built email OTP (Redis-cached code + Brevo API or Gmail SMTP) + JWT session
 - **Media storage**: Cloudinary
 - **Push notifications**: Expo Notifications
 - **Hosting**: Render (backend), EAS / local builds (client)
@@ -61,9 +61,9 @@ MONGODB_URI
 REDIS_URL
 JWT_ACCESS_SECRET
 JWT_REFRESH_SECRET
-RESEND_API_KEY
+BREVO_API_KEY
 EMAIL_FROM_ADDRESS
-# If using Gmail SMTP instead of Resend:
+# If using Gmail SMTP instead of Brevo:
 # GMAIL_USER
 # GMAIL_APP_PASSWORD
 CLOUDINARY_CLOUD_NAME

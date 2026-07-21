@@ -1,15 +1,9 @@
 import nodemailer from 'nodemailer';
-import { Resend } from 'resend';
 
-const RESEND_API_KEY = process.env.RESEND_API_KEY;
+const BREVO_API_KEY = process.env.BREVO_API_KEY;
 const EMAIL_FROM_ADDRESS = process.env.EMAIL_FROM_ADDRESS || 'ChatConnect <noreply@chatconnect.app>';
 const GMAIL_USER = process.env.GMAIL_USER;
 const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD;
-
-let resendClient: Resend | null = null;
-if (RESEND_API_KEY) {
-  resendClient = new Resend(RESEND_API_KEY);
-}
 
 let smtpTransporter: nodemailer.Transporter | null = null;
 if (GMAIL_USER && GMAIL_APP_PASSWORD) {
@@ -20,6 +14,14 @@ if (GMAIL_USER && GMAIL_APP_PASSWORD) {
       pass: GMAIL_APP_PASSWORD,
     },
   });
+}
+
+function parseFromAddress(fromStr: string): { name: string; email: string } {
+  const match = fromStr.match(/^(?:"?([^"]*)"?\s)?<([^>]+)>$/);
+  if (match && match[2]) {
+    return { name: match[1]?.trim() || 'ChatConnect', email: match[2].trim() };
+  }
+  return { name: 'ChatConnect', email: fromStr.trim() };
 }
 
 export async function sendOTPEmail(email: string, otp: string): Promise<void> {
@@ -44,18 +46,33 @@ export async function sendOTPEmail(email: string, otp: string): Promise<void> {
     return;
   }
 
-  if (resendClient) {
+  if (BREVO_API_KEY) {
     try {
-      await resendClient.emails.send({
-        from: EMAIL_FROM_ADDRESS,
-        to: [normalizedEmail],
-        subject,
-        html: htmlContent,
+      const sender = parseFromAddress(EMAIL_FROM_ADDRESS);
+      const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'accept': 'application/json',
+          'api-key': BREVO_API_KEY,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          sender,
+          to: [{ email: normalizedEmail }],
+          subject,
+          htmlContent,
+        }),
       });
-      console.log(`[Resend] OTP email sent to ${normalizedEmail}`);
-      return;
+
+      if (response.ok) {
+        console.log(`[Brevo] OTP email sent successfully to ${normalizedEmail}`);
+        return;
+      } else {
+        const errorText = await response.text();
+        console.error(`[Brevo] Failed to send OTP email (${response.status}):`, errorText);
+      }
     } catch (e: any) {
-      console.error(`[Resend] Failed to send OTP email to ${normalizedEmail}:`, e.message);
+      console.error(`[Brevo] Error sending OTP email to ${normalizedEmail}:`, e.message);
     }
   }
 
@@ -75,5 +92,5 @@ export async function sendOTPEmail(email: string, otp: string): Promise<void> {
   }
 
   // Fallback if no email provider is configured
-  console.log(`[Email Service] No active email provider configured (RESEND_API_KEY or GMAIL credentials). OTP code '${otp}' was printed above.`);
+  console.log(`[Email Service] No active email provider configured (BREVO_API_KEY or GMAIL credentials). OTP code '${otp}' was printed above.`);
 }
