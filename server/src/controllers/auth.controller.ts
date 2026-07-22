@@ -413,3 +413,80 @@ export async function removeAvatar(req: AuthenticatedRequest, res: Response) {
   }
 }
 
+/**
+ * Forgot Password: Verify email exists and send OTP
+ */
+export async function forgotPassword(req: Request, res: Response) {
+  try {
+    const { email } = req.body;
+
+    if (!email || typeof email !== 'string') {
+      return res.status(400).json({ message: 'Valid email address is required' });
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      return res.status(400).json({ message: 'Invalid email address format' });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = await User.findOne({ email: normalizedEmail });
+
+    if (!user) {
+      return res.status(404).json({ message: 'No account found with this email address.' });
+    }
+
+    const otp = generateOTP();
+    await storeOTP(normalizedEmail, otp, 300);
+    await sendOTPEmail(normalizedEmail, otp);
+
+    return res.status(200).json({
+      message: 'Verification code sent successfully to your email.',
+    });
+  } catch (error: any) {
+    console.error('Forgot password error:', error);
+    return res.status(500).json({ message: error.message || 'Failed to request password reset' });
+  }
+}
+
+/**
+ * Reset Password: Verify OTP and update password
+ */
+export async function resetPassword(req: Request, res: Response) {
+  try {
+    const { email, otp, newPassword } = req.body;
+
+    if (!email || !otp || !newPassword) {
+      return res.status(400).json({ message: 'Email, verification code, and new password are required' });
+    }
+
+    if (typeof newPassword !== 'string' || newPassword.length < 6) {
+      return res.status(400).json({ message: 'New password must be at least 6 characters long' });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const isValid = await verifyOTP(normalizedEmail, otp.trim());
+
+    if (!isValid) {
+      return res.status(400).json({ message: 'Invalid or expired verification code' });
+    }
+
+    const user = await User.findOne({ email: normalizedEmail });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    user.password = hashedPassword;
+    await user.save();
+
+    return res.status(200).json({
+      message: 'Password reset successfully. You can now login.',
+    });
+  } catch (error: any) {
+    console.error('Reset password error:', error);
+    return res.status(500).json({ message: error.message || 'Failed to reset password' });
+  }
+}
+
+

@@ -83,7 +83,7 @@ EXPO_PUBLIC_API_URL
 *Update this section as the project progresses so any agent picking up the repo has current context.*
 
 - [ ] Phase 0 — Project Setup
-- [ ] Phase 1 — OTP Authentication (Email)
+- [x] Phase 1 — OTP Authentication (Email)
 - [ ] Phase 2 — Contacts & User Discovery
 - [ ] Phase 3 — Core 1:1 Messaging
 - [ ] Phase 4 — Presence & Notifications

@@ -36,6 +36,8 @@ interface AuthState {
   updateProfile: (data: { displayName?: string; age?: number; status?: string; avatarUrl?: string }) => Promise<boolean>;
   removeAvatar: () => Promise<boolean>;
   logout: () => Promise<void>;
+  forgotPassword: (email: string) => Promise<{ success: boolean; message?: string }>;
+  resetPassword: (email: string, otp: string, newPassword: string) => Promise<{ success: boolean; message?: string }>;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -118,6 +120,34 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch (error: any) {
       console.error('Send OTP error:', error?.response?.data || error.message);
       const msg = error?.response?.data?.message || 'Failed to send OTP code.';
+      set({ isLoading: false });
+      return { success: false, message: msg };
+    }
+  },
+
+  forgotPassword: async (email: string) => {
+    set({ isLoading: true });
+    try {
+      const response = await api.post('/api/auth/forgot-password', { email });
+      set({ isLoading: false });
+      return { success: true, message: response.data.message };
+    } catch (error: any) {
+      console.error('Forgot password error:', error?.response?.data || error.message);
+      const msg = error?.response?.data?.message || 'Failed to request password reset.';
+      set({ isLoading: false });
+      return { success: false, message: msg };
+    }
+  },
+
+  resetPassword: async (email: string, otp: string, newPassword: string) => {
+    set({ isLoading: true });
+    try {
+      const response = await api.post('/api/auth/reset-password', { email, otp, newPassword });
+      set({ isLoading: false });
+      return { success: true, message: response.data.message };
+    } catch (error: any) {
+      console.error('Reset password error:', error?.response?.data || error.message);
+      const msg = error?.response?.data?.message || 'Failed to reset password.';
       set({ isLoading: false });
       return { success: false, message: msg };
     }

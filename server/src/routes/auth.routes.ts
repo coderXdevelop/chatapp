@@ -1,11 +1,13 @@
 import { Router } from 'express';
 import {
   completeRegistration,
+  forgotPassword,
   getMe,
   login,
   refreshSession,
   registerInit,
   removeAvatar,
+  resetPassword,
   sendOTP,
   updateProfile,
   verifyOTPHandler,
@@ -19,6 +21,8 @@ router.post('/login', login);
 router.post('/register-init', registerInit);
 router.post('/verify-register-otp', verifyRegisterOTP);
 router.post('/complete-registration', completeRegistration);
+router.post('/forgot-password', forgotPassword);
+router.post('/reset-password', resetPassword);
 
 // Legacy/OTP-only routes
 router.post('/send-otp', sendOTP);
