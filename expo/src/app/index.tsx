@@ -5,7 +5,7 @@ export default function Index() {
   const { user } = useAuthStore();
 
   if (user) {
-    return <Redirect href={'/profile' as any} />;
+    return <Redirect href={'/home' as any} />;
   }
 
   return <Redirect href={'/login' as any} />;

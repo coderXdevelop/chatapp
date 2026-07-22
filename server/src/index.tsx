@@ -6,6 +6,7 @@ import mongoose from 'mongoose';
 import { Server } from 'socket.io';
 import authRoutes from './routes/auth.routes.js';
 import chatRoutes from './routes/chat.routes.js';
+import User from './models/User.js';
 import { setupSockets } from './sockets/socket.js';
 
 dotenv.config();
@@ -39,7 +40,27 @@ const MONGO_URI = process.env.MONGO_URI || process.env.MONGODB_URI || '';
 if (MONGO_URI) {
   mongoose
     .connect(MONGO_URI)
-    .then(() => console.log('Connected to MongoDB successfully.'))
+    .then(async () => {
+      console.log('Connected to MongoDB successfully.');
+      try {
+        const legacyUsers = await User.find({ connectId: { $exists: false } });
+        for (const user of legacyUsers) {
+          const parts = (user.email || '').split('@');
+          const base = (parts[0] || 'user').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+          let uniqueId = base;
+          let collision = await User.findOne({ connectId: uniqueId });
+          while (collision) {
+            uniqueId = `${base}_${Math.floor(1000 + Math.random() * 9000)}`;
+            collision = await User.findOne({ connectId: uniqueId });
+          }
+          user.connectId = uniqueId;
+          await user.save();
+          console.log(`Migrated User: ${user.email} -> allocated connectId: ${uniqueId}`);
+        }
+      } catch (err) {
+        console.error('Error migrating legacy users:', err);
+      }
+    })
     .catch((err) => console.error('MongoDB connection error:', err));
 } else {
   console.warn('MONGO_URI is not set in environment variables.');

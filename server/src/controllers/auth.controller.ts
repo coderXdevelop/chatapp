@@ -7,6 +7,18 @@ import { sendOTPEmail } from '../services/email.service.js';
 import { generateAccessToken, generateRefreshToken, verifyRefreshToken } from '../services/jwt.service.js';
 import { generateOTP, storeOTP, verifyOTP } from '../services/otp.service.js';
 
+async function generateUniqueConnectId(email: string): Promise<string> {
+  const parts = (email || '').split('@');
+  const base = (parts[0] || 'user').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+  let uniqueId = base;
+  let exists = await User.findOne({ connectId: uniqueId });
+  while (exists) {
+    uniqueId = `${base}_${Math.floor(1000 + Math.random() * 9000)}`;
+    exists = await User.findOne({ connectId: uniqueId });
+  }
+  return uniqueId;
+}
+
 /**
  * Register Step 1: Initialize Registration & Send OTP
  */
@@ -95,10 +107,12 @@ export async function completeRegistration(req: Request, res: Response) {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    const connectId = await generateUniqueConnectId(normalizedEmail);
     const userData: any = {
       email: normalizedEmail,
       password: hashedPassword,
       displayName: displayName?.trim() || normalizedEmail.split('@')[0] || 'ChatConnect User',
+      connectId,
       status: status?.trim() || 'Hey there! I am using ChatConnect.',
       avatarUrl: '',
       avatarPublicId: '',
@@ -131,6 +145,7 @@ export async function completeRegistration(req: Request, res: Response) {
         id: user._id,
         email: user.email,
         displayName: user.displayName,
+        connectId: user.connectId,
         age: user.age,
         status: user.status,
         avatarUrl: user.avatarUrl,
@@ -183,6 +198,7 @@ export async function login(req: Request, res: Response) {
         id: user._id,
         email: user.email,
         displayName: user.displayName,
+        connectId: user.connectId,
         age: user.age,
         status: user.status,
         avatarUrl: user.avatarUrl,
@@ -242,9 +258,11 @@ export async function verifyOTPHandler(req: Request, res: Response) {
 
     if (!user) {
       const defaultName = displayName?.trim() || normalizedEmail.split('@')[0] || 'ChatConnect User';
+      const connectId = await generateUniqueConnectId(normalizedEmail);
       user = await User.create({
         email: normalizedEmail,
         displayName: defaultName,
+        connectId,
         status: 'Hey there! I am using ChatConnect.',
       });
     } else if (displayName && displayName.trim() && user.displayName !== displayName.trim()) {
@@ -264,6 +282,7 @@ export async function verifyOTPHandler(req: Request, res: Response) {
         id: user._id,
         email: user.email,
         displayName: user.displayName,
+        connectId: user.connectId,
         age: user.age,
         status: user.status,
         avatarUrl: user.avatarUrl,
@@ -317,6 +336,7 @@ export async function getMe(req: AuthenticatedRequest, res: Response) {
         id: user._id,
         email: user.email,
         displayName: user.displayName,
+        connectId: user.connectId,
         age: user.age,
         status: user.status,
         avatarUrl: user.avatarUrl,
@@ -365,6 +385,7 @@ export async function updateProfile(req: AuthenticatedRequest, res: Response) {
         id: user._id,
         email: user.email,
         displayName: user.displayName,
+        connectId: user.connectId,
         age: user.age,
         status: user.status,
         avatarUrl: user.avatarUrl,
@@ -400,6 +421,7 @@ export async function removeAvatar(req: AuthenticatedRequest, res: Response) {
         id: user._id,
         email: user.email,
         displayName: user.displayName,
+        connectId: user.connectId,
         age: user.age,
         status: user.status,
         avatarUrl: user.avatarUrl,

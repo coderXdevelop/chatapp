@@ -3,6 +3,7 @@ import type { AuthenticatedRequest } from '../middleware/auth.middleware.js';
 import type { Server } from 'socket.io';
 import Chat from '../models/Chat.js';
 import Message from '../models/Message.js';
+import User from '../models/User.js';
 
 export async function getChats(req: AuthenticatedRequest, res: Response) {
   const userId = req.user?.userId;
@@ -25,38 +26,64 @@ export async function getChats(req: AuthenticatedRequest, res: Response) {
 
 export async function createChat(req: AuthenticatedRequest, res: Response) {
   const userId = req.user?.userId;
-  const { participantId } = req.body;
+  const { participantId, searchContact } = req.body;
 
   if (!userId) return res.status(401).json({ message: 'Unauthorized' });
-  if (!participantId) return res.status(400).json({ message: 'Participant ID required' });
 
   try {
+    let targetUserId = participantId;
+
+    // Search target user if connectId or email is provided
+    if (searchContact) {
+      const queryStr = searchContact.toLowerCase().trim();
+      const targetUser = await User.findOne({
+        $or: [
+          { connectId: queryStr },
+          { email: queryStr }
+        ]
+      });
+
+      if (!targetUser) {
+        return res.status(404).json({ message: 'User not found with this ID or Email.' });
+      }
+
+      if (targetUser._id.toString() === userId) {
+        return res.status(400).json({ message: 'You cannot add yourself as a contact.' });
+      }
+
+      targetUserId = targetUser._id;
+    }
+
+    if (!targetUserId) {
+      return res.status(400).json({ message: 'Participant identifier required' });
+    }
+
     // Check if 1:1 chat already exists
     let chat = await Chat.findOne({
-      participants: { $all: [userId, participantId] },
+      participants: { $all: [userId, targetUserId] },
     });
 
     if (chat) {
-      const populatedChat = await chat.populate('participants', 'displayName email avatarUrl status');
+      const populatedChat = await chat.populate('participants', 'displayName email avatarUrl status connectId');
       return res.status(200).json({ chat: populatedChat, isNew: false });
     }
 
     // Create new chat
     chat = new Chat({
-      participants: [userId, participantId],
-      unreadCounts: new Map([[userId, 0], [participantId, 0]]),
+      participants: [userId, targetUserId],
+      unreadCounts: new Map([[userId, 0], [targetUserId, 0]]),
     });
 
     await chat.save();
-    const populatedChat = await chat.populate('participants', 'displayName email avatarUrl status');
+    const populatedChat = await chat.populate('participants', 'displayName email avatarUrl status connectId');
 
     // Programmatically join socket rooms for both participants on backend if they are connected
     const io = req.app.get('io') as Server;
     if (io) {
       io.in(`user:${userId}`).socketsJoin(`chat:${chat._id}`);
-      io.in(`user:${participantId}`).socketsJoin(`chat:${chat._id}`);
+      io.in(`user:${targetUserId}`).socketsJoin(`chat:${chat._id}`);
       // Notify the other user that a chat has been created
-      io.to(`user:${participantId}`).emit('chat_created', populatedChat);
+      io.to(`user:${targetUserId}`).emit('chat_created', populatedChat);
     }
 
     return res.status(201).json({ chat: populatedChat, isNew: true });

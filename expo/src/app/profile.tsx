@@ -380,6 +380,20 @@ export default function ProfileScreen() {
               </View>
             </View>
 
+            {/* User ID */}
+            <View style={globalStyles.inputGroup}>
+              <Text style={globalStyles.label}>USER ID (SHARE THIS WITH FRIENDS)</Text>
+              <View style={[globalStyles.inputWrapper, styles.disabledInputWrapper]}>
+                <TextInput
+                  style={[globalStyles.input, styles.disabledInput]}
+                  value={user.connectId || 'Not Allocated'}
+                  editable={false}
+                  placeholder="User ID"
+                  placeholderTextColor={COLORS.textSecondary}
+                />
+              </View>
+            </View>
+
             {/* Email Address */}
             <View style={globalStyles.inputGroup}>
               <Text style={globalStyles.label}>EMAIL ADDRESS</Text>

@@ -22,8 +22,8 @@ export default function RootLayout() {
       // Redirect to login if user is not authenticated
       router.replace("/login" as any);
     } else if (user && inAuthGroup) {
-      // Redirect to profile if user is already authenticated
-      router.replace("/profile" as any);
+      // Redirect to home if user is already authenticated
+      router.replace("/home" as any);
     }
   }, [user, isInitialized, segments]);
 
@@ -39,6 +39,7 @@ export default function RootLayout() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="login" />
+      <Stack.Screen name="home" />
       <Stack.Screen name="profile" />
       <Stack.Screen name="chat/[id]" />
     </Stack>

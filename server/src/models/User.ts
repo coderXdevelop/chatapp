@@ -4,6 +4,7 @@ export interface IUser extends Document {
   email: string;
   password?: string;
   displayName: string;
+  connectId: string;
   age?: number | undefined;
   avatarUrl?: string;
   avatarPublicId?: string;
@@ -30,6 +31,14 @@ const UserSchema: Schema = new Schema(
       type: String,
       default: 'ChatConnect User',
       trim: true,
+    },
+    connectId: {
+      type: String,
+      unique: true,
+      sparse: true,
+      trim: true,
+      lowercase: true,
+      index: true,
     },
     age: {
       type: Number,

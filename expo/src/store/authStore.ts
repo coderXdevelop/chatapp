@@ -6,6 +6,7 @@ export interface UserProfile {
   id: string;
   email: string;
   displayName: string;
+  connectId?: string;
   age?: number;
   status: string;
   avatarUrl?: string;
