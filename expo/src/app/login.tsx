@@ -112,7 +112,7 @@ export default function LoginScreen() {
     try {
       const res = await login(cleanEmail, password);
       if (res.success) {
-        router.replace('/profile' as any);
+        router.replace('/home' as any);
       } else {
         setErrorMessage(res.message || 'Login failed.');
       }
@@ -209,7 +209,7 @@ export default function LoginScreen() {
       });
 
       if (success) {
-        router.replace('/profile' as any);
+        router.replace('/home' as any);
       } else {
         setErrorMessage('Failed to complete registration. Please try again.');
       }

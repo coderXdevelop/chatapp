@@ -8,11 +8,11 @@ import {
   Image,
   StyleSheet,
   ActivityIndicator,
-  SafeAreaView,
   ScrollView,
   Modal,
   Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '../store/authStore';
 import { useChatStore } from '../store/chatStore';
@@ -93,9 +93,6 @@ export default function HomeScreen() {
                   {socketConnected ? '🟢 Connected' : '🔴 Connecting...'}
                 </Text>
               </View>
-              <TouchableOpacity style={styles.addButton} onPress={() => setIsAddModalOpen(true)}>
-                <Text style={styles.addButtonText}>+</Text>
-              </TouchableOpacity>
             </View>
 
             {/* List of active chat threads */}
@@ -220,6 +217,17 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Floating Action Button (FAB) for adding contacts, WhatsApp-style */}
+      {activeTab === 'HOME' && (
+        <TouchableOpacity
+          style={styles.fab}
+          onPress={() => setIsAddModalOpen(true)}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.fabText}>+</Text>
+        </TouchableOpacity>
+      )}
+
       {/* Add Contact Modal */}
       <Modal
         visible={isAddModalOpen}
@@ -308,19 +316,29 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 2,
   },
-  addButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  fab: {
+    position: 'absolute',
+    bottom: 84, // 64 (navBar height) + 20
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 8,
+    zIndex: 999,
   },
-  addButtonText: {
+  fabText: {
     color: COLORS.primaryText,
-    fontSize: 24,
-    fontWeight: '700',
-    lineHeight: 28,
+    fontSize: 28,
+    fontWeight: '800',
+    lineHeight: 30,
+    marginTop: -2,
   },
   listContainer: {
     paddingBottom: 24,
