@@ -489,4 +489,41 @@ export async function resetPassword(req: Request, res: Response) {
   }
 }
 
+/**
+ * Delete User Account permanently
+ */
+export async function deleteAccount(req: AuthenticatedRequest, res: Response) {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Delete user's avatar from Cloudinary if it exists
+    if (user.avatarPublicId) {
+      try {
+        await deleteAvatar(user.avatarPublicId);
+      } catch (err) {
+        console.warn('Failed to delete avatar from Cloudinary during account deletion:', err);
+      }
+    }
+
+    // Delete the user from the database
+    await User.findByIdAndDelete(userId);
+
+    return res.status(200).json({
+      message: 'Account deleted successfully',
+    });
+  } catch (error: any) {
+    console.error('Delete account error:', error);
+    return res.status(500).json({ message: error.message || 'Failed to delete account' });
+  }
+}
+
+
 

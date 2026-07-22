@@ -38,6 +38,7 @@ interface AuthState {
   logout: () => Promise<void>;
   forgotPassword: (email: string) => Promise<{ success: boolean; message?: string }>;
   resetPassword: (email: string, otp: string, newPassword: string) => Promise<{ success: boolean; message?: string }>;
+  deleteAccount: () => Promise<{ success: boolean; message?: string }>;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -244,5 +245,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     await removeItem('access_token');
     await removeItem('refresh_token');
     set({ user: null, token: null, isLoading: false, isInitialized: true });
+  },
+
+  deleteAccount: async () => {
+    set({ isLoading: true });
+    try {
+      await api.delete('/api/auth/account');
+      await removeItem('access_token');
+      await removeItem('refresh_token');
+      set({ user: null, token: null, isLoading: false, isInitialized: true });
+      return { success: true };
+    } catch (error: any) {
+      console.error('Delete account error:', error?.response?.data || error.message);
+      const msg = error?.response?.data?.message || 'Failed to delete account.';
+      set({ isLoading: false });
+      return { success: false, message: msg };
+    }
   },
 }));

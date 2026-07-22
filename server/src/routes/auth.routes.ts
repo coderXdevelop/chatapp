@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import {
   completeRegistration,
+  deleteAccount,
   forgotPassword,
   getMe,
   login,
@@ -32,5 +33,6 @@ router.post('/refresh', refreshSession);
 router.get('/me', authenticateJWT, getMe);
 router.put('/profile', authenticateJWT, updateProfile);
 router.delete('/avatar', authenticateJWT, removeAvatar);
+router.delete('/account', authenticateJWT, deleteAccount);
 
 export default router;

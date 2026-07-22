@@ -27,6 +27,7 @@ export default function ProfileScreen() {
     removeAvatar,
     forgotPassword,
     resetPassword,
+    deleteAccount,
     isLoading,
   } = useAuthStore();
 
@@ -204,6 +205,29 @@ export default function ProfileScreen() {
     ]);
   };
 
+  const handleDeleteAccount = async () => {
+    Alert.alert(
+      'Delete Account',
+      'Are you sure you want to permanently delete your account? This action cannot be undone and all your data will be erased.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            const res = await deleteAccount();
+            if (res.success) {
+              Alert.alert('Success', 'Your account has been deleted.');
+              router.replace('/login' as any);
+            } else {
+              Alert.alert('Error', res.message || 'Failed to delete account.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const initial = (user.displayName || 'C').charAt(0).toUpperCase();
 
   return (
@@ -287,6 +311,22 @@ export default function ProfileScreen() {
                   <Text style={[styles.menuIcon, styles.destructiveMenuIcon]}>⏻</Text>
                 </View>
                 <Text style={[styles.menuItemText, styles.destructiveMenuItemText]}>Log Out</Text>
+              </View>
+            </TouchableOpacity>
+
+            <View style={styles.divider} />
+
+            {/* Delete Account */}
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={handleDeleteAccount}
+              activeOpacity={0.7}
+            >
+              <View style={styles.menuItemLeft}>
+                <View style={[styles.iconCircle, styles.destructiveIconCircle]}>
+                  <Text style={[styles.menuIcon, styles.destructiveMenuIcon]}>🗑️</Text>
+                </View>
+                <Text style={[styles.menuItemText, styles.destructiveMenuItemText]}>Delete Account</Text>
               </View>
             </TouchableOpacity>
           </View>
