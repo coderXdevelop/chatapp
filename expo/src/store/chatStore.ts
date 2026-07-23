@@ -14,6 +14,17 @@ export interface Message {
   };
   text: string;
   status: 'sending' | 'sent' | 'delivered' | 'read';
+  isEdited?: boolean;
+  isDeleted?: boolean;
+  replyTo?: {
+    _id: string;
+    sender: {
+      _id: string;
+      displayName: string;
+    };
+    text: string;
+  } | null;
+  isForwarded?: boolean;
   createdAt: string;
 }
 
@@ -25,6 +36,7 @@ export interface Chat {
     email: string;
     avatarUrl?: string;
     status: string;
+    connectId?: string;
   }>;
   lastMessage?: Message;
   unreadCounts: Record<string, number>;
@@ -42,7 +54,10 @@ interface ChatState {
   fetchChats: () => Promise<void>;
   createChat: (participantId: string) => Promise<Chat | null>;
   fetchMessages: (chatId: string, loadMore?: boolean) => Promise<void>;
-  sendMessage: (chatId: string, text: string) => Promise<void>;
+  sendMessage: (chatId: string, text: string, replyTo?: string) => Promise<void>;
+  editMessage: (chatId: string, messageId: string, newText: string) => Promise<boolean>;
+  deleteMessage: (chatId: string, messageId: string) => Promise<boolean>;
+  forwardMessages: (messageIds: string[], chatIds: string[], searchContacts?: string[]) => Promise<boolean>;
   markAsRead: (chatId: string) => void;
   connectSocket: () => void;
   disconnectSocket: () => void;
@@ -130,9 +145,24 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
-  sendMessage: async (chatId, text) => {
+  sendMessage: async (chatId, text, replyTo) => {
     const currentUser = useAuthStore.getState().user;
     if (!currentUser) return;
+
+    let replyToObj: any = null;
+    if (replyTo) {
+      const originalMsg = (get().messages[chatId] || []).find((m) => m._id === replyTo);
+      if (originalMsg) {
+        replyToObj = {
+          _id: originalMsg._id,
+          sender: {
+            _id: originalMsg.sender._id,
+            displayName: originalMsg.sender.displayName,
+          },
+          text: originalMsg.text,
+        };
+      }
+    }
 
     const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const optimisticMessage: Message = {
@@ -146,6 +176,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       },
       text,
       status: 'sending',
+      replyTo: replyToObj,
       createdAt: new Date().toISOString(),
     };
 
@@ -173,7 +204,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const handleFail = async () => {
       // Offline fallback: attempt HTTP post request directly
       try {
-        const res = await api.post(`/api/chats/${chatId}/messages`, { text, tempId });
+        const res = await api.post(`/api/chats/${chatId}/messages`, { text, tempId, replyTo });
         handleSuccess(res.data.message);
       } catch (err) {
         set((state) => {
@@ -190,7 +221,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (socket && get().socketConnected) {
       socket.emit(
         'send_message',
-        { chatId, text, tempId },
+        { chatId, text, tempId, replyTo },
         (ack: { success: boolean; message?: Message; error?: string }) => {
           if (ack && ack.success && ack.message) {
             handleSuccess(ack.message);
@@ -203,6 +234,84 @@ export const useChatStore = create<ChatState>((set, get) => ({
     } else {
       console.warn('Socket not connected, trying REST fallback directly');
       handleFail();
+    }
+  },
+
+  editMessage: async (chatId, messageId, newText) => {
+    const socket = get().socket;
+    if (socket && get().socketConnected) {
+      return new Promise<boolean>((resolve) => {
+        socket.emit(
+          'edit_message',
+          { chatId, messageId, text: newText },
+          (ack: { success: boolean; message?: Message; error?: string }) => {
+            if (ack && ack.success && ack.message) {
+              set((state) => {
+                const list = state.messages[chatId] || [];
+                const updated = list.map((m) => (m._id === messageId ? ack.message! : m));
+                return {
+                  messages: { ...state.messages, [chatId]: updated },
+                };
+              });
+              resolve(true);
+            } else {
+              console.warn('Socket edit_message ack failed:', ack?.error);
+              resolve(false);
+            }
+          }
+        );
+      });
+    }
+    return false;
+  },
+
+  deleteMessage: async (chatId, messageId) => {
+    const socket = get().socket;
+    if (socket && get().socketConnected) {
+      return new Promise<boolean>((resolve) => {
+        socket.emit(
+          'delete_message',
+          { chatId, messageId },
+          (ack: { success: boolean; messageId?: string; error?: string }) => {
+            if (ack && ack.success) {
+              set((state) => {
+                const list = state.messages[chatId] || [];
+                const updated = list.map((m) =>
+                  m._id === messageId
+                    ? { ...m, text: 'This message was deleted', isDeleted: true }
+                    : m
+                );
+                return {
+                  messages: { ...state.messages, [chatId]: updated },
+                };
+              });
+              resolve(true);
+            } else {
+              console.warn('Socket delete_message ack failed:', ack?.error);
+              resolve(false);
+            }
+          }
+        );
+      });
+    }
+    return false;
+  },
+
+  forwardMessages: async (messageIds, chatIds, searchContacts = []) => {
+    try {
+      const res = await api.post('/api/chats/forward', {
+        messageIds,
+        chatIds,
+        searchContacts,
+      });
+      if (res.data && res.data.success) {
+        await get().fetchChats();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      console.error('Forward messages error:', e);
+      return false;
     }
   },
 
@@ -274,6 +383,36 @@ export const useChatStore = create<ChatState>((set, get) => ({
           )
           .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
       }));
+    });
+
+    newSocket.on('message_edited', (editedMsg: Message) => {
+      set((state) => {
+        const list = state.messages[editedMsg.chat] || [];
+        const updated = list.map((m) => (m._id === editedMsg._id ? editedMsg : m));
+        return {
+          messages: {
+            ...state.messages,
+            [editedMsg.chat]: updated,
+          },
+        };
+      });
+    });
+
+    newSocket.on('message_deleted', (data: { chatId: string; messageId: string; text: string; isDeleted: boolean }) => {
+      set((state) => {
+        const list = state.messages[data.chatId] || [];
+        const updated = list.map((m) =>
+          m._id === data.messageId
+            ? { ...m, text: data.text, isDeleted: data.isDeleted }
+            : m
+        );
+        return {
+          messages: {
+            ...state.messages,
+            [data.chatId]: updated,
+          },
+        };
+      });
     });
 
     newSocket.on('messages_read', (data: { chatId: string; userId: string }) => {

@@ -9,12 +9,69 @@ import {
   Platform,
   ActivityIndicator,
   StyleSheet,
+  Vibration,
+  Modal,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useChatStore } from '../../store/chatStore';
+import { Swipeable } from 'react-native-gesture-handler';
+import { useChatStore, Message } from '../../store/chatStore';
 import { useAuthStore } from '../../store/authStore';
 import { COLORS } from '../../styles/theme';
+
+// Swipeable message row wrapper component
+const SwipeableRow = ({
+  item,
+  children,
+  onReply,
+  isMe,
+}: {
+  item: Message;
+  children: React.ReactNode;
+  onReply: () => void;
+  isMe: boolean;
+}) => {
+  const swipeableRef = useRef<any>(null);
+
+  const renderLeftActions = () => {
+    return (
+      <View style={styles.replyIconContainerLeft}>
+        <Text style={styles.replyIconText}>↩</Text>
+      </View>
+    );
+  };
+
+  const renderRightActions = () => {
+    return (
+      <View style={styles.replyIconContainerRight}>
+        <Text style={styles.replyIconText}>↩</Text>
+      </View>
+    );
+  };
+
+  const handleSwipeWillOpen = () => {
+    if (swipeableRef.current) {
+      swipeableRef.current.close();
+    }
+    Vibration.vibrate(15);
+    onReply();
+  };
+
+  return (
+    <Swipeable
+      ref={swipeableRef}
+      friction={2}
+      leftThreshold={50}
+      rightThreshold={50}
+      renderLeftActions={!isMe && !item.isDeleted ? renderLeftActions : undefined}
+      renderRightActions={isMe && !item.isDeleted ? renderRightActions : undefined}
+      onSwipeableWillOpen={handleSwipeWillOpen}
+    >
+      {children}
+    </Swipeable>
+  );
+};
 
 export default function ChatScreen() {
   const { id: chatId } = useLocalSearchParams<{ id: string }>();
@@ -28,11 +85,20 @@ export default function ChatScreen() {
     socketConnected,
     fetchMessages,
     sendMessage,
+    editMessage,
+    deleteMessage,
     markAsRead,
     connectSocket,
   } = useChatStore();
 
   const [text, setText] = useState('');
+  const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+  const [editingMessage, setEditingMessage] = useState<Message | null>(null);
+  
+  // States for long press options menu
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
+
   const chatMessages = messages[chatId || ''] || [];
   const isLoading = loadingMessages[chatId || ''] || false;
   const hasMore = hasMoreMessages[chatId || ''] !== false;
@@ -42,27 +108,74 @@ export default function ChatScreen() {
   const recipient = currentChat?.participants.find((p) => p._id !== user?.id);
   const chatTitle = recipient?.displayName || 'Conversation';
 
+  const flatListRef = useRef<FlatList>(null);
+
   useEffect(() => {
     if (!chatId) return;
 
-    // Connect socket and listen
     connectSocket();
-    // Load initial batch of messages
     fetchMessages(chatId);
-    // Mark incoming messages as read
     markAsRead(chatId);
   }, [chatId]);
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!text.trim() || !chatId) return;
-    sendMessage(chatId, text.trim());
-    setText('');
+
+    if (editingMessage) {
+      const success = await editMessage(chatId, editingMessage._id, text.trim());
+      if (success) {
+        setEditingMessage(null);
+        setText('');
+      } else {
+        Alert.alert('Error', 'Failed to edit message.');
+      }
+    } else {
+      sendMessage(chatId, text.trim(), replyingTo?._id);
+      setReplyingTo(null);
+      setText('');
+    }
   };
 
   const handleLoadMore = () => {
     if (chatId && hasMore && !isLoading) {
       fetchMessages(chatId, true);
     }
+  };
+
+  const handleLongPressMessage = (msg: Message) => {
+    if (msg.isDeleted) return;
+    Vibration.vibrate(10);
+    setSelectedMessage(msg);
+    setIsMenuOpen(true);
+  };
+
+  const handleDeleteMessage = (msg: Message) => {
+    Alert.alert(
+      'Delete Message',
+      'Are you sure you want to delete this message for everyone?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            if (chatId) {
+              const success = await deleteMessage(chatId, msg._id);
+              if (!success) {
+                Alert.alert('Error', 'Failed to delete message.');
+              }
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleForwardMessage = (msg: Message) => {
+    router.push({
+      pathname: '/forward',
+      params: { messageIds: [msg._id] },
+    } as any);
   };
 
   return (
@@ -85,6 +198,7 @@ export default function ChatScreen() {
 
       {/* Message List */}
       <FlatList
+        ref={flatListRef}
         data={chatMessages}
         keyExtractor={(item) => item._id}
         inverted // Renders list from bottom to top
@@ -99,35 +213,117 @@ export default function ChatScreen() {
         renderItem={({ item }) => {
           const isMe = item.sender._id === user?.id;
           return (
-            <View style={[styles.messageRow, isMe ? styles.myMessageRow : styles.otherMessageRow]}>
-              <View style={[styles.bubble, isMe ? styles.myBubble : styles.otherBubble]}>
-                <Text style={[styles.bubbleText, isMe ? styles.myBubbleText : styles.otherBubbleText]}>
-                  {item.text}
-                </Text>
-                <View style={styles.metaRow}>
-                  <Text style={styles.timeText}>
-                    {new Date(item.createdAt).toLocaleTimeString([], {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </Text>
-                  {isMe && (
-                    <Text style={[styles.statusText, item.status === 'read' && styles.statusRead]}>
-                      {item.status === 'sending' ? '⏳' : item.status === 'read' ? '✓✓' : '✓'}
+            <SwipeableRow item={item} isMe={isMe} onReply={() => setReplyingTo(item)}>
+              <TouchableOpacity
+                onLongPress={() => handleLongPressMessage(item)}
+                activeOpacity={0.8}
+                style={[styles.messageRow, isMe ? styles.myMessageRow : styles.otherMessageRow]}
+              >
+                <View style={[styles.bubble, isMe ? styles.myBubble : styles.otherBubble]}>
+                  {/* Replied-To Message Header inside the bubble */}
+                  {item.replyTo && !item.isDeleted && (
+                    <View
+                      style={[
+                        styles.bubbleReplyPreview,
+                        isMe ? styles.myBubbleReplyPreview : styles.otherBubbleReplyPreview,
+                      ]}
+                    >
+                      <Text style={styles.bubbleReplySender} numberOfLines={1}>
+                        {item.replyTo.sender._id === user?.id ? 'You' : item.replyTo.sender.displayName}
+                      </Text>
+                      <Text style={styles.bubbleReplyText} numberOfLines={1}>
+                        {item.replyTo.text}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Forwarded Tag */}
+                  {item.isForwarded && !item.isDeleted && (
+                    <Text style={[styles.forwardedText, isMe ? styles.myForwardedText : styles.otherForwardedText]}>
+                      ↪ Forwarded
                     </Text>
                   )}
+
+                  <Text
+                    style={[
+                      styles.bubbleText,
+                      isMe ? styles.myBubbleText : styles.otherBubbleText,
+                      item.isDeleted && styles.deletedBubbleText,
+                    ]}
+                  >
+                    {item.text}
+                  </Text>
+                  
+                  {!item.isDeleted && (
+                    <View style={styles.metaRow}>
+                      {item.isEdited && <Text style={styles.editedText}>(edited)</Text>}
+                      <Text style={styles.timeText}>
+                        {new Date(item.createdAt).toLocaleTimeString([], {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </Text>
+                      {isMe && (
+                        <Text style={[styles.statusText, item.status === 'read' && styles.statusRead]}>
+                          {item.status === 'sending' ? '⏳' : item.status === 'read' ? '✓✓' : '✓'}
+                        </Text>
+                      )}
+                    </View>
+                  )}
                 </View>
-              </View>
-            </View>
+              </TouchableOpacity>
+            </SwipeableRow>
           );
         }}
       />
+
+      {/* Reply Preview Banner */}
+      {replyingTo && (
+        <View style={styles.replyBanner}>
+          <View style={styles.replyBannerBorder} />
+          <View style={styles.replyBannerContent}>
+            <Text style={styles.replyBannerSender}>
+              Replying to {replyingTo.sender._id === user?.id ? 'yourself' : replyingTo.sender.displayName}
+            </Text>
+            <Text style={styles.replyBannerText} numberOfLines={1}>
+              {replyingTo.text}
+            </Text>
+          </View>
+          <TouchableOpacity onPress={() => setReplyingTo(null)} style={styles.replyCloseButton}>
+            <Text style={styles.replyCloseText}>✕</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Editing Banner */}
+      {editingMessage && (
+        <View style={styles.replyBanner}>
+          <View style={[styles.replyBannerBorder, { backgroundColor: COLORS.primary }]} />
+          <View style={styles.replyBannerContent}>
+            <Text style={[styles.replyBannerSender, { color: COLORS.primary }]}>
+              Editing Message
+            </Text>
+            <Text style={styles.replyBannerText} numberOfLines={1}>
+              {editingMessage.text}
+            </Text>
+          </View>
+          <TouchableOpacity
+            onPress={() => {
+              setEditingMessage(null);
+              setText('');
+            }}
+            style={styles.replyCloseButton}
+          >
+            <Text style={styles.replyCloseText}>✕</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Input container */}
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={styles.inputContainer}>
           <TextInput
-            placeholder="Type a message..."
+            placeholder={editingMessage ? "Edit message..." : "Type a message..."}
             placeholderTextColor={COLORS.textSecondary}
             value={text}
             onChangeText={setText}
@@ -139,10 +335,81 @@ export default function ChatScreen() {
             disabled={!text.trim()}
             style={[styles.sendButton, !text.trim() && styles.sendButtonDisabled]}
           >
-            <Text style={styles.sendButtonText}>Send</Text>
+            <Text style={styles.sendButtonText}>{editingMessage ? 'Update' : 'Send'}</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Long Press Actions Modal */}
+      <Modal
+        visible={isMenuOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsMenuOpen(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setIsMenuOpen(false)}
+        >
+          <View style={styles.menuContainer}>
+            <Text style={styles.menuTitle} numberOfLines={1}>
+              Message Actions
+            </Text>
+
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                if (selectedMessage) setReplyingTo(selectedMessage);
+                setIsMenuOpen(false);
+              }}
+            >
+              <Text style={styles.menuItemText}>↩ Reply</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                if (selectedMessage) handleForwardMessage(selectedMessage);
+                setIsMenuOpen(false);
+              }}
+            >
+              <Text style={styles.menuItemText}>➡️ Forward</Text>
+            </TouchableOpacity>
+
+            {selectedMessage?.sender._id === user?.id && (
+              <>
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={() => {
+                    if (selectedMessage) {
+                      setEditingMessage(selectedMessage);
+                      setText(selectedMessage.text);
+                    }
+                    setIsMenuOpen(false);
+                  }}
+                >
+                  <Text style={styles.menuItemText}>✏️ Edit</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.menuItem, styles.menuItemDelete]}
+                  onPress={() => {
+                    if (selectedMessage) handleDeleteMessage(selectedMessage);
+                    setIsMenuOpen(false);
+                  }}
+                >
+                  <Text style={styles.menuItemDeleteText}>🗑️ Delete for everyone</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            <TouchableOpacity style={styles.menuCancelButton} onPress={() => setIsMenuOpen(false)}>
+              <Text style={styles.menuCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -232,6 +499,11 @@ const styles = StyleSheet.create({
   otherBubbleText: {
     color: COLORS.textPrimary, // White text
   },
+  deletedBubbleText: {
+    fontStyle: 'italic',
+    color: COLORS.textSecondary,
+    opacity: 0.8,
+  },
   metaRow: {
     flexDirection: 'row',
     alignSelf: 'flex-end',
@@ -242,6 +514,12 @@ const styles = StyleSheet.create({
   timeText: {
     fontSize: 10,
     color: COLORS.textSecondary,
+  },
+  editedText: {
+    fontSize: 9,
+    color: COLORS.textSecondary,
+    fontStyle: 'italic',
+    marginRight: 2,
   },
   statusText: {
     fontSize: 10,
@@ -284,5 +562,160 @@ const styles = StyleSheet.create({
     color: COLORS.primaryText,
     fontWeight: '800',
     fontSize: 15,
+  },
+  // Swipeable structures
+  replyIconContainerLeft: {
+    width: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 30,
+    marginVertical: 4,
+    marginRight: 10,
+  },
+  replyIconContainerRight: {
+    width: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 30,
+    marginVertical: 4,
+    marginLeft: 10,
+  },
+  replyIconText: {
+    fontSize: 22,
+    color: COLORS.primary,
+  },
+  // Reply banner above input
+  replyBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.cardBackground,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  replyBannerBorder: {
+    width: 4,
+    height: '100%',
+    backgroundColor: COLORS.primary,
+    borderRadius: 2,
+    marginRight: 10,
+  },
+  replyBannerContent: {
+    flex: 1,
+  },
+  replyBannerSender: {
+    color: COLORS.primary,
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  replyBannerText: {
+    color: COLORS.textPrimary,
+    fontSize: 14,
+  },
+  replyCloseButton: {
+    padding: 6,
+  },
+  replyCloseText: {
+    color: COLORS.textSecondary,
+    fontSize: 16,
+  },
+  // Inner bubble reply preview styling
+  bubbleReplyPreview: {
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.primary,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 4,
+    marginBottom: 6,
+    width: '100%',
+  },
+  myBubbleReplyPreview: {
+    borderLeftColor: '#000',
+    backgroundColor: 'rgba(0,0,0,0.08)',
+  },
+  otherBubbleReplyPreview: {
+    borderLeftColor: COLORS.primary,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  bubbleReplySender: {
+    fontWeight: '700',
+    fontSize: 11,
+    color: COLORS.primary,
+    marginBottom: 1,
+  },
+  bubbleReplyText: {
+    fontSize: 13,
+    color: COLORS.textPrimary,
+  },
+  // Forwarded text indicator
+  forwardedText: {
+    fontSize: 11,
+    fontStyle: 'italic',
+    marginBottom: 3,
+  },
+  myForwardedText: {
+    color: 'rgba(0,0,0,0.5)',
+  },
+  otherForwardedText: {
+    color: COLORS.textSecondary,
+  },
+  // Modal styles for message options
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  menuContainer: {
+    backgroundColor: COLORS.cardBackground,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 24,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  menuTitle: {
+    color: COLORS.textSecondary,
+    fontSize: 13,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 16,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  menuItem: {
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  menuItemText: {
+    color: COLORS.textPrimary,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  menuItemDelete: {
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  menuItemDeleteText: {
+    color: '#EF4444',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  menuCancelButton: {
+    marginTop: 16,
+    paddingVertical: 14,
+    backgroundColor: '#1E293B',
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  menuCancelText: {
+    color: COLORS.textPrimary,
+    fontSize: 16,
+    fontWeight: '700',
   },
 });

@@ -41,9 +41,9 @@ export function setupSockets(io: Server) {
     }
 
     // Handle sending a message
-    socket.on('send_message', async (data: { chatId: string; text: string; tempId?: string }, callback) => {
+    socket.on('send_message', async (data: { chatId: string; text: string; tempId?: string; replyTo?: string }, callback) => {
       try {
-        const { chatId, text, tempId } = data;
+        const { chatId, text, tempId, replyTo } = data;
         const chat = await Chat.findOne({ _id: chatId, participants: userId });
         if (!chat) {
           return callback && callback({ success: false, error: 'Unauthorized or chat not found' });
@@ -55,10 +55,14 @@ export function setupSockets(io: Server) {
           text,
           status: 'sent',
           tempId,
+          replyTo: replyTo || null,
         });
         await message.save();
 
-        const populated = await message.populate('sender', 'displayName avatarUrl status');
+        const populated = await message.populate([
+          { path: 'sender', select: 'displayName avatarUrl status' },
+          { path: 'replyTo', populate: { path: 'sender', select: 'displayName' } }
+        ]);
 
         // Update Chat metadata (last message and unread count)
         chat.lastMessage = message._id as any;
@@ -76,6 +80,56 @@ export function setupSockets(io: Server) {
         if (callback) callback({ success: true, message: populated });
       } catch (err: any) {
         console.error('Socket send_message error:', err);
+        if (callback) callback({ success: false, error: err.message });
+      }
+    });
+
+    // Handle editing a message
+    socket.on('edit_message', async (data: { chatId: string; messageId: string; text: string }, callback) => {
+      try {
+        const { chatId, messageId, text } = data;
+        const message = await Message.findOne({ _id: messageId, chat: chatId, sender: userId });
+        if (!message) {
+          return callback && callback({ success: false, error: 'Message not found or unauthorized' });
+        }
+        if (message.isDeleted) {
+          return callback && callback({ success: false, error: 'Cannot edit a deleted message' });
+        }
+
+        message.text = text;
+        message.isEdited = true;
+        await message.save();
+
+        const populated = await message.populate([
+          { path: 'sender', select: 'displayName avatarUrl status' },
+          { path: 'replyTo', populate: { path: 'sender', select: 'displayName' } }
+        ]);
+
+        io.to(`chat:${chatId}`).emit('message_edited', populated);
+        if (callback) callback({ success: true, message: populated });
+      } catch (err: any) {
+        console.error('Socket edit_message error:', err);
+        if (callback) callback({ success: false, error: err.message });
+      }
+    });
+
+    // Handle deleting a message
+    socket.on('delete_message', async (data: { chatId: string; messageId: string }, callback) => {
+      try {
+        const { chatId, messageId } = data;
+        const message = await Message.findOne({ _id: messageId, chat: chatId, sender: userId });
+        if (!message) {
+          return callback && callback({ success: false, error: 'Message not found or unauthorized' });
+        }
+
+        message.text = 'This message was deleted';
+        message.isDeleted = true;
+        await message.save();
+
+        io.to(`chat:${chatId}`).emit('message_deleted', { chatId, messageId, text: message.text, isDeleted: true });
+        if (callback) callback({ success: true, messageId });
+      } catch (err: any) {
+        console.error('Socket delete_message error:', err);
         if (callback) callback({ success: false, error: err.message });
       }
     });

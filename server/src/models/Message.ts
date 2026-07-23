@@ -6,6 +6,10 @@ export interface IMessage extends Document {
   text: string;
   status: 'sending' | 'sent' | 'delivered' | 'read';
   tempId?: string;
+  isEdited?: boolean;
+  isDeleted?: boolean;
+  replyTo?: mongoose.Types.ObjectId | null;
+  isForwarded?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -35,6 +39,23 @@ const MessageSchema: Schema = new Schema(
     },
     tempId: {
       type: String,
+    },
+    isEdited: {
+      type: Boolean,
+      default: false,
+    },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
+    replyTo: {
+      type: Schema.Types.ObjectId,
+      ref: 'Message',
+      default: null,
+    },
+    isForwarded: {
+      type: Boolean,
+      default: false,
     },
   },
   {

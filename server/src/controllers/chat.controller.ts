@@ -112,7 +112,11 @@ export async function getMessages(req: AuthenticatedRequest, res: Response) {
     const messages = await Message.find(query)
       .sort({ createdAt: -1 })
       .limit(Number(limit))
-      .populate('sender', 'displayName avatarUrl status');
+      .populate('sender', 'displayName avatarUrl status')
+      .populate({
+        path: 'replyTo',
+        populate: { path: 'sender', select: 'displayName' }
+      });
 
     return res.status(200).json({ messages });
   } catch (error: any) {
@@ -123,7 +127,7 @@ export async function getMessages(req: AuthenticatedRequest, res: Response) {
 export async function sendMessageHttp(req: AuthenticatedRequest, res: Response) {
   const userId = req.user?.userId;
   const { chatId } = req.params;
-  const { text, tempId } = req.body;
+  const { text, tempId, replyTo } = req.body;
 
   if (!userId) return res.status(401).json({ message: 'Unauthorized' });
   if (!text) return res.status(400).json({ message: 'Message text required' });
@@ -138,10 +142,14 @@ export async function sendMessageHttp(req: AuthenticatedRequest, res: Response) 
       text,
       status: 'sent',
       tempId,
+      replyTo: replyTo || null,
     });
     await message.save();
 
-    const populatedMessage = await message.populate('sender', 'displayName avatarUrl status');
+    const populatedMessage = await message.populate([
+      { path: 'sender', select: 'displayName avatarUrl status' },
+      { path: 'replyTo', populate: { path: 'sender', select: 'displayName' } }
+    ]);
 
     // Update last message & unread counters
     chat.lastMessage = message._id as any;
@@ -162,5 +170,116 @@ export async function sendMessageHttp(req: AuthenticatedRequest, res: Response) 
     return res.status(201).json({ message: populatedMessage });
   } catch (error: any) {
     return res.status(500).json({ message: 'Failed to send message', error: error.message });
+  }
+}
+
+export async function forwardMessages(req: AuthenticatedRequest, res: Response) {
+  const userId = req.user?.userId;
+  const { messageIds, chatIds, searchContacts } = req.body;
+
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+  if (!messageIds || !Array.isArray(messageIds) || messageIds.length === 0) {
+    return res.status(400).json({ message: 'messageIds array is required' });
+  }
+
+  try {
+    // 1. Fetch the source messages to forward
+    const sourceMessages = await Message.find({ _id: { $in: messageIds } }).sort({ createdAt: 1 });
+    if (sourceMessages.length === 0) {
+      return res.status(404).json({ message: 'No messages found to forward' });
+    }
+
+    // 2. Resolve all target chat IDs (including creating chats for searchContacts)
+    const resolvedChatIds: string[] = [];
+    if (chatIds && Array.isArray(chatIds)) {
+      resolvedChatIds.push(...chatIds);
+    }
+
+    if (searchContacts && Array.isArray(searchContacts)) {
+      for (const contact of searchContacts) {
+        const queryStr = contact.toLowerCase().trim();
+        if (!queryStr) continue;
+
+        const targetUser = await User.findOne({
+          $or: [
+            { connectId: queryStr },
+            { email: queryStr }
+          ]
+        });
+
+        if (targetUser && targetUser._id.toString() !== userId) {
+          // Check if chat already exists
+          let chat = await Chat.findOne({
+            participants: { $all: [userId, targetUser._id] },
+          });
+
+          if (!chat) {
+            chat = new Chat({
+              participants: [userId, targetUser._id],
+              unreadCounts: new Map([[userId, 0], [targetUser._id.toString(), 0]]),
+            });
+            await chat.save();
+
+            const populatedChat = await chat.populate('participants', 'displayName email avatarUrl status connectId');
+            const io = req.app.get('io') as Server;
+            if (io) {
+              io.in(`user:${userId}`).socketsJoin(`chat:${chat._id}`);
+              io.in(`user:${targetUser._id}`).socketsJoin(`chat:${chat._id}`);
+              io.to(`user:${targetUser._id}`).emit('chat_created', populatedChat);
+            }
+          }
+          resolvedChatIds.push(chat._id.toString());
+        }
+      }
+    }
+
+    // Ensure we have unique chat IDs
+    const uniqueChatIds = Array.from(new Set(resolvedChatIds));
+    if (uniqueChatIds.length === 0) {
+      return res.status(400).json({ message: 'No valid recipient chats resolved' });
+    }
+
+    const io = req.app.get('io') as Server;
+    const sentMessagesByChat: Record<string, any[]> = {};
+
+    // 3. For each unique chat, create and send the messages
+    for (const chatId of uniqueChatIds) {
+      const chat = await Chat.findOne({ _id: chatId, participants: userId });
+      if (!chat) continue;
+
+      sentMessagesByChat[chatId] = [];
+
+      for (const srcMsg of sourceMessages) {
+        const message = new Message({
+          chat: chatId,
+          sender: userId,
+          text: srcMsg.text,
+          status: 'sent',
+          isForwarded: true,
+        });
+        await message.save();
+
+        const populated = await message.populate('sender', 'displayName avatarUrl status');
+
+        chat.lastMessage = message._id as any;
+        chat.participants.forEach((pId) => {
+          if (pId.toString() !== userId) {
+            const count = chat.unreadCounts.get(pId.toString()) || 0;
+            chat.unreadCounts.set(pId.toString(), count + 1);
+          }
+        });
+
+        sentMessagesByChat[chatId].push(populated);
+
+        if (io) {
+          io.to(`chat:${chatId}`).emit('new_message', populated);
+        }
+      }
+      await chat.save();
+    }
+
+    return res.status(200).json({ success: true, forwarded: sentMessagesByChat });
+  } catch (error: any) {
+    return res.status(500).json({ message: 'Error forwarding messages', error: error.message });
   }
 }
