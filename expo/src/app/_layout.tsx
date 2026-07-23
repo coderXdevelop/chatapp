@@ -1,3 +1,4 @@
+import Constants from "expo-constants";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Stack, useSegments, useRouter } from "expo-router";
 import { useEffect } from "react";
@@ -30,16 +31,30 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (user) {
+      // expo-notifications does not support push notifications inside Expo Go on SDK 53+
+      const isExpoGo =
+        Constants.appOwnership === "expo" ||
+        (Constants.executionEnvironment as string) === "store-client";
+
+      if (isExpoGo) {
+        console.warn("Skipping push notification registration: remote notifications are not supported in Expo Go on SDK 53+.");
+        return;
+      }
+
       // Dynamic import to avoid initialization issues
       import("../services/notifications").then(
         ({ registerForPushNotificationsAsync, registerPushTokenOnBackend }) => {
-          registerForPushNotificationsAsync().then((token) => {
-            if (token) {
-              registerPushTokenOnBackend(token);
-            }
-          });
+          if (registerForPushNotificationsAsync) {
+            registerForPushNotificationsAsync().then((token) => {
+              if (token) {
+                registerPushTokenOnBackend(token);
+              }
+            });
+          }
         }
-      );
+      ).catch((err) => {
+        console.error("Failed to load notifications service:", err);
+      });
     }
   }, [user]);
 
