@@ -37,6 +37,7 @@ export interface Chat {
     avatarUrl?: string;
     status: string;
     connectId?: string;
+    age?: number;
   }>;
   lastMessage?: Message;
   unreadCounts: Record<string, number>;

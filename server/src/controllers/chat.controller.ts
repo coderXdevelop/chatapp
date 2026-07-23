@@ -12,7 +12,7 @@ export async function getChats(req: AuthenticatedRequest, res: Response) {
 
   try {
     const chats = await Chat.find({ participants: userId })
-      .populate('participants', 'displayName email avatarUrl status')
+      .populate('participants', 'displayName email avatarUrl status connectId age')
       .populate({
         path: 'lastMessage',
         populate: { path: 'sender', select: 'displayName' },
@@ -65,7 +65,7 @@ export async function createChat(req: AuthenticatedRequest, res: Response) {
     });
 
     if (chat) {
-      const populatedChat = await chat.populate('participants', 'displayName email avatarUrl status connectId');
+      const populatedChat = await chat.populate('participants', 'displayName email avatarUrl status connectId age');
       return res.status(200).json({ chat: populatedChat, isNew: false });
     }
 
@@ -76,7 +76,7 @@ export async function createChat(req: AuthenticatedRequest, res: Response) {
     });
 
     await chat.save();
-    const populatedChat = await chat.populate('participants', 'displayName email avatarUrl status connectId');
+    const populatedChat = await chat.populate('participants', 'displayName email avatarUrl status connectId age');
 
     // Programmatically join socket rooms for both participants on backend if they are connected
     const io = req.app.get('io') as Server;
@@ -243,7 +243,7 @@ export async function forwardMessages(req: AuthenticatedRequest, res: Response) 
             });
             await chat.save();
 
-            const populatedChat = await chat.populate('participants', 'displayName email avatarUrl status connectId');
+            const populatedChat = await chat.populate('participants', 'displayName email avatarUrl status connectId age');
             const io = req.app.get('io') as Server;
             if (io) {
               io.in(`user:${userId}`).socketsJoin(`chat:${chat._id}`);

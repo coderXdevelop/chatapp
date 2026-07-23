@@ -12,6 +12,7 @@ import {
   Vibration,
   Modal,
   Alert,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -98,6 +99,10 @@ export default function ChatScreen() {
   // States for long press options menu
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
+
+  // States for viewing user profile details and viewing avatar fullscreen
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isAvatarViewerOpen, setIsAvatarViewerOpen] = useState(false);
 
   const chatMessages = messages[chatId || ''] || [];
   const isLoading = loadingMessages[chatId || ''] || false;
@@ -205,14 +210,18 @@ export default function ChatScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
-        <View style={styles.headerTitleContainer}>
+        <TouchableOpacity
+          onPress={() => recipient && setIsProfileModalOpen(true)}
+          style={styles.headerTitleContainer}
+          activeOpacity={0.7}
+        >
           <Text style={styles.headerTitle} numberOfLines={1}>
             {chatTitle}
           </Text>
           <Text style={styles.connectionStatus}>
             {socketConnected ? '🟢 Online' : '🔴 Reconnecting...'}
           </Text>
-        </View>
+        </TouchableOpacity>
         <View style={styles.headerRightPlaceholder} />
       </View>
 
@@ -426,6 +435,135 @@ export default function ChatScreen() {
               <Text style={styles.menuCancelText}>Cancel</Text>
             </TouchableOpacity>
           </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* User Profile Modal */}
+      <Modal
+        visible={isProfileModalOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsProfileModalOpen(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setIsProfileModalOpen(false)}
+        >
+          <TouchableOpacity
+            style={styles.profileModalContainer}
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+          >
+            {/* Header/Close bar */}
+            <View style={styles.profileModalHeader}>
+              <Text style={styles.profileModalTitle}>Contact Info</Text>
+              <TouchableOpacity
+                style={styles.profileCloseButton}
+                onPress={() => setIsProfileModalOpen(false)}
+              >
+                <Text style={styles.profileCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Avatar Section */}
+            <View style={styles.profileAvatarSection}>
+              <TouchableOpacity
+                onPress={() => {
+                  if (recipient?.avatarUrl) {
+                    setIsAvatarViewerOpen(true);
+                  }
+                }}
+                activeOpacity={recipient?.avatarUrl ? 0.8 : 1}
+                style={styles.profileAvatarWrapper}
+              >
+                {recipient?.avatarUrl ? (
+                  <Image source={{ uri: recipient.avatarUrl }} style={styles.profileAvatar} />
+                ) : (
+                  <View style={styles.profileAvatarPlaceholder}>
+                    <Text style={styles.profileAvatarInitial}>
+                      {(recipient?.displayName || 'C').charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                )}
+                {recipient?.avatarUrl && (
+                  <View style={styles.viewAvatarBadge}>
+                    <Text style={styles.viewAvatarBadgeText}>🔍 View</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            {/* Profile Info Fields */}
+            <View style={styles.profileInfoList}>
+              {/* Display Name */}
+              <View style={styles.profileInfoItem}>
+                <Text style={styles.profileLabel}>USER NAME</Text>
+                <Text style={styles.profileValue}>{recipient?.displayName || 'ChatConnect User'}</Text>
+              </View>
+
+              <View style={styles.profileDivider} />
+
+              {/* User ID / connectId */}
+              <View style={styles.profileInfoItem}>
+                <Text style={styles.profileLabel}>USER ID</Text>
+                <Text style={styles.profileValueMono}>{recipient?.connectId ? `@${recipient.connectId}` : 'Not Allocated'}</Text>
+              </View>
+
+              <View style={styles.profileDivider} />
+
+              {/* Age */}
+              <View style={styles.profileInfoItem}>
+                <Text style={styles.profileLabel}>AGE</Text>
+                <Text style={styles.profileValue}>{recipient?.age ? `${recipient.age} years old` : 'Not specified'}</Text>
+              </View>
+
+              <View style={styles.profileDivider} />
+
+              {/* Status */}
+              <View style={styles.profileInfoItem}>
+                <Text style={styles.profileLabel}>STATUS</Text>
+                <Text style={styles.profileValueStatus}>{recipient?.status || 'No status message.'}</Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.profileConfirmButton}
+              onPress={() => setIsProfileModalOpen(false)}
+            >
+              <Text style={styles.profileConfirmText}>Close</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Fullscreen Avatar Viewer Modal */}
+      <Modal
+        visible={isAvatarViewerOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsAvatarViewerOpen(false)}
+      >
+        <TouchableOpacity
+          style={styles.viewerOverlay}
+          activeOpacity={1}
+          onPress={() => setIsAvatarViewerOpen(false)}
+        >
+          {/* Close button top right */}
+          <TouchableOpacity
+            style={styles.viewerCloseButton}
+            onPress={() => setIsAvatarViewerOpen(false)}
+          >
+            <Text style={styles.viewerCloseText}>✕ Close</Text>
+          </TouchableOpacity>
+
+          {recipient?.avatarUrl && (
+            <Image
+              source={{ uri: recipient.avatarUrl }}
+              style={styles.viewerImage}
+              resizeMode="contain"
+            />
+          )}
         </TouchableOpacity>
       </Modal>
     </SafeAreaView>
@@ -735,5 +873,166 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     fontSize: 16,
     fontWeight: '700',
+  },
+  // Profile Modal Styles
+  profileModalContainer: {
+    backgroundColor: COLORS.cardBackground,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    width: '100%',
+    maxHeight: '90%',
+  },
+  profileModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  profileModalTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: COLORS.textPrimary,
+  },
+  profileCloseButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  profileCloseText: {
+    color: COLORS.textSecondary,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  profileAvatarSection: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  profileAvatarWrapper: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    backgroundColor: COLORS.background,
+    borderWidth: 3,
+    borderColor: COLORS.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  profileAvatar: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 52,
+  },
+  profileAvatarPlaceholder: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 52,
+    backgroundColor: COLORS.accent,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  profileAvatarInitial: {
+    fontSize: 48,
+    fontWeight: '800',
+    color: '#070b13',
+  },
+  viewAvatarBadge: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    paddingVertical: 3,
+    alignItems: 'center',
+  },
+  viewAvatarBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  profileInfoList: {
+    backgroundColor: '#03050a',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: 16,
+    marginBottom: 24,
+  },
+  profileInfoItem: {
+    paddingVertical: 10,
+  },
+  profileLabel: {
+    color: COLORS.textSecondary,
+    fontSize: 11,
+    fontWeight: '600',
+    marginBottom: 4,
+    letterSpacing: 0.5,
+  },
+  profileValue: {
+    color: COLORS.textPrimary,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  profileValueMono: {
+    color: COLORS.primary,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  profileValueStatus: {
+    color: COLORS.textPrimary,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  profileDivider: {
+    height: 1,
+    backgroundColor: COLORS.border,
+    marginVertical: 4,
+  },
+  profileConfirmButton: {
+    backgroundColor: '#1E293B',
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  profileConfirmText: {
+    color: COLORS.textPrimary,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  // Fullscreen Viewer Styles
+  viewerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  viewerCloseButton: {
+    position: 'absolute',
+    top: 48,
+    right: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    zIndex: 999,
+  },
+  viewerCloseText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  viewerImage: {
+    width: '100%',
+    height: '80%',
   },
 });
