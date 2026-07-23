@@ -4,6 +4,7 @@ import type { Server } from 'socket.io';
 import Chat from '../models/Chat.js';
 import Message from '../models/Message.js';
 import User from '../models/User.js';
+import { sendPushNotification } from '../services/push.service.js';
 
 export async function getChats(req: AuthenticatedRequest, res: Response) {
   const userId = req.user?.userId;
@@ -104,7 +105,7 @@ export async function getMessages(req: AuthenticatedRequest, res: Response) {
     const chat = await Chat.findOne({ _id: chatId, participants: userId } as any);
     if (!chat) return res.status(403).json({ message: 'Forbidden' });
 
-    const query: any = { chat: chatId };
+    const query: any = { chat: chatId, deletedForUsers: { $ne: userId } };
     if (before) {
       query.createdAt = { $lt: new Date(before as string) };
     }
@@ -165,6 +166,28 @@ export async function sendMessageHttp(req: AuthenticatedRequest, res: Response) 
     const io = req.app.get('io') as Server;
     if (io) {
       io.to(`chat:${chatId}`).emit('new_message', populatedMessage);
+
+      // Send push notifications to other participants who are not actively in this chat room
+      try {
+        const chatRoom = `chat:${chatId}`;
+        const socketsInChat = await io.in(chatRoom).fetchSockets();
+        const activeUserIds = new Set(socketsInChat.map((s: any) => s.user?.userId));
+
+        const senderName = (populatedMessage.sender as any).displayName || 'Someone';
+
+        chat.participants.forEach((pId) => {
+          const recipientId = pId.toString();
+          if (recipientId !== userId && !activeUserIds.has(recipientId)) {
+            sendPushNotification(recipientId, {
+              title: senderName,
+              body: text,
+              data: { chatId, messageId: message._id.toString() },
+            });
+          }
+        });
+      } catch (e) {
+        console.error('Failed to dispatch HTTP push notifications:', e);
+      }
     }
 
     return res.status(201).json({ message: populatedMessage });
@@ -273,6 +296,28 @@ export async function forwardMessages(req: AuthenticatedRequest, res: Response) 
 
         if (io) {
           io.to(`chat:${chatId}`).emit('new_message', populated);
+
+          // Send push notifications to other participants who are not actively in this chat room
+          try {
+            const chatRoom = `chat:${chatId}`;
+            const socketsInChat = await io.in(chatRoom).fetchSockets();
+            const activeUserIds = new Set(socketsInChat.map((s: any) => s.user?.userId));
+
+            const senderName = (populated.sender as any).displayName || 'Someone';
+
+            chat.participants.forEach((pId) => {
+              const recipientId = pId.toString();
+              if (recipientId !== userId && !activeUserIds.has(recipientId)) {
+                sendPushNotification(recipientId, {
+                  title: senderName,
+                  body: srcMsg.text,
+                  data: { chatId, messageId: message._id.toString() },
+                });
+              }
+            });
+          } catch (e) {
+            console.error('Failed to dispatch forward push notification:', e);
+          }
         }
       }
       await chat.save();

@@ -2,6 +2,7 @@ import { Server, Socket } from 'socket.io';
 import { verifyAccessToken, type TokenPayload } from '../services/jwt.service.js';
 import Chat from '../models/Chat.js';
 import Message from '../models/Message.js';
+import { sendPushNotification } from '../services/push.service.js';
 
 export interface AuthenticatedSocket extends Socket {
   user?: TokenPayload;
@@ -77,6 +78,28 @@ export function setupSockets(io: Server) {
         // Broadcast message to everyone in the chat room
         io.to(`chat:${chatId}`).emit('new_message', populated);
 
+        // Send push notifications to other participants who are not actively in this chat room
+        try {
+          const chatRoom = `chat:${chatId}`;
+          const socketsInChat = await io.in(chatRoom).fetchSockets();
+          const activeUserIds = new Set(socketsInChat.map((s: any) => s.user?.userId));
+
+          const senderName = (populated.sender as any).displayName || 'Someone';
+
+          chat.participants.forEach((pId) => {
+            const recipientId = pId.toString();
+            if (recipientId !== userId && !activeUserIds.has(recipientId)) {
+              sendPushNotification(recipientId, {
+                title: senderName,
+                body: text,
+                data: { chatId, messageId: message._id.toString() },
+              });
+            }
+          });
+        } catch (e) {
+          console.error('Failed to dispatch socket push notifications:', e);
+        }
+
         if (callback) callback({ success: true, message: populated });
       } catch (err: any) {
         console.error('Socket send_message error:', err);
@@ -114,20 +137,43 @@ export function setupSockets(io: Server) {
     });
 
     // Handle deleting a message
-    socket.on('delete_message', async (data: { chatId: string; messageId: string }, callback) => {
+    socket.on('delete_message', async (data: { chatId: string; messageId: string; type?: 'me' | 'everyone' }, callback) => {
       try {
-        const { chatId, messageId } = data;
-        const message = await Message.findOne({ _id: messageId, chat: chatId, sender: userId });
-        if (!message) {
-          return callback && callback({ success: false, error: 'Message not found or unauthorized' });
+        const { chatId, messageId, type = 'everyone' } = data;
+
+        if (type === 'me') {
+          // Verify user is a participant of the chat to delete their view of the message
+          const chat = await Chat.findOne({ _id: chatId, participants: userId });
+          if (!chat) {
+            return callback && callback({ success: false, error: 'Chat not found or unauthorized' });
+          }
+
+          const message = await Message.findOne({ _id: messageId, chat: chatId });
+          if (!message) {
+            return callback && callback({ success: false, error: 'Message not found' });
+          }
+
+          // Add user to deletedForUsers array if not already present
+          if (message.deletedForUsers && !message.deletedForUsers.includes(userId as any)) {
+            message.deletedForUsers.push(userId as any);
+            await message.save();
+          }
+
+          if (callback) callback({ success: true, messageId, type: 'me' });
+        } else {
+          // Delete for everyone (only message sender is authorized)
+          const message = await Message.findOne({ _id: messageId, chat: chatId, sender: userId });
+          if (!message) {
+            return callback && callback({ success: false, error: 'Message not found or unauthorized' });
+          }
+
+          message.text = 'This message was deleted';
+          message.isDeleted = true;
+          await message.save();
+
+          io.to(`chat:${chatId}`).emit('message_deleted', { chatId, messageId, text: message.text, isDeleted: true });
+          if (callback) callback({ success: true, messageId, type: 'everyone' });
         }
-
-        message.text = 'This message was deleted';
-        message.isDeleted = true;
-        await message.save();
-
-        io.to(`chat:${chatId}`).emit('message_deleted', { chatId, messageId, text: message.text, isDeleted: true });
-        if (callback) callback({ success: true, messageId });
       } catch (err: any) {
         console.error('Socket delete_message error:', err);
         if (callback) callback({ success: false, error: err.message });

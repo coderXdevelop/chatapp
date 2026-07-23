@@ -9,6 +9,7 @@ export interface IUser extends Document {
   avatarUrl?: string;
   avatarPublicId?: string;
   status: string;
+  pushToken?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -54,6 +55,10 @@ const UserSchema: Schema = new Schema(
     status: {
       type: String,
       default: 'Hey there! I am using ChatConnect.',
+    },
+    pushToken: {
+      type: String,
+      default: '',
     },
   },
   {

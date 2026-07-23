@@ -56,7 +56,7 @@ interface ChatState {
   fetchMessages: (chatId: string, loadMore?: boolean) => Promise<void>;
   sendMessage: (chatId: string, text: string, replyTo?: string) => Promise<void>;
   editMessage: (chatId: string, messageId: string, newText: string) => Promise<boolean>;
-  deleteMessage: (chatId: string, messageId: string) => Promise<boolean>;
+  deleteMessage: (chatId: string, messageId: string, type: 'me' | 'everyone') => Promise<boolean>;
   forwardMessages: (messageIds: string[], chatIds: string[], searchContacts?: string[]) => Promise<boolean>;
   markAsRead: (chatId: string) => void;
   connectSocket: () => void;
@@ -265,25 +265,34 @@ export const useChatStore = create<ChatState>((set, get) => ({
     return false;
   },
 
-  deleteMessage: async (chatId, messageId) => {
+  deleteMessage: async (chatId, messageId, type) => {
     const socket = get().socket;
     if (socket && get().socketConnected) {
       return new Promise<boolean>((resolve) => {
         socket.emit(
           'delete_message',
-          { chatId, messageId },
-          (ack: { success: boolean; messageId?: string; error?: string }) => {
+          { chatId, messageId, type },
+          (ack: { success: boolean; messageId?: string; type?: 'me' | 'everyone'; error?: string }) => {
             if (ack && ack.success) {
               set((state) => {
                 const list = state.messages[chatId] || [];
-                const updated = list.map((m) =>
-                  m._id === messageId
-                    ? { ...m, text: 'This message was deleted', isDeleted: true }
-                    : m
-                );
-                return {
-                  messages: { ...state.messages, [chatId]: updated },
-                };
+                if (type === 'me') {
+                  // Filter out the message for me locally
+                  const updated = list.filter((m) => m._id !== messageId);
+                  return {
+                    messages: { ...state.messages, [chatId]: updated },
+                  };
+                } else {
+                  // Update message text for everyone locally
+                  const updated = list.map((m) =>
+                    m._id === messageId
+                      ? { ...m, text: 'This message was deleted', isDeleted: true }
+                      : m
+                  );
+                  return {
+                    messages: { ...state.messages, [chatId]: updated },
+                  };
+                }
               });
               resolve(true);
             } else {

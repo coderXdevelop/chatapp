@@ -10,6 +10,7 @@ export interface IMessage extends Document {
   isDeleted?: boolean;
   replyTo?: mongoose.Types.ObjectId | null;
   isForwarded?: boolean;
+  deletedForUsers?: mongoose.Types.ObjectId[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -56,6 +57,11 @@ const MessageSchema: Schema = new Schema(
     isForwarded: {
       type: Boolean,
       default: false,
+    },
+    deletedForUsers: {
+      type: [Schema.Types.ObjectId],
+      ref: 'User',
+      default: [],
     },
   },
   {

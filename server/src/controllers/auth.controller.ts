@@ -547,5 +547,25 @@ export async function deleteAccount(req: AuthenticatedRequest, res: Response) {
   }
 }
 
+export async function updatePushToken(req: AuthenticatedRequest, res: Response) {
+  try {
+    const userId = req.user?.userId;
+    const { pushToken } = req.body;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    user.pushToken = pushToken || '';
+    await user.save();
+
+    return res.status(200).json({ message: 'Push token updated successfully' });
+  } catch (error: any) {
+    console.error('Update push token error:', error);
+    return res.status(500).json({ message: 'Failed to update push token' });
+  }
+}
+
 
 

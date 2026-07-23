@@ -150,24 +150,44 @@ export default function ChatScreen() {
   };
 
   const handleDeleteMessage = (msg: Message) => {
+    const isMe = msg.sender._id === user?.id;
+    const options: any[] = [
+      {
+        text: 'Delete for me',
+        onPress: async () => {
+          if (chatId) {
+            const success = await deleteMessage(chatId, msg._id, 'me');
+            if (!success) {
+              Alert.alert('Error', 'Failed to delete message.');
+            }
+          }
+        },
+      },
+    ];
+
+    if (isMe) {
+      options.push({
+        text: 'Delete for everyone',
+        style: 'destructive',
+        onPress: async () => {
+          if (chatId) {
+            const success = await deleteMessage(chatId, msg._id, 'everyone');
+            if (!success) {
+              Alert.alert('Error', 'Failed to delete message.');
+            }
+          }
+        },
+      });
+    }
+
+    options.push({ text: 'Cancel', style: 'cancel' });
+
     Alert.alert(
       'Delete Message',
-      'Are you sure you want to delete this message for everyone?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            if (chatId) {
-              const success = await deleteMessage(chatId, msg._id);
-              if (!success) {
-                Alert.alert('Error', 'Failed to delete message.');
-              }
-            }
-          },
-        },
-      ]
+      isMe
+        ? 'Do you want to delete this message for yourself, or for everyone?'
+        : 'Do you want to delete this message for yourself?',
+      options
     );
   };
 
@@ -378,31 +398,29 @@ export default function ChatScreen() {
             </TouchableOpacity>
 
             {selectedMessage?.sender._id === user?.id && (
-              <>
-                <TouchableOpacity
-                  style={styles.menuItem}
-                  onPress={() => {
-                    if (selectedMessage) {
-                      setEditingMessage(selectedMessage);
-                      setText(selectedMessage.text);
-                    }
-                    setIsMenuOpen(false);
-                  }}
-                >
-                  <Text style={styles.menuItemText}>✏️ Edit</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.menuItem, styles.menuItemDelete]}
-                  onPress={() => {
-                    if (selectedMessage) handleDeleteMessage(selectedMessage);
-                    setIsMenuOpen(false);
-                  }}
-                >
-                  <Text style={styles.menuItemDeleteText}>🗑️ Delete for everyone</Text>
-                </TouchableOpacity>
-              </>
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  if (selectedMessage) {
+                    setEditingMessage(selectedMessage);
+                    setText(selectedMessage.text);
+                  }
+                  setIsMenuOpen(false);
+                }}
+              >
+                <Text style={styles.menuItemText}>✏️ Edit</Text>
+              </TouchableOpacity>
             )}
+
+            <TouchableOpacity
+              style={[styles.menuItem, styles.menuItemDelete]}
+              onPress={() => {
+                if (selectedMessage) handleDeleteMessage(selectedMessage);
+                setIsMenuOpen(false);
+              }}
+            >
+              <Text style={styles.menuItemDeleteText}>🗑️ Delete Message</Text>
+            </TouchableOpacity>
 
             <TouchableOpacity style={styles.menuCancelButton} onPress={() => setIsMenuOpen(false)}>
               <Text style={styles.menuCancelText}>Cancel</Text>

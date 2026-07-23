@@ -13,6 +13,7 @@ import {
   updateProfile,
   verifyOTPHandler,
   verifyRegisterOTP,
+  updatePushToken,
 } from '../controllers/auth.controller.js';
 import { authenticateJWT } from '../middleware/auth.middleware.js';
 
@@ -32,6 +33,7 @@ router.post('/verify-otp', verifyOTPHandler);
 router.post('/refresh', refreshSession);
 router.get('/me', authenticateJWT, getMe);
 router.put('/profile', authenticateJWT, updateProfile);
+router.patch('/push-token', authenticateJWT, updatePushToken);
 router.delete('/avatar', authenticateJWT, removeAvatar);
 router.delete('/account', authenticateJWT, deleteAccount);
 

@@ -28,6 +28,21 @@ export default function RootLayout() {
     }
   }, [user, isInitialized, segments]);
 
+  useEffect(() => {
+    if (user) {
+      // Dynamic import to avoid initialization issues
+      import("../services/notifications").then(
+        ({ registerForPushNotificationsAsync, registerPushTokenOnBackend }) => {
+          registerForPushNotificationsAsync().then((token) => {
+            if (token) {
+              registerPushTokenOnBackend(token);
+            }
+          });
+        }
+      );
+    }
+  }, [user]);
+
   if (!isInitialized) {
     return (
       <View style={styles.splashContainer}>
