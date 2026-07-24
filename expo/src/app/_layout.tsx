@@ -5,7 +5,6 @@ import { useEffect } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { useAuthStore } from "../store/authStore";
 import { useAppState } from "../hooks/useAppState";
-import * as Notifications from "expo-notifications";
 
 export default function RootLayout() {
   const { user, isInitialized, checkAuth } = useAuthStore();
@@ -17,17 +16,33 @@ export default function RootLayout() {
 
   // Route user when tapping notifications
   useEffect(() => {
-    const responseSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
-      const data = response.notification.request.content.data;
-      if (data?.chatId) {
-        setTimeout(() => {
-          router.push(`/chat/${data.chatId}` as any);
-        }, 500);
-      }
+    const isExpoGo =
+      Constants.appOwnership === "expo" ||
+      (Constants.executionEnvironment as string) === "store-client";
+
+    if (isExpoGo) {
+      return;
+    }
+
+    let subscription: { remove: () => void } | null = null;
+
+    import("expo-notifications").then((Notifications) => {
+      subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+        const data = response.notification.request.content.data;
+        if (data?.chatId) {
+          setTimeout(() => {
+            router.push(`/chat/${data.chatId}` as any);
+          }, 500);
+        }
+      });
+    }).catch((err) => {
+      console.error("Failed to dynamically import expo-notifications:", err);
     });
 
     return () => {
-      responseSubscription.remove();
+      if (subscription) {
+        subscription.remove();
+      }
     };
   }, []);
 
