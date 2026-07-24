@@ -9,6 +9,7 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -28,6 +29,7 @@ export default function ProfileScreen() {
     forgotPassword,
     resetPassword,
     deleteAccount,
+    toggleNotifications,
     isLoading,
   } = useAuthStore();
 
@@ -261,20 +263,26 @@ export default function ProfileScreen() {
 
             <View style={styles.divider} />
 
-            {/* Notification */}
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => Alert.alert('Notifications', 'Notification settings coming soon.')}
-              activeOpacity={0.7}
-            >
+            {/* Push Notifications Toggle */}
+            <View style={styles.menuItem}>
               <View style={styles.menuItemLeft}>
                 <View style={styles.iconCircle}>
                   <Text style={styles.menuIcon}>🔔</Text>
                 </View>
-                <Text style={styles.menuItemText}>Notification</Text>
+                <Text style={styles.menuItemText}>Push Notifications</Text>
               </View>
-              <Text style={styles.menuChevron}>›</Text>
-            </TouchableOpacity>
+              <Switch
+                value={user.notificationsEnabled !== false}
+                onValueChange={async (newValue) => {
+                  const success = await toggleNotifications(newValue);
+                  if (!success) {
+                    Alert.alert('Error', 'Failed to update notification settings.');
+                  }
+                }}
+                trackColor={{ false: '#162235', true: COLORS.primary }}
+                thumbColor={Platform.OS === 'android' ? (user.notificationsEnabled !== false ? COLORS.primaryText : '#888') : undefined}
+              />
+            </View>
 
             <View style={styles.divider} />
 

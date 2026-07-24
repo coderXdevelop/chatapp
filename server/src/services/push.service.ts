@@ -13,6 +13,19 @@ export async function sendPushNotification(recipientId: string, payload: PushNot
       return; // No push token registered or user not found
     }
 
+    // Check if notifications are globally disabled for this user
+    if (user.notificationsEnabled === false) {
+      console.log(`Push notification blocked: User ${user.displayName} has disabled notifications globally.`);
+      return;
+    }
+
+    // Check if notifications are muted for this specific chat
+    const chatId = payload.data?.chatId;
+    if (chatId && user.mutedChats?.some((id) => id.toString() === chatId.toString())) {
+      console.log(`Push notification blocked: User ${user.displayName} has muted chat ${chatId}.`);
+      return;
+    }
+
     const { title, body, data } = payload;
 
     // Call Expo Push Service API

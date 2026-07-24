@@ -11,6 +11,8 @@ export interface UserProfile {
   status: string;
   avatarUrl?: string;
   avatarPublicId?: string;
+  notificationsEnabled?: boolean;
+  mutedChats?: string[];
   createdAt?: string;
 }
 
@@ -36,6 +38,8 @@ interface AuthState {
   checkAuth: () => Promise<void>;
   updateProfile: (data: { displayName?: string; age?: number; status?: string; avatarUrl?: string }) => Promise<boolean>;
   removeAvatar: () => Promise<boolean>;
+  toggleNotifications: (enabled: boolean) => Promise<boolean>;
+  toggleChatMute: (chatId: string, mute: boolean) => Promise<boolean>;
   logout: () => Promise<void>;
   forgotPassword: (email: string) => Promise<{ success: boolean; message?: string }>;
   resetPassword: (email: string, otp: string, newPassword: string) => Promise<{ success: boolean; message?: string }>;
@@ -237,6 +241,45 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch (error: any) {
       console.error('Remove avatar error:', error?.response?.data || error.message);
       set({ isLoading: false });
+      return false;
+    }
+  },
+
+  toggleNotifications: async (enabled) => {
+    try {
+      const response = await api.put('/api/users/profile/notifications', { enabled });
+      const currentUser = get().user;
+      if (currentUser) {
+        set({
+          user: {
+            ...currentUser,
+            notificationsEnabled: response.data.notificationsEnabled,
+          },
+        });
+      }
+      return true;
+    } catch (error: any) {
+      console.error('Toggle notifications error:', error?.response?.data || error.message);
+      return false;
+    }
+  },
+
+  toggleChatMute: async (chatId, mute) => {
+    try {
+      const response = await api.post(`/api/users/chats/${chatId}/mute`, { mute });
+      const currentUser = get().user;
+      if (currentUser) {
+        const updatedMutedChats = response.data.mutedChats.map((id: any) => id.toString());
+        set({
+          user: {
+            ...currentUser,
+            mutedChats: updatedMutedChats,
+          },
+        });
+      }
+      return true;
+    } catch (error: any) {
+      console.error('Toggle chat mute error:', error?.response?.data || error.message);
       return false;
     }
   },

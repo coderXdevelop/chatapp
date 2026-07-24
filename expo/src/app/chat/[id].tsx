@@ -13,6 +13,7 @@ import {
   Modal,
   Alert,
   Image,
+  Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -84,7 +85,7 @@ const SwipeableRow = ({
 export default function ChatScreen() {
   const { id: chatId } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { user } = useAuthStore();
+  const { user, toggleChatMute } = useAuthStore();
   const {
     chats,
     messages,
@@ -136,6 +137,9 @@ export default function ChatScreen() {
   // States for long press options menu
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
+
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([]);
 
   // States for viewing user profile details and viewing avatar fullscreen
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -586,6 +590,8 @@ export default function ChatScreen() {
   const handleLongPressMessage = (msg: Message) => {
     if (msg.isDeleted) return;
     Vibration.vibrate(10);
+    setIsSelectionMode(true);
+    setSelectedMessageIds([msg._id]);
     setSelectedMessage(msg);
     setIsMenuOpen(true);
   };
@@ -637,6 +643,80 @@ export default function ChatScreen() {
       pathname: '/forward',
       params: { messageIds: [msg._id] },
     } as any);
+  };
+
+  const handleToggleMessageSelection = (msgId: string) => {
+    setSelectedMessageIds((prev) => {
+      if (prev.includes(msgId)) {
+        const next = prev.filter((id) => id !== msgId);
+        if (next.length === 0) {
+          setIsSelectionMode(false);
+        }
+        return next;
+      } else {
+        return [...prev, msgId];
+      }
+    });
+  };
+
+  const handleForwardSelected = () => {
+    if (selectedMessageIds.length === 0) return;
+    router.push({
+      pathname: '/forward',
+      params: { messageIds: selectedMessageIds },
+    } as any);
+    setIsSelectionMode(false);
+    setSelectedMessageIds([]);
+  };
+
+  const handleDeleteSelected = () => {
+    if (selectedMessageIds.length === 0) return;
+
+    const selectedMsgs = selectedMessageIds.map(id => chatMessages.find(m => m._id === id)).filter(Boolean);
+    const allMe = selectedMsgs.every(msg => msg?.sender._id === user?.id);
+
+    const deleteMessages = async (type: 'me' | 'everyone') => {
+      for (const msgId of selectedMessageIds) {
+        const msg = chatMessages.find((m) => m._id === msgId);
+        if (msg) {
+          await deleteMessage(chatId!, msgId, type);
+        }
+      }
+      setIsSelectionMode(false);
+      setSelectedMessageIds([]);
+    };
+
+    if (allMe) {
+      Alert.alert(
+        'Delete Messages',
+        `Do you want to delete these ${selectedMessageIds.length} messages for yourself, or for everyone?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete for me',
+            onPress: () => deleteMessages('me'),
+          },
+          {
+            text: 'Delete for everyone',
+            style: 'destructive',
+            onPress: () => deleteMessages('everyone'),
+          },
+        ]
+      );
+    } else {
+      Alert.alert(
+        'Delete Messages',
+        `Delete these ${selectedMessageIds.length} selected messages for yourself?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete for me',
+            style: 'destructive',
+            onPress: () => deleteMessages('me'),
+          },
+        ]
+      );
+    }
   };
 
   const handleChatOptions = () => {
@@ -769,54 +849,76 @@ export default function ChatScreen() {
     <SafeAreaView style={styles.safeArea}>
       {/* Custom Header Bar */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => {
-            if (currentChat?.isGroup) {
-              router.push({ pathname: '/chat/group/settings', params: { chatId } } as any);
-            } else if (recipient) {
-              setIsProfileModalOpen(true);
-            }
-          }}
-          style={styles.headerTitleContainer}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            {chatTitle}
-          </Text>
-          <Text
-            style={[
-              styles.connectionStatus,
-              ((currentChat?.isGroup && isTypingList.length > 0) || (!currentChat?.isGroup && recipient && isTypingList.includes(recipient._id))) && {
-                color: COLORS.primary,
-                fontWeight: '700',
-              },
-            ]}
-          >
-            {!socketConnected
-              ? '🔴 Reconnecting...'
-              : currentChat?.isGroup
-              ? (isTypingList.length > 0
-                ? `${currentChat.participants.find(p => p._id === isTypingList[0])?.displayName || 'Someone'} is typing...`
-                : `${currentChat.participants.length} members`)
-              : recipient && isTypingList.includes(recipient._id)
-              ? 'typing...'
-              : recipient?.isOnline
-              ? '🟢 Online'
-              : formatLastSeen(recipient?.lastSeen)}
-          </Text>
-        </TouchableOpacity>
-        
-        <View style={styles.headerRight}>
-          <TouchableOpacity onPress={() => setIsSearchOpen(true)} style={styles.headerIconButton}>
-            <Ionicons name="search" size={20} color={COLORS.accent} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={handleChatOptions} style={styles.headerIconButton}>
-            <Ionicons name="ellipsis-vertical" size={20} color={COLORS.accent} />
-          </TouchableOpacity>
-        </View>
+        {isSelectionMode ? (
+          <>
+            <TouchableOpacity
+              onPress={() => {
+                setIsSelectionMode(false);
+                setSelectedMessageIds([]);
+              }}
+              style={styles.backButton}
+            >
+              <Text style={styles.backText}>Cancel</Text>
+            </TouchableOpacity>
+            <View style={styles.headerTitleContainer}>
+              <Text style={styles.headerTitle}>
+                {selectedMessageIds.length} selected
+              </Text>
+            </View>
+            <View style={styles.headerRightPlaceholder} />
+          </>
+        ) : (
+          <>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+              <Text style={styles.backText}>← Back</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {
+                if (currentChat?.isGroup) {
+                  router.push({ pathname: '/chat/group/settings', params: { chatId } } as any);
+                } else if (recipient) {
+                  setIsProfileModalOpen(true);
+                }
+              }}
+              style={styles.headerTitleContainer}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.headerTitle} numberOfLines={1}>
+                {chatTitle}
+              </Text>
+              <Text
+                style={[
+                  styles.connectionStatus,
+                  ((currentChat?.isGroup && isTypingList.length > 0) || (!currentChat?.isGroup && recipient && isTypingList.includes(recipient._id))) && {
+                    color: COLORS.primary,
+                    fontWeight: '700',
+                  },
+                ]}
+              >
+                {!socketConnected
+                  ? '🔴 Reconnecting...'
+                  : currentChat?.isGroup
+                  ? (isTypingList.length > 0
+                    ? `${currentChat.participants.find(p => p._id === isTypingList[0])?.displayName || 'Someone'} is typing...`
+                    : `${currentChat.participants.length} members`)
+                  : recipient && isTypingList.includes(recipient._id)
+                  ? 'typing...'
+                  : recipient?.isOnline
+                  ? '🟢 Online'
+                  : formatLastSeen(recipient?.lastSeen)}
+              </Text>
+            </TouchableOpacity>
+            
+            <View style={styles.headerRight}>
+              <TouchableOpacity onPress={() => setIsSearchOpen(true)} style={styles.headerIconButton}>
+                <Ionicons name="search" size={20} color={COLORS.accent} />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleChatOptions} style={styles.headerIconButton}>
+                <Ionicons name="ellipsis-vertical" size={20} color={COLORS.accent} />
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
       </View>
 
 
@@ -837,119 +939,150 @@ export default function ChatScreen() {
         renderItem={({ item }) => {
           const isMe = item.sender._id === user?.id;
           const onlyMedia = item.mediaUrl && !item.text && !item.isDeleted;
+          const isSelected = selectedMessageIds.includes(item._id);
+
           return (
             <SwipeableRow item={item} isMe={isMe} onReply={() => setReplyingTo(item)}>
-              <TouchableOpacity
-                onLongPress={() => handleLongPressMessage(item)}
-                activeOpacity={0.8}
-                style={[styles.messageRow, isMe ? styles.myMessageRow : styles.otherMessageRow]}
-              >
-                <View
+              <View style={styles.messageRowWrapper}>
+                {isSelectionMode && (
+                  <TouchableOpacity
+                    onPress={() => handleToggleMessageSelection(item._id)}
+                    style={styles.selectionCheckboxWrapper}
+                  >
+                    <View style={[styles.checkboxCircle, isSelected && styles.checkboxCircleSelected]}>
+                      {isSelected && <Text style={styles.checkboxCheckmark}>✓</Text>}
+                    </View>
+                  </TouchableOpacity>
+                )}
+                
+                <TouchableOpacity
+                  onPress={() => {
+                    if (isSelectionMode) {
+                      handleToggleMessageSelection(item._id);
+                    }
+                  }}
+                  onLongPress={() => {
+                    if (isSelectionMode) {
+                      handleToggleMessageSelection(item._id);
+                    } else {
+                      handleLongPressMessage(item);
+                    }
+                  }}
+                  activeOpacity={0.8}
                   style={[
-                    styles.bubble,
-                    isMe ? styles.myBubble : styles.otherBubble,
-                    onlyMedia && styles.onlyMediaBubble,
-                    item._id === highlightedMessageId && styles.highlightedBubble,
+                    styles.messageRow,
+                    isMe ? styles.myMessageRow : styles.otherMessageRow,
+                    isSelectionMode && { flex: 1 },
                   ]}
                 >
-                  {/* Group Sender Name */}
-                  {currentChat?.isGroup && !isMe && (
-                    <Text style={styles.groupSenderName}>
-                      {item.sender?.displayName || 'Someone'}
-                    </Text>
-                  )}
-                  {/* Replied-To Message Header inside the bubble */}
-                  {item.replyTo && !item.isDeleted && (
-                    <View
-                      style={[
-                        styles.bubbleReplyPreview,
-                        isMe ? styles.myBubbleReplyPreview : styles.otherBubbleReplyPreview,
-                      ]}
-                    >
-                      <Text style={styles.bubbleReplySender} numberOfLines={1}>
-                        {item.replyTo.sender._id === user?.id ? 'You' : item.replyTo.sender.displayName}
+                  <View
+                    style={[
+                      styles.bubble,
+                      isMe ? styles.myBubble : styles.otherBubble,
+                      onlyMedia && styles.onlyMediaBubble,
+                      item._id === highlightedMessageId && styles.highlightedBubble,
+                      isSelected && styles.selectedBubble,
+                    ]}
+                  >
+                    {/* Group Sender Name */}
+                    {currentChat?.isGroup && !isMe && (
+                      <Text style={styles.groupSenderName}>
+                        {item.sender?.displayName || 'Someone'}
                       </Text>
-                      <Text style={styles.bubbleReplyText} numberOfLines={1}>
-                        {item.replyTo.text}
-                      </Text>
-                    </View>
-                  )}
-
-                  {/* Forwarded Tag */}
-                  {item.isForwarded && !item.isDeleted && (
-                    <Text style={[styles.forwardedText, isMe ? styles.myForwardedText : styles.otherForwardedText]}>
-                      ↪ Forwarded
-                    </Text>
-                  )}
-
-                  {item.mediaUrl && item.mediaType && !item.isDeleted && (
-                    <TouchableOpacity
-                      activeOpacity={0.9}
-                      onPress={async () => {
-                        if (item.status !== 'sending') {
-                          const fileExtension = item.mediaType === 'video' ? 'mp4' : item.mediaType === 'audio' ? 'm4a' : 'jpg';
-                          const localPath = `${FileSystem.documentDirectory}media_${item._id}.${fileExtension}`;
-                          const info = await FileSystem.getInfoAsync(localPath);
-                          const activeUrl = info.exists ? localPath : item.mediaUrl;
-
-                          setFullscreenMedia({
-                            messageId: item._id,
-                            url: activeUrl,
-                            type: item.mediaType,
-                          });
-                        }
-                      }}
-                      style={{ marginBottom: item.text ? 8 : 0 }}
-                    >
-                      <MediaMessage
-                        messageId={item._id}
-                        mediaUrl={item.mediaUrl}
-                        mediaType={item.mediaType}
-                        mediaWidth={item.mediaWidth}
-                        mediaHeight={item.mediaHeight}
-                        mediaDuration={item.mediaDuration}
-                        isSending={item.status === 'sending'}
-                        progress={uploadProgressMap[item.tempId || '']}
-                        onCancel={() => handleCancelParticularUpload(item.tempId!)}
-                      />
-                    </TouchableOpacity>
-                  )}
-
-                  {(item.text ? true : false || item.isDeleted) && (
-                    <Text
-                      style={[
-                        styles.bubbleText,
-                        isMe ? styles.myBubbleText : styles.otherBubbleText,
-                        item.isDeleted && styles.deletedBubbleText,
-                      ]}
-                    >
-                      {item.text}
-                    </Text>
-                  )}
-                  
-                  {!item.isDeleted && (
-                    <View style={onlyMedia ? styles.metaRowOnlyMedia : styles.metaRow}>
-                      {item.isEdited && <Text style={styles.editedText}>(edited)</Text>}
-                      <Text style={onlyMedia ? styles.timeTextOnlyMedia : styles.timeText}>
-                        {new Date(item.createdAt).toLocaleTimeString([], {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </Text>
-                      {isMe && (
-                        <Text
-                          style={[
-                            onlyMedia ? styles.statusTextOnlyMedia : styles.statusText,
-                            item.status === 'read' && styles.statusRead,
-                          ]}
-                        >
-                          {item.status === 'sending' ? '⏳' : item.status === 'read' ? '✓✓' : '✓'}
+                    )}
+                    {/* Replied-To Message Header inside the bubble */}
+                    {item.replyTo && !item.isDeleted && (
+                      <View
+                        style={[
+                          styles.bubbleReplyPreview,
+                          isMe ? styles.myBubbleReplyPreview : styles.otherBubbleReplyPreview,
+                        ]}
+                      >
+                        <Text style={styles.bubbleReplySender} numberOfLines={1}>
+                          {item.replyTo.sender._id === user?.id ? 'You' : item.replyTo.sender.displayName}
                         </Text>
-                      )}
-                    </View>
-                  )}
-                </View>
-              </TouchableOpacity>
+                        <Text style={styles.bubbleReplyText} numberOfLines={1}>
+                          {item.replyTo.text}
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* Forwarded Tag */}
+                    {item.isForwarded && !item.isDeleted && (
+                      <Text style={[styles.forwardedText, isMe ? styles.myForwardedText : styles.otherForwardedText]}>
+                        ↪ Forwarded
+                      </Text>
+                    )}
+
+                    {item.mediaUrl && item.mediaType && !item.isDeleted && (
+                      <TouchableOpacity
+                        activeOpacity={0.9}
+                        onPress={async () => {
+                          if (item.status !== 'sending') {
+                            const fileExtension = item.mediaType === 'video' ? 'mp4' : item.mediaType === 'audio' ? 'm4a' : 'jpg';
+                            const localPath = `${FileSystem.documentDirectory}media_${item._id}.${fileExtension}`;
+                            const info = await FileSystem.getInfoAsync(localPath);
+                            const activeUrl = info.exists ? localPath : item.mediaUrl;
+
+                            setFullscreenMedia({
+                              messageId: item._id,
+                              url: activeUrl,
+                              type: item.mediaType,
+                            });
+                          }
+                        }}
+                        style={{ marginBottom: item.text ? 8 : 0 }}
+                      >
+                        <MediaMessage
+                          messageId={item._id}
+                          mediaUrl={item.mediaUrl}
+                          mediaType={item.mediaType}
+                          mediaWidth={item.mediaWidth}
+                          mediaHeight={item.mediaHeight}
+                          mediaDuration={item.mediaDuration}
+                          isSending={item.status === 'sending'}
+                          progress={uploadProgressMap[item.tempId || '']}
+                          onCancel={() => handleCancelParticularUpload(item.tempId!)}
+                        />
+                      </TouchableOpacity>
+                    )}
+
+                    {(item.text ? true : false || item.isDeleted) && (
+                      <Text
+                        style={[
+                          styles.bubbleText,
+                          isMe ? styles.myBubbleText : styles.otherBubbleText,
+                          item.isDeleted && styles.deletedBubbleText,
+                        ]}
+                      >
+                        {item.text}
+                      </Text>
+                    )}
+                    
+                    {!item.isDeleted && (
+                      <View style={onlyMedia ? styles.metaRowOnlyMedia : styles.metaRow}>
+                        {item.isEdited && <Text style={styles.editedText}>(edited)</Text>}
+                        <Text style={onlyMedia ? styles.timeTextOnlyMedia : styles.timeText}>
+                          {new Date(item.createdAt).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </Text>
+                        {isMe && (
+                          <Text
+                            style={[
+                              onlyMedia ? styles.statusTextOnlyMedia : styles.statusText,
+                              item.status === 'read' && styles.statusRead,
+                            ]}
+                          >
+                            {item.status === 'sending' ? '⏳' : item.status === 'read' ? '✓✓' : '✓'}
+                          </Text>
+                        )}
+                      </View>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              </View>
             </SwipeableRow>
           );
         }}
@@ -998,50 +1131,76 @@ export default function ChatScreen() {
       )}
 
       {/* Input container */}
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <View style={styles.inputContainer}>
-          {isRecording ? (
-            <View style={styles.recordingRow}>
-              <View style={styles.recordingDotContainer}>
-                <View style={styles.recordingDot} />
-                <Text style={styles.recordingText}>Recording Voice...</Text>
-              </View>
-              <View style={styles.recordingActions}>
-                <TouchableOpacity onPress={handleStopAndSendVoice} style={styles.voiceSendButton}>
-                  <Ionicons name="send" size={16} color="#070b13" />
-                </TouchableOpacity>
-              </View>
-            </View>
-          ) : (
-            <>
-              <TouchableOpacity onPress={handleAttachPress} style={styles.attachButton}>
-                <Ionicons name="add" size={24} color={COLORS.textSecondary} />
-              </TouchableOpacity>
-              <TextInput
-                placeholder={editingMessage ? "Edit message..." : "Type a message..."}
-                placeholderTextColor={COLORS.textSecondary}
-                value={text}
-                onChangeText={handleTextChange}
-                style={styles.textInput}
-                multiline
-              />
-              {text.trim() || editingMessage ? (
-                <TouchableOpacity
-                  onPress={handleSend}
-                  disabled={!text.trim()}
-                  style={[styles.sendButton, !text.trim() && styles.sendButtonDisabled]}
-                >
-                  <Text style={styles.sendButtonText}>{editingMessage ? 'Update' : 'Send'}</Text>
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity onPress={handleStartVoice} style={styles.micButton}>
-                  <Ionicons name="mic" size={22} color={COLORS.accent} />
-                </TouchableOpacity>
-              )}
-            </>
-          )}
+      {isSelectionMode ? (
+        <View style={styles.selectionActionBar}>
+          <TouchableOpacity
+            style={[styles.selectionActionButton, styles.selectionActionDelete, selectedMessageIds.length === 0 && styles.disabledButton]}
+            onPress={handleDeleteSelected}
+            disabled={selectedMessageIds.length === 0}
+          >
+            <Ionicons name="trash-outline" size={20} color="#FCA5A5" />
+            <Text style={styles.selectionActionTextDelete}>
+              Delete ({selectedMessageIds.length})
+            </Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[styles.selectionActionButton, styles.selectionActionForward, selectedMessageIds.length === 0 && styles.disabledButton]}
+            onPress={handleForwardSelected}
+            disabled={selectedMessageIds.length === 0}
+          >
+            <Ionicons name="arrow-redo-outline" size={20} color={COLORS.primary} />
+            <Text style={styles.selectionActionTextForward}>
+              Forward ({selectedMessageIds.length})
+            </Text>
+          </TouchableOpacity>
         </View>
-      </KeyboardAvoidingView>
+      ) : (
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <View style={styles.inputContainer}>
+            {isRecording ? (
+              <View style={styles.recordingRow}>
+                <View style={styles.recordingDotContainer}>
+                  <View style={styles.recordingDot} />
+                  <Text style={styles.recordingText}>Recording Voice...</Text>
+                </View>
+                <View style={styles.recordingActions}>
+                  <TouchableOpacity onPress={handleStopAndSendVoice} style={styles.voiceSendButton}>
+                    <Ionicons name="send" size={16} color="#070b13" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <>
+                <TouchableOpacity onPress={handleAttachPress} style={styles.attachButton}>
+                  <Ionicons name="add" size={24} color={COLORS.textSecondary} />
+                </TouchableOpacity>
+                <TextInput
+                  placeholder={editingMessage ? "Edit message..." : "Type a message..."}
+                  placeholderTextColor={COLORS.textSecondary}
+                  value={text}
+                  onChangeText={handleTextChange}
+                  style={styles.textInput}
+                  multiline
+                />
+                {text.trim() || editingMessage ? (
+                  <TouchableOpacity
+                    onPress={handleSend}
+                    disabled={!text.trim()}
+                    style={[styles.sendButton, !text.trim() && styles.sendButtonDisabled]}
+                  >
+                    <Text style={styles.sendButtonText}>{editingMessage ? 'Update' : 'Send'}</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity onPress={handleStartVoice} style={styles.micButton}>
+                    <Ionicons name="mic" size={22} color={COLORS.accent} />
+                  </TouchableOpacity>
+                )}
+              </>
+            )}
+          </View>
+        </KeyboardAvoidingView>
+      )}
 
       {/* Media Options Action Sheet Modal */}
       <Modal
@@ -1117,7 +1276,8 @@ export default function ChatScreen() {
               <Text style={styles.menuItemText}>➡️ Forward</Text>
             </TouchableOpacity>
 
-            {selectedMessage?.sender._id === user?.id && (
+
+            {selectedMessage?.sender._id === user?.id && !selectedMessage?.mediaUrl && (
               <TouchableOpacity
                 style={styles.menuItem}
                 onPress={() => {
@@ -1235,6 +1395,31 @@ export default function ChatScreen() {
               <View style={styles.profileInfoItem}>
                 <Text style={styles.profileLabel}>STATUS</Text>
                 <Text style={styles.profileValueStatus}>{recipient?.status || 'No status message.'}</Text>
+              </View>
+
+              <View style={styles.profileDivider} />
+
+              {/* Mute Notifications Toggle */}
+              <View style={[styles.profileInfoItem, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10 }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.profileLabel}>MUTE NOTIFICATIONS</Text>
+                  <Text style={[styles.profileValue, { fontSize: 13, color: COLORS.textSecondary }]}>
+                    {user?.mutedChats?.includes(chatId || '') ? 'Notifications are muted' : 'Notifications are active'}
+                  </Text>
+                </View>
+                <Switch
+                  value={user?.mutedChats?.includes(chatId || '') || false}
+                  onValueChange={async (newValue) => {
+                    if (chatId) {
+                      const success = await toggleChatMute(chatId, newValue);
+                      if (!success) {
+                        Alert.alert('Error', 'Failed to update mute settings.');
+                      }
+                    }
+                  }}
+                  trackColor={{ false: '#162235', true: COLORS.primary }}
+                  thumbColor={Platform.OS === 'android' ? (user?.mutedChats?.includes(chatId || '') ? COLORS.primaryText : '#888') : undefined}
+                />
               </View>
             </View>
 
@@ -2344,6 +2529,79 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     opacity: 0.5,
+  },
+  messageRowWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+  },
+  selectionCheckboxWrapper: {
+    paddingRight: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkboxCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: COLORS.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+  },
+  checkboxCircleSelected: {
+    borderColor: COLORS.primary,
+    backgroundColor: COLORS.primary,
+  },
+  checkboxCheckmark: {
+    color: COLORS.primaryText,
+    fontWeight: '900',
+    fontSize: 12,
+  },
+  selectedBubble: {
+    backgroundColor: 'rgba(204, 255, 0, 0.12)',
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+  },
+  selectionActionBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    backgroundColor: COLORS.cardBackground,
+    gap: 16,
+  },
+  selectionActionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 24,
+    borderWidth: 1,
+    gap: 8,
+  },
+  selectionActionDelete: {
+    borderColor: '#EF4444',
+    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+  },
+  selectionActionForward: {
+    borderColor: COLORS.primary,
+    backgroundColor: 'rgba(204, 255, 0, 0.08)',
+  },
+  selectionActionTextDelete: {
+    color: '#FCA5A5',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  selectionActionTextForward: {
+    color: COLORS.primary,
+    fontWeight: '700',
+    fontSize: 14,
   },
 });
 

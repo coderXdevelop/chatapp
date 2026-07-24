@@ -99,3 +99,56 @@ export async function reportUserOrChat(req: AuthenticatedRequest, res: Response)
     return res.status(500).json({ message: 'Error submitting report', error: error.message });
   }
 }
+
+export async function toggleNotifications(req: AuthenticatedRequest, res: Response) {
+  const userId = req.user?.userId;
+  const { enabled } = req.body;
+
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+  if (enabled === undefined) return res.status(400).json({ message: 'enabled boolean is required' });
+
+  try {
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    user.notificationsEnabled = !!enabled;
+    await user.save();
+
+    return res.status(200).json({ success: true, notificationsEnabled: user.notificationsEnabled });
+  } catch (error: any) {
+    return res.status(500).json({ message: 'Error toggling notifications', error: error.message });
+  }
+}
+
+export async function toggleChatMute(req: AuthenticatedRequest, res: Response) {
+  const userId = req.user?.userId;
+  const { chatId } = req.params;
+  const { mute } = req.body;
+
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+  if (!chatId) return res.status(400).json({ message: 'chatId parameter is required' });
+  if (mute === undefined) return res.status(400).json({ message: 'mute boolean is required' });
+
+  try {
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const chatIndex = user.mutedChats?.findIndex((id) => id.toString() === chatId);
+
+    if (mute) {
+      if (chatIndex === -1 || chatIndex === undefined) {
+        if (!user.mutedChats) user.mutedChats = [];
+        user.mutedChats.push(chatId as any);
+      }
+    } else {
+      if (chatIndex !== -1 && chatIndex !== undefined) {
+        user.mutedChats = user.mutedChats.filter((id) => id.toString() !== chatId);
+      }
+    }
+
+    await user.save();
+    return res.status(200).json({ success: true, mutedChats: user.mutedChats || [] });
+  } catch (error: any) {
+    return res.status(500).json({ message: 'Error toggling mute status', error: error.message });
+  }
+}

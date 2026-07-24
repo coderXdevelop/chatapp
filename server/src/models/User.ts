@@ -12,6 +12,8 @@ export interface IUser extends Document {
   pushToken?: string;
   lastSeen?: Date;
   blockedUsers: mongoose.Types.ObjectId[];
+  notificationsEnabled: boolean;
+  mutedChats: mongoose.Types.ObjectId[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -70,6 +72,16 @@ const UserSchema: Schema = new Schema(
       {
         type: Schema.Types.ObjectId,
         ref: 'User',
+      },
+    ],
+    notificationsEnabled: {
+      type: Boolean,
+      default: true,
+    },
+    mutedChats: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: 'Chat',
       },
     ],
   },

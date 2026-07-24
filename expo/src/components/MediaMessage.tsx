@@ -216,6 +216,11 @@ export const MediaMessage: React.FC<MediaMessageProps> = ({
 };
 
 const VideoMessageItem: React.FC<{ url: string; width: number; height: number; isLocked: boolean }> = ({ url, width, height, isLocked }) => {
+  const player = useVideoPlayer(url, (playerInstance) => {
+    playerInstance.loop = false;
+    playerInstance.muted = false;
+  });
+
   if (isLocked) {
     return (
       <View style={[styles.videoContainer, { width, height, justifyContent: 'center', alignItems: 'center' }]}>
@@ -223,11 +228,6 @@ const VideoMessageItem: React.FC<{ url: string; width: number; height: number; i
       </View>
     );
   }
-
-  const player = useVideoPlayer(url, (playerInstance) => {
-    playerInstance.loop = false;
-    playerInstance.muted = false;
-  });
 
   return (
     <View style={[styles.videoContainer, { width, height }]}>
@@ -261,8 +261,23 @@ const VoiceMessageItem: React.FC<{
     return list;
   }, [messageId]);
 
+  const player = useAudioPlayer(url);
+  const status = useAudioPlayerStatus(player);
+
+  const togglePlayback = () => {
+    if (status.playing) {
+      player.pause();
+    } else {
+      player.play();
+    }
+  };
+
+  const progress = status.duration > 0 ? status.currentTime / status.duration : 0;
+  const displayTime = formatTime(status.currentTime || 0);
+  const totalTime = formatTime(status.duration || duration || 0);
+
   if (isLocked) {
-    const totalTime = formatTime(duration || 0);
+    const totalTimeLocked = formatTime(duration || 0);
     return (
       <View style={styles.voiceContainer}>
         <TouchableOpacity onPress={onPlayPress} style={styles.playButton}>
@@ -281,27 +296,12 @@ const VoiceMessageItem: React.FC<{
           </View>
           <View style={styles.timeRow}>
             <Text style={styles.timeText}>0:00</Text>
-            <Text style={styles.timeText}>{totalTime} (Download)</Text>
+            <Text style={styles.timeText}>{totalTimeLocked} (Download)</Text>
           </View>
         </View>
       </View>
     );
   }
-
-  const player = useAudioPlayer(url);
-  const status = useAudioPlayerStatus(player);
-
-  const togglePlayback = () => {
-    if (status.playing) {
-      player.pause();
-    } else {
-      player.play();
-    }
-  };
-
-  const progress = status.duration > 0 ? status.currentTime / status.duration : 0;
-  const displayTime = formatTime(status.currentTime || 0);
-  const totalTime = formatTime(status.duration || duration || 0);
 
   return (
     <View style={styles.voiceContainer}>
@@ -325,7 +325,7 @@ const VoiceMessageItem: React.FC<{
                   {
                     height: h,
                     backgroundColor: isActive ? '#F59E0B' : '#1f293d',
-                  }
+                  },
                 ]}
               />
             );

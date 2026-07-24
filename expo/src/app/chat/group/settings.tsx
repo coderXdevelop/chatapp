@@ -10,6 +10,8 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  Switch,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -21,7 +23,7 @@ import { pickMedia, getCloudinarySignature, compressImage, uploadToCloudinary } 
 export default function GroupSettingsScreen() {
   const router = useRouter();
   const { chatId } = useLocalSearchParams<{ chatId: string }>();
-  const { user } = useAuthStore();
+  const { user, toggleChatMute } = useAuthStore();
   const {
     chats,
     updateGroupSettings,
@@ -291,6 +293,29 @@ export default function GroupSettingsScreen() {
                   )}
                 </View>
               )}
+            </View>
+
+            {/* Mute Notifications Toggle */}
+            <View style={styles.muteRowContainer}>
+              <View style={styles.muteTextContainer}>
+                <Text style={styles.muteLabel}>Mute Notifications</Text>
+                <Text style={styles.muteSubtitle}>
+                  {user?.mutedChats?.includes(chatId || '') ? 'Notifications are muted' : 'Notifications are active'}
+                </Text>
+              </View>
+              <Switch
+                value={user?.mutedChats?.includes(chatId || '') || false}
+                onValueChange={async (newValue) => {
+                  if (chatId) {
+                    const success = await toggleChatMute(chatId, newValue);
+                    if (!success) {
+                      Alert.alert('Error', 'Failed to update mute settings.');
+                    }
+                  }
+                }}
+                trackColor={{ false: '#162235', true: COLORS.primary }}
+                thumbColor={Platform.OS === 'android' ? (user?.mutedChats?.includes(chatId || '') ? COLORS.primaryText : '#888') : undefined}
+              />
             </View>
 
             <Text style={styles.participantHeaderTitle}>
@@ -832,5 +857,30 @@ const styles = StyleSheet.create({
     color: COLORS.primaryText,
     fontWeight: '800',
     fontSize: 15,
+  },
+  muteRowContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    backgroundColor: COLORS.cardBackground,
+  },
+  muteTextContainer: {
+    flex: 1,
+    paddingRight: 10,
+  },
+  muteLabel: {
+    color: COLORS.textPrimary,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  muteSubtitle: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    marginTop: 2,
   },
 });
