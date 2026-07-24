@@ -85,6 +85,20 @@ interface ChatState {
   disconnectSocket: () => void;
   sendTypingStart: (chatId: string) => void;
   sendTypingStop: (chatId: string) => void;
+  addOptimisticMessage: (chatId: string, message: Message) => void;
+  removeMessage: (chatId: string, messageId: string) => void;
+  sendFinalizedMessage: (
+    chatId: string,
+    tempId: string,
+    mediaPayload: {
+      url: string;
+      type: 'image' | 'video' | 'audio';
+      duration?: number;
+      size?: number;
+      width?: number;
+      height?: number;
+    }
+  ) => Promise<void>;
 }
 
 // Extract base URL from Axios instance configuration
@@ -563,6 +577,90 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const socket = get().socket;
     if (socket && get().socketConnected) {
       socket.emit('typing_stop', { chatId });
+    }
+  },
+
+  addOptimisticMessage: (chatId, message) => {
+    set((state) => ({
+      messages: {
+        ...state.messages,
+        [chatId]: [message, ...(state.messages[chatId] || [])],
+      },
+    }));
+  },
+
+  removeMessage: (chatId, messageId) => {
+    set((state) => {
+      const updated = (state.messages[chatId] || []).filter((m) => m._id !== messageId && m.tempId !== messageId);
+      return {
+        messages: { ...state.messages, [chatId]: updated },
+      };
+    });
+  },
+
+  sendFinalizedMessage: async (chatId, tempId, mediaPayload) => {
+    const socket = get().socket;
+
+    const handleSuccess = (savedMsg: Message) => {
+      set((state) => {
+        const updated = (state.messages[chatId] || []).map((m) =>
+          m.tempId === tempId ? savedMsg : m
+        );
+        return {
+          messages: { ...state.messages, [chatId]: updated },
+        };
+      });
+    };
+
+    const handleFail = async () => {
+      try {
+        const res = await api.post(`/api/chats/${chatId}/messages`, {
+          text: '',
+          tempId,
+          mediaUrl: mediaPayload.url,
+          mediaType: mediaPayload.type,
+          mediaDuration: mediaPayload.duration,
+          mediaSize: mediaPayload.size,
+          mediaWidth: mediaPayload.width,
+          mediaHeight: mediaPayload.height,
+        });
+        handleSuccess(res.data.message);
+      } catch (err) {
+        set((state) => {
+          const updated = (state.messages[chatId] || []).map((m) =>
+            m.tempId === tempId ? { ...m, status: 'sending' as any } : m
+          );
+          return { messages: { ...state.messages, [chatId]: updated } };
+        });
+      }
+    };
+
+    if (socket && get().socketConnected) {
+      socket.emit(
+        'send_message',
+        {
+          chatId,
+          text: '',
+          tempId,
+          mediaUrl: mediaPayload.url,
+          mediaType: mediaPayload.type,
+          mediaDuration: mediaPayload.duration,
+          mediaSize: mediaPayload.size,
+          mediaWidth: mediaPayload.width,
+          mediaHeight: mediaPayload.height,
+        },
+        (ack: { success: boolean; message?: Message; error?: string }) => {
+          if (ack && ack.success && ack.message) {
+            handleSuccess(ack.message);
+          } else {
+            console.warn('Socket ack failed, trying REST fallback:', ack?.error);
+            handleFail();
+          }
+        }
+      );
+    } else {
+      console.warn('Socket not connected, trying REST fallback directly');
+      handleFail();
     }
   },
 }));

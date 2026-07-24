@@ -98,6 +98,9 @@ export default function ChatScreen() {
     typingStates,
     sendTypingStart,
     sendTypingStop,
+    addOptimisticMessage,
+    removeMessage,
+    sendFinalizedMessage,
   } = useChatStore();
 
   const [text, setText] = useState('');
@@ -129,6 +132,8 @@ export default function ChatScreen() {
 
   const flatListRef = useRef<FlatList>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const activeUploadsRef = useRef<Record<string, AbortController>>({});
+  const [uploadProgressMap, setUploadProgressMap] = useState<Record<string, number>>({});
 
   const isTypingRef = useRef(false);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -218,14 +223,18 @@ export default function ChatScreen() {
     setIsMediaMenuOpen(true);
   };
 
-  const handleCancelUpload = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
+  const handleCancelParticularUpload = (tempId: string) => {
+    const controller = activeUploadsRef.current[tempId];
+    if (controller) {
+      controller.abort();
+      delete activeUploadsRef.current[tempId];
     }
-    setIsUploading(false);
-    setUploadProgress(null);
-    setCurrentUploadIndex(null);
+    removeMessage(chatId!, tempId);
+    setUploadProgressMap((prev) => {
+      const updated = { ...prev };
+      delete updated[tempId];
+      return updated;
+    });
   };
 
   const handleSelectImage = async () => {
@@ -234,47 +243,70 @@ export default function ChatScreen() {
       const assets = await pickMedia('image', true);
       if (!assets || assets.length === 0) return;
 
-      setIsUploading(true);
-      abortControllerRef.current = new AbortController();
       const signatureData = await getCloudinarySignature();
 
-      for (let i = 0; i < assets.length; i++) {
-        const asset = assets[i];
-        setUploadProgress(0);
-        setCurrentUploadIndex({ current: i + 1, total: assets.length });
+      assets.forEach(async (asset) => {
+        const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const controller = new AbortController();
+        activeUploadsRef.current[tempId] = controller;
 
-        const compressedUri = await compressImage(asset.uri);
+        const optimisticMsg: Message = {
+          _id: tempId,
+          tempId,
+          chat: chatId!,
+          sender: { _id: user!.id, displayName: user!.displayName, avatarUrl: user!.avatarUrl },
+          status: 'sending',
+          mediaUrl: asset.uri,
+          mediaType: 'image',
+          mediaWidth: asset.width,
+          mediaHeight: asset.height,
+          mediaSize: asset.fileSize,
+          createdAt: new Date().toISOString(),
+        };
+        addOptimisticMessage(chatId!, optimisticMsg);
 
-        const mediaUrl = await uploadToCloudinary(
-          compressedUri,
-          asset.mimeType || 'image/jpeg',
-          signatureData,
-          (progress) => setUploadProgress(progress),
-          abortControllerRef.current.signal
-        );
+        try {
+          const compressedUri = await compressImage(asset.uri);
 
-        await sendMessage(chatId!, '', replyingTo?._id, {
-          url: mediaUrl,
-          type: 'image',
-          width: asset.width,
-          height: asset.height,
-          size: asset.fileSize,
-        });
-      }
+          const mediaUrl = await uploadToCloudinary(
+            compressedUri,
+            asset.mimeType || 'image/jpeg',
+            signatureData,
+            (progress) => {
+              setUploadProgressMap((prev) => ({ ...prev, [tempId]: progress }));
+            },
+            controller.signal
+          );
+
+          await sendFinalizedMessage(chatId!, tempId, {
+            url: mediaUrl,
+            type: 'image',
+            width: asset.width,
+            height: asset.height,
+            size: asset.fileSize,
+          });
+
+        } catch (error: any) {
+          if (axios.isCancel(error) || error.name === 'AbortError') {
+            console.log(`Upload ${tempId} was explicitly canceled.`);
+          } else {
+            console.error(`Upload ${tempId} failed:`, error);
+            removeMessage(chatId!, tempId);
+            Alert.alert('Upload Failed', 'Could not upload image.');
+          }
+        } finally {
+          delete activeUploadsRef.current[tempId];
+          setUploadProgressMap((prev) => {
+            const updated = { ...prev };
+            delete updated[tempId];
+            return updated;
+          });
+        }
+      });
 
       setReplyingTo(null);
     } catch (e: any) {
-      if (axios.isCancel(e) || e.name === 'AbortError') {
-        console.log('Image upload was canceled by the user.');
-      } else {
-        console.error(e);
-        Alert.alert('Upload Failed', e.message || 'Could not upload images.');
-      }
-    } finally {
-      setIsUploading(false);
-      setUploadProgress(null);
-      setCurrentUploadIndex(null);
-      abortControllerRef.current = null;
+      console.error(e);
     }
   };
 
@@ -284,46 +316,69 @@ export default function ChatScreen() {
       const assets = await pickMedia('video', true);
       if (!assets || assets.length === 0) return;
 
-      setIsUploading(true);
-      abortControllerRef.current = new AbortController();
       const signatureData = await getCloudinarySignature();
 
-      for (let i = 0; i < assets.length; i++) {
-        const asset = assets[i];
-        setUploadProgress(0);
-        setCurrentUploadIndex({ current: i + 1, total: assets.length });
+      assets.forEach(async (asset) => {
+        const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const controller = new AbortController();
+        activeUploadsRef.current[tempId] = controller;
 
-        const mediaUrl = await uploadToCloudinary(
-          asset.uri,
-          asset.mimeType || 'video/mp4',
-          signatureData,
-          (progress) => setUploadProgress(progress),
-          abortControllerRef.current.signal
-        );
+        const optimisticMsg: Message = {
+          _id: tempId,
+          tempId,
+          chat: chatId!,
+          sender: { _id: user!.id, displayName: user!.displayName, avatarUrl: user!.avatarUrl },
+          status: 'sending',
+          mediaUrl: asset.uri,
+          mediaType: 'video',
+          mediaWidth: asset.width,
+          mediaHeight: asset.height,
+          mediaSize: asset.fileSize,
+          createdAt: new Date().toISOString(),
+        };
+        addOptimisticMessage(chatId!, optimisticMsg);
 
-        await sendMessage(chatId!, '', replyingTo?._id, {
-          url: mediaUrl,
-          type: 'video',
-          width: asset.width,
-          height: asset.height,
-          size: asset.fileSize,
-          duration: asset.duration ? asset.duration / 1000 : undefined,
-        });
-      }
+        try {
+          const mediaUrl = await uploadToCloudinary(
+            asset.uri,
+            asset.mimeType || 'video/mp4',
+            signatureData,
+            (progress) => {
+              setUploadProgressMap((prev) => ({ ...prev, [tempId]: progress }));
+            },
+            controller.signal
+          );
+
+          await sendFinalizedMessage(chatId!, tempId, {
+            url: mediaUrl,
+            type: 'video',
+            width: asset.width,
+            height: asset.height,
+            size: asset.fileSize,
+            duration: asset.duration ? asset.duration / 1000 : undefined,
+          });
+
+        } catch (error: any) {
+          if (axios.isCancel(error) || error.name === 'AbortError') {
+            console.log(`Upload ${tempId} was explicitly canceled.`);
+          } else {
+            console.error(`Upload ${tempId} failed:`, error);
+            removeMessage(chatId!, tempId);
+            Alert.alert('Upload Failed', 'Could not upload video.');
+          }
+        } finally {
+          delete activeUploadsRef.current[tempId];
+          setUploadProgressMap((prev) => {
+            const updated = { ...prev };
+            delete updated[tempId];
+            return updated;
+          });
+        }
+      });
 
       setReplyingTo(null);
     } catch (e: any) {
-      if (axios.isCancel(e) || e.name === 'AbortError') {
-        console.log('Video upload was canceled by the user.');
-      } else {
-        console.error(e);
-        Alert.alert('Upload Failed', e.message || 'Could not upload videos.');
-      }
-    } finally {
-      setIsUploading(false);
-      setUploadProgress(null);
-      setCurrentUploadIndex(null);
-      abortControllerRef.current = null;
+      console.error(e);
     }
   };
 
@@ -335,38 +390,55 @@ export default function ChatScreen() {
     const localUri = await stopRecording();
     if (!localUri) return;
 
-    try {
-      setIsUploading(true);
-      setUploadProgress(0);
-      abortControllerRef.current = new AbortController();
+    const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const controller = new AbortController();
+    activeUploadsRef.current[tempId] = controller;
 
+    const optimisticMsg: Message = {
+      _id: tempId,
+      tempId,
+      chat: chatId!,
+      sender: { _id: user!.id, displayName: user!.displayName, avatarUrl: user!.avatarUrl },
+      status: 'sending',
+      mediaUrl: localUri,
+      mediaType: 'audio',
+      createdAt: new Date().toISOString(),
+    };
+    addOptimisticMessage(chatId!, optimisticMsg);
+
+    try {
       const signatureData = await getCloudinarySignature();
 
       const mediaUrl = await uploadToCloudinary(
         localUri,
         'audio/m4a',
         signatureData,
-        (progress) => setUploadProgress(progress),
-        abortControllerRef.current.signal
+        (progress) => {
+          setUploadProgressMap((prev) => ({ ...prev, [tempId]: progress }));
+        },
+        controller.signal
       );
 
-      await sendMessage(chatId!, '', replyingTo?._id, {
+      await sendFinalizedMessage(chatId!, tempId, {
         url: mediaUrl,
         type: 'audio',
       });
 
-      setReplyingTo(null);
-    } catch (e: any) {
-      if (axios.isCancel(e) || e.name === 'AbortError') {
-        console.log('Voice note upload was canceled by the user.');
+    } catch (error: any) {
+      if (axios.isCancel(error) || error.name === 'AbortError') {
+        console.log(`Voice note upload ${tempId} was explicitly canceled.`);
       } else {
-        console.error(e);
-        Alert.alert('Upload Failed', e.message || 'Could not upload voice note.');
+        console.error(`Voice note upload ${tempId} failed:`, error);
+        removeMessage(chatId!, tempId);
+        Alert.alert('Upload Failed', 'Could not upload voice note.');
       }
     } finally {
-      setIsUploading(false);
-      setUploadProgress(null);
-      abortControllerRef.current = null;
+      delete activeUploadsRef.current[tempId];
+      setUploadProgressMap((prev) => {
+        const updated = { ...prev };
+        delete updated[tempId];
+        return updated;
+      });
     }
   };
 
@@ -524,6 +596,9 @@ export default function ChatScreen() {
                         mediaWidth={item.mediaWidth}
                         mediaHeight={item.mediaHeight}
                         mediaDuration={item.mediaDuration}
+                        isSending={item.status === 'sending'}
+                        progress={uploadProgressMap[item.tempId || '']}
+                        onCancel={() => handleCancelParticularUpload(item.tempId!)}
                       />
                     </View>
                   )}
@@ -601,22 +676,6 @@ export default function ChatScreen() {
             style={styles.replyCloseButton}
           >
             <Text style={styles.replyCloseText}>✕</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* Upload progress indicator */}
-      {isUploading && (
-        <View style={styles.uploadProgressOverlay}>
-          <ActivityIndicator size="small" color={COLORS.accent} style={{ marginRight: 8 }} />
-          <Text style={styles.uploadProgressText}>
-            {currentUploadIndex
-              ? `Uploading media (${currentUploadIndex.current}/${currentUploadIndex.total}): ${uploadProgress !== null ? `${uploadProgress}%` : ''}`
-              : `Uploading media... ${uploadProgress !== null ? `${uploadProgress}%` : ''}`
-            }
-          </Text>
-          <TouchableOpacity onPress={handleCancelUpload} style={styles.cancelUploadButton}>
-            <Text style={styles.cancelUploadButtonText}>Cancel</Text>
           </TouchableOpacity>
         </View>
       )}

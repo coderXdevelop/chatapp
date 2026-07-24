@@ -11,6 +11,9 @@ interface MediaMessageProps {
   mediaWidth?: number;
   mediaHeight?: number;
   mediaDuration?: number;
+  isSending?: boolean;
+  progress?: number;
+  onCancel?: () => void;
 }
 
 export const MediaMessage: React.FC<MediaMessageProps> = ({
@@ -19,29 +22,61 @@ export const MediaMessage: React.FC<MediaMessageProps> = ({
   mediaWidth = 200,
   mediaHeight = 150,
   mediaDuration,
+  isSending = false,
+  progress = 0,
+  onCancel,
 }) => {
   const aspectRatio = (mediaWidth && mediaHeight) ? mediaWidth / mediaHeight : 4 / 3;
   const maxWidth = 260;
   const height = Math.min(maxWidth / aspectRatio, 320);
 
+  const renderSendingOverlay = () => {
+    if (!isSending) return null;
+    return (
+      <View style={[StyleSheet.absoluteFill, styles.progressOverlay]}>
+        <View style={styles.progressCircle}>
+          <Text style={styles.progressText}>{progress ? `${progress}%` : '0%'}</Text>
+          {onCancel && (
+            <TouchableOpacity onPress={onCancel} style={styles.bubbleCancelButton}>
+              <Ionicons name="close" size={12} color="#FFFFFF" />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    );
+  };
+
   if (mediaType === 'image') {
     return (
-      <Image
-        source={{ uri: mediaUrl }}
-        style={[styles.image, { width: maxWidth, height }]}
-        contentFit="cover"
-        transition={250}
-        cachePolicy="disk"
-      />
+      <View style={{ width: maxWidth, height, position: 'relative' }}>
+        <Image
+          source={{ uri: mediaUrl }}
+          style={[styles.image, { width: maxWidth, height }]}
+          contentFit="cover"
+          transition={250}
+          cachePolicy="disk"
+        />
+        {renderSendingOverlay()}
+      </View>
     );
   }
 
   if (mediaType === 'video') {
-    return <VideoMessageItem url={mediaUrl} width={maxWidth} height={height} />;
+    return (
+      <View style={{ width: maxWidth, height, position: 'relative' }}>
+        <VideoMessageItem url={mediaUrl} width={maxWidth} height={height} />
+        {renderSendingOverlay()}
+      </View>
+    );
   }
 
   if (mediaType === 'audio') {
-    return <VoiceMessageItem url={mediaUrl} duration={mediaDuration} />;
+    return (
+      <View style={{ position: 'relative', width: 240 }}>
+        <VoiceMessageItem url={mediaUrl} duration={mediaDuration} />
+        {renderSendingOverlay()}
+      </View>
+    );
   }
 
   return null;
@@ -167,5 +202,40 @@ const styles = StyleSheet.create({
   timeText: {
     fontSize: 10,
     color: '#64748B',
+  },
+  progressOverlay: {
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 12,
+  },
+  progressCircle: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: 'rgba(7, 11, 19, 0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#F59E0B',
+    position: 'relative',
+  },
+  progressText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  bubbleCancelButton: {
+    position: 'absolute',
+    bottom: -4,
+    right: -4,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#EF4444',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
   },
 });
