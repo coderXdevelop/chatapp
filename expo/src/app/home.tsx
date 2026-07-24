@@ -111,7 +111,9 @@ export default function HomeScreen() {
               }
               renderItem={({ item }) => {
                 const partner = item.participants.find((p) => p._id !== user?.id);
-                const initial = (partner?.displayName || 'C').charAt(0).toUpperCase();
+                const displayName = item.isGroup ? item.name : (partner?.displayName || 'ChatConnect User');
+                const avatarUrl = item.isGroup ? item.avatarUrl : partner?.avatarUrl;
+                const initial = (displayName || 'C').charAt(0).toUpperCase();
                 const unreadCount = item.unreadCounts?.[user?.id || ''] || 0;
 
                 return (
@@ -121,19 +123,19 @@ export default function HomeScreen() {
                     activeOpacity={0.7}
                   >
                     <View style={styles.avatarContainer}>
-                      {partner?.avatarUrl ? (
-                        <Image source={{ uri: partner.avatarUrl }} style={styles.avatar} />
+                      {avatarUrl ? (
+                        <Image source={{ uri: avatarUrl }} style={styles.avatar} />
                       ) : (
                         <View style={styles.avatarPlaceholder}>
                           <Text style={styles.avatarText}>{initial}</Text>
                         </View>
                       )}
-                      {partner?.isOnline && <View style={styles.onlineBadge} />}
+                      {!item.isGroup && partner?.isOnline && <View style={styles.onlineBadge} />}
                     </View>
                     <View style={styles.chatInfo}>
                       <View style={styles.chatHeaderRow}>
                         <Text style={styles.chatName} numberOfLines={1}>
-                          {partner?.displayName || 'ChatConnect User'}
+                          {displayName}
                         </Text>
                         {item.lastMessage && (
                           <Text style={styles.chatTime}>
@@ -146,7 +148,7 @@ export default function HomeScreen() {
                       </View>
                       <View style={styles.chatBodyRow}>
                         <Text style={styles.lastMessage} numberOfLines={1}>
-                          {item.lastMessage ? item.lastMessage.text : `Tap to chat with ${partner?.displayName}`}
+                          {item.lastMessage ? item.lastMessage.text : (item.isGroup ? 'Tap to open group chat' : `Tap to chat with ${partner?.displayName}`)}
                         </Text>
                         {unreadCount > 0 && (
                           <View style={styles.unreadBadge}>
@@ -170,9 +172,9 @@ export default function HomeScreen() {
             <Text style={styles.helpSubtitle}>Get help with ChatConnect core messaging.</Text>
 
             <View style={styles.helpCard}>
-              <Text style={styles.helpCardTitle}>💬 Direct Messaging</Text>
+              <Text style={styles.helpCardTitle}>💬 Direct Messaging & Groups</Text>
               <Text style={styles.helpCardText}>
-                We prioritize user privacy. There is no public list of users. To start a chat, press the "+" button in the top right of your chats tab and input your contact's registered email or their unique User ID.
+                We prioritize user privacy. Press the "+" button in the bottom right to start a secure 1:1 conversation or create a group chat.
               </Text>
             </View>
 
@@ -220,16 +222,28 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Floating Action Button (FAB) for adding contacts, WhatsApp-style */}
+      {/* Floating Action Button (FAB) for starting conversation options */}
       {activeTab === 'HOME' && (
         <TouchableOpacity
           style={styles.fab}
-          onPress={() => setIsAddModalOpen(true)}
+          onPress={() => {
+            Alert.alert(
+              'New Conversation',
+              'Start a secure conversation or create a group:',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'New Secure DM', onPress: () => setIsAddModalOpen(true) },
+                { text: 'Create Group Chat', onPress: () => router.push('/chat/group/create' as any) },
+              ],
+              { cancelable: true }
+            );
+          }}
           activeOpacity={0.8}
         >
           <Text style={styles.fabText}>+</Text>
         </TouchableOpacity>
       )}
+
 
       {/* Add Contact Modal */}
       <Modal

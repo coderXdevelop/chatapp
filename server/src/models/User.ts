@@ -11,6 +11,7 @@ export interface IUser extends Document {
   status: string;
   pushToken?: string;
   lastSeen?: Date;
+  blockedUsers: mongoose.Types.ObjectId[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -65,10 +66,19 @@ const UserSchema: Schema = new Schema(
       type: Date,
       default: Date.now,
     },
+    blockedUsers: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
+      },
+    ],
   },
   {
     timestamps: true,
   }
 );
 
+UserSchema.index({ blockedUsers: 1 });
+
 export default mongoose.model<IUser>('User', UserSchema);
+

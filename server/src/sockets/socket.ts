@@ -54,12 +54,27 @@ export function setupSockets(io: Server) {
         if (currentConnections === 1) {
           await redisClient.set(presenceKey, 'online');
           // Broadcast to all of the user's chats
-          userChats.forEach((chat) => {
-            socket.to(`chat:${chat._id}`).emit('presence_change', {
-              userId,
-              isOnline: true,
-            });
-          });
+          for (const chat of userChats) {
+            if (chat.isGroup) {
+              socket.to(`chat:${chat._id}`).emit('presence_change', {
+                userId,
+                isOnline: true,
+              });
+            } else {
+              const recipientId = chat.participants.find((pId: any) => pId.toString() !== userId);
+              if (recipientId) {
+                const recipientUser = await User.findById(recipientId);
+                const senderUser = await User.findById(userId);
+                const hasBlock = (recipientUser?.blockedUsers?.includes(userId as any)) || (senderUser?.blockedUsers?.includes(recipientId as any));
+                if (!hasBlock) {
+                  io.to(`user:${recipientId}`).emit('presence_change', {
+                    userId,
+                    isOnline: true,
+                  });
+                }
+              }
+            }
+          }
         }
       } catch (err) {
         console.error('Redis presence connect error:', err);
@@ -87,6 +102,21 @@ export function setupSockets(io: Server) {
         const chat = await Chat.findOne({ _id: chatId, participants: userId });
         if (!chat) {
           return callback && callback({ success: false, error: 'Unauthorized or chat not found' });
+        }
+
+        // Verify block status if 1:1 chat
+        if (!chat.isGroup) {
+          const recipientId = chat.participants.find((pId) => pId.toString() !== userId);
+          if (recipientId) {
+            const recipientUser = await User.findById(recipientId);
+            if (recipientUser && recipientUser.blockedUsers.includes(userId as any)) {
+              return callback && callback({ success: false, error: 'You are blocked by this user.' });
+            }
+            const senderUser = await User.findById(userId);
+            if (senderUser && senderUser.blockedUsers.includes(recipientId as any)) {
+              return callback && callback({ success: false, error: 'You have blocked this user. Unblock them to send messages.' });
+            }
+          }
         }
 
         const message = new Message({
@@ -285,13 +315,29 @@ export function setupSockets(io: Server) {
             await User.findByIdAndUpdate(userId, { lastSeen: lastSeenDate });
 
             // Broadcast offline state to all active chats of the user
-            userChats.forEach((chat) => {
-              io.to(`chat:${chat._id}`).emit('presence_change', {
-                userId,
-                isOnline: false,
-                lastSeen: lastSeenDate.toISOString(),
-              });
-            });
+            for (const chat of userChats) {
+              if (chat.isGroup) {
+                io.to(`chat:${chat._id}`).emit('presence_change', {
+                  userId,
+                  isOnline: false,
+                  lastSeen: lastSeenDate.toISOString(),
+                });
+              } else {
+                const recipientId = chat.participants.find((p: any) => p.toString() !== userId);
+                if (recipientId) {
+                  const recipientUser = await User.findById(recipientId);
+                  const senderUser = await User.findById(userId);
+                  const hasBlock = (recipientUser?.blockedUsers?.includes(userId as any)) || (senderUser?.blockedUsers?.includes(recipientId as any));
+                  if (!hasBlock) {
+                    io.to(`user:${recipientId}`).emit('presence_change', {
+                      userId,
+                      isOnline: false,
+                      lastSeen: lastSeenDate.toISOString(),
+                    });
+                  }
+                }
+              }
+            }
           }
         } catch (err) {
           console.error('Redis presence disconnect error:', err);

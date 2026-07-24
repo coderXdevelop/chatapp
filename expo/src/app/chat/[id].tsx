@@ -19,7 +19,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Swipeable } from 'react-native-gesture-handler';
 import { useChatStore, Message } from '../../store/chatStore';
 import { useAuthStore } from '../../store/authStore';
-import { COLORS } from '../../styles/theme';
+import { COLORS, globalStyles } from '../../styles/theme';
 import axios from 'axios';
 import { Ionicons } from '@expo/vector-icons';
 import { MediaMessage } from '../../components/MediaMessage';
@@ -103,6 +103,11 @@ export default function ChatScreen() {
     addOptimisticMessage,
     removeMessage,
     sendFinalizedMessage,
+    blockedUsers,
+    blockUser,
+    unblockUser,
+    submitReport,
+    searchMessages,
   } = useChatStore();
 
   const [text, setText] = useState('');
@@ -113,6 +118,18 @@ export default function ChatScreen() {
   const [isUploading, setIsUploading] = useState(false);
   const [currentUploadIndex, setCurrentUploadIndex] = useState<{ current: number; total: number } | null>(null);
   const [fullscreenMedia, setFullscreenMedia] = useState<{ messageId: string; url: string; type: 'image' | 'video' | 'audio' } | null>(null);
+
+  // Search & Block/Report states
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Message[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+  
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [reportCategory, setReportCategory] = useState<'spam' | 'abuse' | 'harassment' | 'inappropriate_content' | 'other'>('spam');
+  const [reportReason, setReportReason] = useState('');
+  const [submittingReport, setSubmittingReport] = useState(false);
 
   const { isRecording, startRecording, stopRecording } = useVoiceRecorder();
   
@@ -131,7 +148,7 @@ export default function ChatScreen() {
   // Resolve chat title / recipient name
   const currentChat = chats.find((c) => c._id === chatId);
   const recipient = currentChat?.participants.find((p) => p._id !== user?.id);
-  const chatTitle = recipient?.displayName || 'Conversation';
+  const chatTitle = currentChat?.isGroup ? (currentChat.name || 'Group Chat') : (recipient?.displayName || 'Conversation');
 
   const flatListRef = useRef<FlatList>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -180,12 +197,15 @@ export default function ChatScreen() {
     }, 3000);
   };
 
+  const fetchBlockedUsers = useChatStore.getState().fetchBlockedUsers;
+
   useEffect(() => {
     if (!chatId) return;
 
     connectSocket();
     fetchMessages(chatId);
     markAsRead(chatId);
+    fetchBlockedUsers();
 
     return () => {
       if (typingTimeoutRef.current) {
@@ -196,6 +216,7 @@ export default function ChatScreen() {
       }
     };
   }, [chatId]);
+
 
   const handleSend = async () => {
     if (!text.trim() || !chatId) return;
@@ -242,11 +263,16 @@ export default function ChatScreen() {
 
   const downloadMediaFile = async (url: string, type: 'image' | 'video' | 'audio') => {
     try {
-      const fileExtension = type === 'video' ? 'mp4' : type === 'audio' ? 'm4a' : 'jpg';
-      const filename = `ChatConnect_${Date.now()}.${fileExtension}`;
-      const localUri = `${FileSystem.documentDirectory}${filename}`;
+      const isLocal = url.startsWith('file://') || url.startsWith('ph://');
+      let targetUri = url;
 
-      const downloadResult = await FileSystem.downloadAsync(url, localUri);
+      if (!isLocal) {
+        const fileExtension = type === 'video' ? 'mp4' : type === 'audio' ? 'm4a' : 'jpg';
+        const filename = `ChatConnect_${Date.now()}.${fileExtension}`;
+        const localUri = `${FileSystem.documentDirectory}${filename}`;
+        const downloadResult = await FileSystem.downloadAsync(url, localUri);
+        targetUri = downloadResult.uri;
+      }
 
       let saved = false;
       try {
@@ -254,7 +280,7 @@ export default function ChatScreen() {
         if (MediaLibrary) {
           const permission = await MediaLibrary.requestPermissionsAsync();
           if (permission.granted) {
-            await MediaLibrary.saveToLibraryAsync(downloadResult.uri);
+            await MediaLibrary.saveToLibraryAsync(targetUri);
             saved = true;
             Alert.alert('Saved', 'Media successfully saved to your photos gallery!');
           }
@@ -267,18 +293,18 @@ export default function ChatScreen() {
         try {
           const Sharing = require('expo-sharing');
           if (Sharing && await Sharing.isAvailableAsync()) {
-            await Sharing.shareAsync(downloadResult.uri);
+            await Sharing.shareAsync(targetUri);
           } else {
-            Alert.alert('Download Complete', `Saved locally to device:\n${downloadResult.uri}`);
+            Alert.alert('Save Complete', `File location:\n${targetUri}`);
           }
         } catch (shareErr) {
           console.error(shareErr);
-          Alert.alert('Download Complete', `Saved locally to device:\n${downloadResult.uri}`);
+          Alert.alert('Save Complete', `File location:\n${targetUri}`);
         }
       }
     } catch (err: any) {
       console.error(err);
-      Alert.alert('Download Failed', err.message || 'Could not download media file.');
+      Alert.alert('Save Failed', err.message || 'Could not save media file.');
     }
   };
 
@@ -613,6 +639,132 @@ export default function ChatScreen() {
     } as any);
   };
 
+  const handleChatOptions = () => {
+    const isCurrentlyBlocked = blockedUsers.some((u) => u._id === recipient?._id);
+
+    const options: any[] = [];
+    if (currentChat?.isGroup) {
+      options.push({
+        text: 'Group Info & Settings',
+        onPress: () => router.push({ pathname: '/chat/group/settings', params: { chatId } } as any),
+      });
+    } else if (recipient) {
+      options.push({
+        text: isCurrentlyBlocked ? 'Unblock Contact' : 'Block Contact',
+        style: isCurrentlyBlocked ? 'default' : 'destructive' as const,
+        onPress: () => {
+          Alert.alert(
+            isCurrentlyBlocked ? 'Unblock User' : 'Block User',
+            isCurrentlyBlocked
+              ? `Are you sure you want to unblock ${recipient.displayName}?`
+              : `Blocked contacts will no longer be able to message you or see your online status. Block ${recipient.displayName}?`,
+            [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: isCurrentlyBlocked ? 'Unblock' : 'Block',
+                style: isCurrentlyBlocked ? 'default' : 'destructive',
+                onPress: async () => {
+                  if (isCurrentlyBlocked) {
+                    await unblockUser(recipient._id);
+                    Alert.alert('Contact Unblocked', `${recipient.displayName} has been unblocked.`);
+                  } else {
+                    await blockUser(recipient._id);
+                    Alert.alert('Contact Blocked', `${recipient.displayName} has been blocked.`);
+                    router.back(); // Go back after blocking
+                  }
+                },
+              },
+            ]
+          );
+        },
+      });
+    }
+
+    options.push({
+      text: currentChat?.isGroup ? 'Report Group' : 'Report User',
+      onPress: () => {
+        setIsReportModalOpen(true);
+      },
+    });
+
+    options.push({ text: 'Cancel', style: 'cancel' as const });
+
+    Alert.alert('Options', 'Select an action:', options, { cancelable: true });
+  };
+
+  const handleSearchSubmit = async () => {
+    if (!searchQuery.trim()) return;
+    setIsSearching(true);
+    try {
+      const results = await searchMessages(chatId, searchQuery.trim());
+      setSearchResults(results);
+    } catch (e) {
+      console.error('Search error:', e);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleSearchClear = () => {
+    setSearchQuery('');
+    setSearchResults([]);
+  };
+
+  const handleSearchClose = () => {
+    setIsSearchOpen(false);
+    setSearchQuery('');
+    setSearchResults([]);
+  };
+
+  const handleScrollToMessage = (msgId: string) => {
+    const idx = chatMessages.findIndex((m) => m._id === msgId);
+    if (idx !== -1) {
+      setIsSearchOpen(false);
+      flatListRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.5 });
+      setHighlightedMessageId(msgId);
+      setTimeout(() => {
+        setHighlightedMessageId(null);
+      }, 2000);
+    } else {
+      Alert.alert('Message Search', 'This message is too old to display in current screen scroll viewport. Try scrolling up to load older messages.');
+    }
+  };
+
+  const handleReportSubmit = async () => {
+    if (!reportReason.trim()) {
+      Alert.alert('Validation', 'Please enter details for your report.');
+      return;
+    }
+
+    setSubmittingReport(true);
+    try {
+      const payload: any = {
+        category: reportCategory,
+        reason: reportReason.trim(),
+      };
+      if (currentChat?.isGroup) {
+        payload.reportedChatId = chatId;
+      } else if (recipient) {
+        payload.reportedUserId = recipient._id;
+      }
+
+      const success = await submitReport(payload);
+      if (success) {
+        setIsReportModalOpen(false);
+        setReportReason('');
+        Alert.alert('Report Submitted', 'Thank you. Your report has been recorded for review.');
+      } else {
+        Alert.alert('Error', 'Failed to submit report. Please try again.');
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to submit report.');
+    } finally {
+      setSubmittingReport(false);
+    }
+  };
+
+  const isTypingList = typingStates[chatId || ''] || [];
+
   return (
     <SafeAreaView style={styles.safeArea}>
       {/* Custom Header Bar */}
@@ -621,7 +773,13 @@ export default function ChatScreen() {
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          onPress={() => recipient && setIsProfileModalOpen(true)}
+          onPress={() => {
+            if (currentChat?.isGroup) {
+              router.push({ pathname: '/chat/group/settings', params: { chatId } } as any);
+            } else if (recipient) {
+              setIsProfileModalOpen(true);
+            }
+          }}
           style={styles.headerTitleContainer}
           activeOpacity={0.7}
         >
@@ -631,7 +789,7 @@ export default function ChatScreen() {
           <Text
             style={[
               styles.connectionStatus,
-              recipient && typingStates[chatId || '']?.includes(recipient._id) && {
+              ((currentChat?.isGroup && isTypingList.length > 0) || (!currentChat?.isGroup && recipient && isTypingList.includes(recipient._id))) && {
                 color: COLORS.primary,
                 fontWeight: '700',
               },
@@ -639,15 +797,28 @@ export default function ChatScreen() {
           >
             {!socketConnected
               ? '🔴 Reconnecting...'
-              : recipient && typingStates[chatId || '']?.includes(recipient._id)
+              : currentChat?.isGroup
+              ? (isTypingList.length > 0
+                ? `${currentChat.participants.find(p => p._id === isTypingList[0])?.displayName || 'Someone'} is typing...`
+                : `${currentChat.participants.length} members`)
+              : recipient && isTypingList.includes(recipient._id)
               ? 'typing...'
               : recipient?.isOnline
               ? '🟢 Online'
               : formatLastSeen(recipient?.lastSeen)}
           </Text>
         </TouchableOpacity>
-        <View style={styles.headerRightPlaceholder} />
+        
+        <View style={styles.headerRight}>
+          <TouchableOpacity onPress={() => setIsSearchOpen(true)} style={styles.headerIconButton}>
+            <Ionicons name="search" size={20} color={COLORS.accent} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleChatOptions} style={styles.headerIconButton}>
+            <Ionicons name="ellipsis-vertical" size={20} color={COLORS.accent} />
+          </TouchableOpacity>
+        </View>
       </View>
+
 
       {/* Message List */}
       <FlatList
@@ -678,8 +849,15 @@ export default function ChatScreen() {
                     styles.bubble,
                     isMe ? styles.myBubble : styles.otherBubble,
                     onlyMedia && styles.onlyMediaBubble,
+                    item._id === highlightedMessageId && styles.highlightedBubble,
                   ]}
                 >
+                  {/* Group Sender Name */}
+                  {currentChat?.isGroup && !isMe && (
+                    <Text style={styles.groupSenderName}>
+                      {item.sender?.displayName || 'Someone'}
+                    </Text>
+                  )}
                   {/* Replied-To Message Header inside the bubble */}
                   {item.replyTo && !item.isDeleted && (
                     <View
@@ -1164,6 +1342,156 @@ export default function ChatScreen() {
             )}
           </View>
         </SafeAreaView>
+      </Modal>
+
+      {/* Search Messages Modal */}
+      <Modal
+        visible={isSearchOpen}
+        animationType="fade"
+        transparent
+        onRequestClose={handleSearchClose}
+      >
+        <SafeAreaView style={styles.searchModalOverlay}>
+          <View style={styles.searchHeader}>
+            <TouchableOpacity onPress={handleSearchClose} style={styles.searchCloseBtn}>
+              <Ionicons name="close" size={24} color={COLORS.textPrimary} />
+            </TouchableOpacity>
+            <View style={styles.searchInputContainer}>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search messages..."
+                placeholderTextColor={COLORS.textSecondary}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                onSubmitEditing={handleSearchSubmit}
+                returnKeyType="search"
+                autoFocus
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={handleSearchClear} style={styles.searchClearBtn}>
+                  <Ionicons name="close-circle" size={16} color={COLORS.textSecondary} />
+                </TouchableOpacity>
+              )}
+            </View>
+            <TouchableOpacity onPress={handleSearchSubmit} style={styles.searchGoBtn}>
+              <Text style={styles.searchGoText}>Search</Text>
+            </TouchableOpacity>
+          </View>
+
+          {isSearching ? (
+            <View style={styles.searchLoadingContainer}>
+              <ActivityIndicator size="small" color={COLORS.primary} />
+            </View>
+          ) : (
+            <FlatList
+              data={searchResults}
+              keyExtractor={(item) => item._id}
+              contentContainerStyle={styles.searchResultsList}
+              ListEmptyComponent={
+                <View style={styles.searchEmptyContainer}>
+                  <Text style={styles.searchEmptyText}>
+                    {searchQuery.trim() ? 'No matching messages found.' : 'Type a phrase and tap search.'}
+                  </Text>
+                </View>
+              }
+              renderItem={({ item }) => {
+                const isMe = item.sender._id === user?.id;
+                const senderName = isMe ? 'You' : item.sender.displayName;
+                const timeStr = new Date(item.createdAt).toLocaleDateString([], {
+                  month: 'short',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                });
+
+                return (
+                  <TouchableOpacity
+                    style={styles.searchResultRow}
+                    onPress={() => handleScrollToMessage(item._id)}
+                  >
+                    <View style={styles.searchResultHeader}>
+                      <Text style={styles.searchResultSender}>{senderName}</Text>
+                      <Text style={styles.searchResultTime}>{timeStr}</Text>
+                    </View>
+                    <Text style={styles.searchResultText} numberOfLines={2}>
+                      {item.text}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              }}
+            />
+          )}
+        </SafeAreaView>
+      </Modal>
+
+      {/* Report Modal */}
+      <Modal
+        visible={isReportModalOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setIsReportModalOpen(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.reportModalContent}>
+            <Text style={styles.reportModalTitle}>Report {currentChat?.isGroup ? 'Group' : 'User'}</Text>
+            <Text style={styles.reportModalSubtitle}>Help us understand what is happening. Select a category and provide details.</Text>
+
+            <Text style={globalStyles.label}>Category</Text>
+            <View style={styles.categoryRow}>
+              {(['spam', 'abuse', 'harassment', 'inappropriate_content', 'other'] as const).map((cat) => (
+                <TouchableOpacity
+                  key={cat}
+                  style={[styles.categoryButton, reportCategory === cat && styles.categoryButtonActive]}
+                  onPress={() => setReportCategory(cat)}
+                >
+                  <Text style={[styles.categoryButtonText, reportCategory === cat && styles.categoryButtonTextActive]}>
+                    {cat.replace('_', ' ').toUpperCase()}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={[globalStyles.label, { marginTop: 16 }]}>Details</Text>
+            <View style={[globalStyles.inputWrapper, { height: 100, alignItems: 'flex-start', paddingTop: 10 }]}>
+              <TextInput
+                style={[globalStyles.input, { height: '100%', textAlignVertical: 'top' }]}
+                placeholder="Provide additional details..."
+                placeholderTextColor={COLORS.textSecondary}
+                value={reportReason}
+                onChangeText={setReportReason}
+                multiline
+                numberOfLines={4}
+                maxLength={500}
+              />
+            </View>
+
+            <View style={styles.reportButtonsRow}>
+              <TouchableOpacity
+                style={styles.reportCancelButton}
+                onPress={() => {
+                  setIsReportModalOpen(false);
+                  setReportReason('');
+                }}
+              >
+                <Text style={styles.reportCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.reportConfirmButton,
+                  (submittingReport || !reportReason.trim()) && styles.disabledButton,
+                ]}
+                onPress={handleReportSubmit}
+                disabled={submittingReport || !reportReason.trim()}
+              >
+                {submittingReport ? (
+                  <ActivityIndicator color={COLORS.primaryText} />
+                ) : (
+                  <Text style={styles.reportConfirmText}>SUBMIT REPORT</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -1831,4 +2159,191 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     alignItems: 'center',
   },
+  headerIconButton: {
+    padding: 6,
+    marginLeft: 8,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: 60,
+    justifyContent: 'flex-end',
+  },
+  groupSenderName: {
+    color: COLORS.accent,
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  highlightedBubble: {
+    borderWidth: 2,
+    borderColor: COLORS.borderFocus,
+    backgroundColor: 'rgba(204, 255, 0, 0.15)',
+  },
+  searchModalOverlay: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  searchHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    backgroundColor: COLORS.cardBackground,
+    gap: 12,
+  },
+  searchCloseBtn: {
+    padding: 4,
+  },
+  searchInputContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#03050a',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  searchInput: {
+    flex: 1,
+    color: COLORS.textPrimary,
+    fontSize: 15,
+    paddingVertical: 8,
+  },
+  searchClearBtn: {
+    padding: 4,
+  },
+  searchGoBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  searchGoText: {
+    color: COLORS.primary,
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  searchResultsList: {
+    paddingBottom: 24,
+  },
+  searchEmptyContainer: {
+    padding: 40,
+    alignItems: 'center',
+  },
+  searchEmptyText: {
+    color: COLORS.textSecondary,
+    fontSize: 15,
+    textAlign: 'center',
+  },
+  searchLoadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  searchResultRow: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#0a101b',
+  },
+  searchResultHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  searchResultSender: {
+    color: COLORS.accent,
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  searchResultTime: {
+    color: COLORS.textSecondary,
+    fontSize: 11,
+  },
+  searchResultText: {
+    color: COLORS.textPrimary,
+    fontSize: 14,
+    lineHeight: 18,
+  },
+  reportModalContent: {
+    backgroundColor: COLORS.cardBackground,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 24,
+    paddingBottom: 32,
+    width: '100%',
+  },
+  reportModalTitle: {
+    color: COLORS.textPrimary,
+    fontSize: 20,
+    fontWeight: '800',
+    marginBottom: 6,
+  },
+  reportModalSubtitle: {
+    color: COLORS.textSecondary,
+    fontSize: 13,
+    marginBottom: 20,
+  },
+  categoryRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 8,
+  },
+  categoryButton: {
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 16,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: '#03050a',
+  },
+  categoryButtonActive: {
+    borderColor: COLORS.primary,
+    backgroundColor: 'rgba(204, 255, 0, 0.1)',
+  },
+  categoryButtonText: {
+    color: COLORS.textSecondary,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  categoryButtonTextActive: {
+    color: COLORS.primary,
+  },
+  reportButtonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 24,
+    gap: 12,
+  },
+  reportCancelButton: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 24,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  reportCancelText: {
+    color: COLORS.textSecondary,
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  reportConfirmButton: {
+    flex: 2,
+    backgroundColor: COLORS.primary,
+    borderRadius: 24,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  reportConfirmText: {
+    color: COLORS.primaryText,
+    fontWeight: '800',
+    fontSize: 15,
+  },
+  disabledButton: {
+    opacity: 0.5,
+  },
 });
+

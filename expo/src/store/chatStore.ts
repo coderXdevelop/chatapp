@@ -50,6 +50,12 @@ export interface Chat {
   lastMessage?: Message;
   unreadCounts: Record<string, number>;
   updatedAt: string;
+  isGroup?: boolean;
+  name?: string;
+  avatarUrl?: string;
+  avatarPublicId?: string;
+  creator?: string;
+  admins?: string[];
 }
 
 interface ChatState {
@@ -60,6 +66,7 @@ interface ChatState {
   socket: Socket | null;
   socketConnected: boolean;
   typingStates: Record<string, string[]>;
+  blockedUsers: any[];
 
   fetchChats: () => Promise<void>;
   createChat: (participantId: string) => Promise<Chat | null>;
@@ -100,6 +107,18 @@ interface ChatState {
       text?: string;
     }
   ) => Promise<void>;
+
+  fetchBlockedUsers: () => Promise<void>;
+  blockUser: (targetUserId: string) => Promise<void>;
+  unblockUser: (targetUserId: string) => Promise<void>;
+  submitReport: (payload: { reportedUserId?: string; reportedChatId?: string; category: string; reason: string }) => Promise<boolean>;
+  createGroup: (name: string, participants: string[], avatarUrl?: string, avatarPublicId?: string) => Promise<Chat | null>;
+  updateGroupSettings: (chatId: string, name?: string, avatarUrl?: string, avatarPublicId?: string) => Promise<Chat | null>;
+  addGroupMembers: (chatId: string, userIds: string[]) => Promise<Chat | null>;
+  removeGroupMember: (chatId: string, memberId: string) => Promise<Chat | null>;
+  leaveGroup: (chatId: string) => Promise<boolean>;
+  promoteGroupAdmin: (chatId: string, targetUserId: string, action: 'promote' | 'demote') => Promise<Chat | null>;
+  searchMessages: (chatId: string | null, query: string) => Promise<Message[]>;
 }
 
 // Extract base URL from Axios instance configuration
@@ -113,6 +132,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
   socket: null,
   socketConnected: false,
   typingStates: {},
+  blockedUsers: [],
+
 
   fetchChats: async () => {
     try {
@@ -513,6 +534,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
       });
     });
 
+    newSocket.on('group_updated', (updatedChat: Chat) => {
+      set((state) => ({
+        chats: state.chats.map((c) => (c._id === updatedChat._id ? updatedChat : c)),
+      }));
+    });
+
+    newSocket.on('chat_deleted', (data: { chatId: string }) => {
+      set((state) => ({
+        chats: state.chats.filter((c) => c._id !== data.chatId),
+      }));
+    });
+
+
     newSocket.on('presence_change', (data: { userId: string; isOnline: boolean; lastSeen?: string }) => {
       set((state) => ({
         chats: state.chats.map((c) => {
@@ -664,4 +698,139 @@ export const useChatStore = create<ChatState>((set, get) => ({
       handleFail();
     }
   },
+
+  fetchBlockedUsers: async () => {
+    try {
+      const res = await api.get('/api/users/blocked');
+      set({ blockedUsers: res.data.blockedUsers || [] });
+    } catch (e) {
+      console.error('Fetch blocked users error:', e);
+    }
+  },
+
+  blockUser: async (targetUserId) => {
+    try {
+      const res = await api.post(`/api/users/block/${targetUserId}`);
+      set({ blockedUsers: res.data.blockedUsers || [] });
+      await get().fetchChats(); // Refresh presence/chats lists
+    } catch (e) {
+      console.error('Block user error:', e);
+    }
+  },
+
+  unblockUser: async (targetUserId) => {
+    try {
+      const res = await api.post(`/api/users/unblock/${targetUserId}`);
+      set({ blockedUsers: res.data.blockedUsers || [] });
+      await get().fetchChats(); // Refresh presence/chats lists
+    } catch (e) {
+      console.error('Unblock user error:', e);
+    }
+  },
+
+  submitReport: async (payload) => {
+    try {
+      await api.post('/api/users/report', payload);
+      return true;
+    } catch (e) {
+      console.error('Submit report error:', e);
+      return false;
+    }
+  },
+
+  createGroup: async (name, participants, avatarUrl, avatarPublicId) => {
+    try {
+      const res = await api.post('/api/chats/group', { name, participants, avatarUrl, avatarPublicId });
+      const newChat: Chat = res.data.chat;
+      set((state) => {
+        if (state.chats.find((c) => c._id === newChat._id)) return {};
+        return { chats: [newChat, ...state.chats] };
+      });
+      return newChat;
+    } catch (e) {
+      console.error('Create group error:', e);
+      return null;
+    }
+  },
+
+  updateGroupSettings: async (chatId, name, avatarUrl, avatarPublicId) => {
+    try {
+      const res = await api.put(`/api/chats/group/${chatId}/settings`, { name, avatarUrl, avatarPublicId });
+      const updatedChat: Chat = res.data.chat;
+      set((state) => ({
+        chats: state.chats.map((c) => (c._id === chatId ? updatedChat : c)),
+      }));
+      return updatedChat;
+    } catch (e) {
+      console.error('Update group settings error:', e);
+      return null;
+    }
+  },
+
+  addGroupMembers: async (chatId, userIds) => {
+    try {
+      const res = await api.post(`/api/chats/group/${chatId}/members`, { userIds });
+      const updatedChat: Chat = res.data.chat;
+      set((state) => ({
+        chats: state.chats.map((c) => (c._id === chatId ? updatedChat : c)),
+      }));
+      return updatedChat;
+    } catch (e) {
+      console.error('Add group members error:', e);
+      return null;
+    }
+  },
+
+  removeGroupMember: async (chatId, memberId) => {
+    try {
+      const res = await api.delete(`/api/chats/group/${chatId}/members/${memberId}`);
+      const updatedChat: Chat = res.data.chat;
+      set((state) => ({
+        chats: state.chats.map((c) => (c._id === chatId ? updatedChat : c)),
+      }));
+      return updatedChat;
+    } catch (e) {
+      console.error('Remove group member error:', e);
+      return null;
+    }
+  },
+
+  leaveGroup: async (chatId) => {
+    try {
+      await api.post(`/api/chats/group/${chatId}/leave`);
+      set((state) => ({
+        chats: state.chats.filter((c) => c._id !== chatId),
+      }));
+      return true;
+    } catch (e) {
+      console.error('Leave group error:', e);
+      return false;
+    }
+  },
+
+  promoteGroupAdmin: async (chatId, targetUserId, action) => {
+    try {
+      const res = await api.put(`/api/chats/group/${chatId}/admins`, { userId: targetUserId, action });
+      const updatedChat: Chat = res.data.chat;
+      set((state) => ({
+        chats: state.chats.map((c) => (c._id === chatId ? updatedChat : c)),
+      }));
+      return updatedChat;
+    } catch (e) {
+      console.error('Promote group admin error:', e);
+      return null;
+    }
+  },
+
+  searchMessages: async (chatId, query) => {
+    try {
+      const url = chatId ? `/api/chats/${chatId}/search` : '/api/chats/search';
+      const res = await api.get(url, { params: { q: query } });
+      return res.data.messages || [];
+    } catch (e) {
+      console.error('Search messages error:', e);
+      return [];
+    }
+  },
 }));
+

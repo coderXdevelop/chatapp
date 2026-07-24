@@ -1,11 +1,13 @@
 import type { Response } from 'express';
 import type { AuthenticatedRequest } from '../middleware/auth.middleware.js';
 import type { Server } from 'socket.io';
+import mongoose from 'mongoose';
 import Chat from '../models/Chat.js';
 import Message from '../models/Message.js';
 import User from '../models/User.js';
 import { sendPushNotification } from '../services/push.service.js';
 import { redisClient } from '../services/redis.service.js';
+
 
 export async function getChats(req: AuthenticatedRequest, res: Response) {
   const userId = req.user?.userId;
@@ -410,3 +412,420 @@ export async function forwardMessages(req: AuthenticatedRequest, res: Response) 
     return res.status(500).json({ message: 'Error forwarding messages', error: error.message });
   }
 }
+
+export async function createGroup(req: AuthenticatedRequest, res: Response) {
+  const userId = req.user?.userId;
+  const { name, participants, avatarUrl, avatarPublicId } = req.body;
+
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+  if (!name || !name.trim()) {
+    return res.status(400).json({ message: 'Group name is required' });
+  }
+
+  // Ensure participants list is an array and does not exceed the limit (150)
+  if (!Array.isArray(participants) || participants.length === 0) {
+    return res.status(400).json({ message: 'At least one participant is required' });
+  }
+
+  const uniqueParticipants = Array.from(new Set([...participants, userId]));
+
+  if (uniqueParticipants.length > 150) {
+    return res.status(400).json({ message: 'Group size cannot exceed 150 participants.' });
+  }
+
+  try {
+    const chat = new Chat({
+      isGroup: true,
+      name: name.trim(),
+      avatarUrl: avatarUrl || '',
+      avatarPublicId: avatarPublicId || '',
+      creator: userId,
+      admins: [userId],
+      participants: uniqueParticipants,
+      unreadCounts: new Map(uniqueParticipants.map(id => [id, 0])),
+    });
+
+    await chat.save();
+    
+    // Enrich with presence and participant details
+    const populatedChat = await Chat.findById(chat._id)
+      .populate('participants', 'displayName email avatarUrl status connectId age lastSeen')
+      .populate({
+        path: 'lastMessage',
+        populate: { path: 'sender', select: 'displayName' },
+      });
+
+    const chatObj = populatedChat!.toObject();
+    const presenceKeys = chatObj.participants.map((p: any) => `user:presence:${p._id.toString()}`);
+    if (redisClient && presenceKeys.length > 0) {
+      try {
+        const results = await redisClient.mget(...presenceKeys);
+        chatObj.participants = chatObj.participants.map((p: any, idx: number) => ({
+          ...p,
+          isOnline: results[idx] === 'online',
+        }));
+      } catch (err) {
+        console.error('Error fetching presence for new group:', err);
+      }
+    } else {
+      chatObj.participants = chatObj.participants.map((p: any) => ({
+        ...p,
+        isOnline: false,
+      }));
+    }
+
+    // Programmatically join socket rooms on backend
+    const io = req.app.get('io') as Server;
+    if (io) {
+      uniqueParticipants.forEach((pId) => {
+        io.in(`user:${pId}`).socketsJoin(`chat:${chat._id}`);
+        // Notify other online users
+        if (pId !== userId) {
+          io.to(`user:${pId}`).emit('chat_created', chatObj);
+        }
+      });
+      // Broadcast group_created inside the group
+      io.to(`chat:${chat._id}`).emit('group_created', chatObj);
+    }
+
+    return res.status(201).json({ chat: chatObj });
+  } catch (error: any) {
+    return res.status(500).json({ message: 'Error creating group chat', error: error.message });
+  }
+}
+
+export async function updateGroupSettings(req: AuthenticatedRequest, res: Response) {
+  const userId = req.user?.userId;
+  const { chatId } = req.params;
+  const { name, avatarUrl, avatarPublicId } = req.body;
+
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+  try {
+    const chat = await Chat.findOne({ _id: chatId, participants: userId, isGroup: true } as any);
+    if (!chat) return res.status(404).json({ message: 'Group chat not found or unauthorized' });
+
+    // Validate request user is admin
+    const isAdmin = chat.admins.some((adminId) => adminId.toString() === userId);
+    if (!isAdmin) {
+      return res.status(403).json({ message: 'Forbidden: Only group admins can update settings' });
+    }
+
+    if (name !== undefined) {
+      if (!name.trim()) return res.status(400).json({ message: 'Group name cannot be empty' });
+      chat.name = name.trim();
+    }
+    if (avatarUrl !== undefined) chat.avatarUrl = avatarUrl;
+    if (avatarPublicId !== undefined) chat.avatarPublicId = avatarPublicId;
+
+    await chat.save();
+
+    const populatedChat = await Chat.findById(chat._id)
+      .populate('participants', 'displayName email avatarUrl status connectId age lastSeen')
+      .populate({
+        path: 'lastMessage',
+        populate: { path: 'sender', select: 'displayName' },
+      });
+
+    const chatObj = populatedChat!.toObject();
+    
+    // Broadcast changes
+    const io = req.app.get('io') as Server;
+    if (io) {
+      io.to(`chat:${chatId}`).emit('group_updated', chatObj);
+    }
+
+    return res.status(200).json({ chat: chatObj });
+  } catch (error: any) {
+    return res.status(500).json({ message: 'Error updating group settings', error: error.message });
+  }
+}
+
+export async function addGroupMembers(req: AuthenticatedRequest, res: Response) {
+  const userId = req.user?.userId;
+  const { chatId } = req.params;
+  const { userIds } = req.body; // array of strings
+
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+  if (!Array.isArray(userIds) || userIds.length === 0) {
+    return res.status(400).json({ message: 'Participant IDs are required' });
+  }
+
+  try {
+    const chat = await Chat.findOne({ _id: chatId, participants: userId, isGroup: true } as any);
+    if (!chat) return res.status(404).json({ message: 'Group chat not found or unauthorized' });
+
+    const isAdmin = chat.admins.some((adminId) => adminId.toString() === userId);
+    if (!isAdmin) {
+      return res.status(403).json({ message: 'Forbidden: Only group admins can add members' });
+    }
+
+    const currentParticipants = chat.participants.map(p => p.toString());
+    const validNewUserIds = userIds.filter(id => !currentParticipants.includes(id));
+
+    if (chat.participants.length + validNewUserIds.length > 150) {
+      return res.status(400).json({ message: 'Group size cannot exceed 150 participants.' });
+    }
+
+    validNewUserIds.forEach((id) => {
+      chat.participants.push(new mongoose.Types.ObjectId(id) as any);
+      chat.unreadCounts.set(id, 0);
+    });
+
+    await chat.save();
+
+    const populatedChat = await Chat.findById(chat._id)
+      .populate('participants', 'displayName email avatarUrl status connectId age lastSeen')
+      .populate({
+        path: 'lastMessage',
+        populate: { path: 'sender', select: 'displayName' },
+      });
+
+    const chatObj = populatedChat!.toObject();
+
+    // Join new participants' sockets and notify
+    const io = req.app.get('io') as Server;
+    if (io) {
+      validNewUserIds.forEach((newId) => {
+        io.in(`user:${newId}`).socketsJoin(`chat:${chat._id}`);
+        io.to(`user:${newId}`).emit('chat_created', chatObj);
+      });
+      // Broadcast to room
+      io.to(`chat:${chatId}`).emit('group_updated', chatObj);
+      io.to(`chat:${chatId}`).emit('member_joined', { chatId, userIds: validNewUserIds });
+    }
+
+    return res.status(200).json({ chat: chatObj });
+  } catch (error: any) {
+    return res.status(500).json({ message: 'Error adding group members', error: error.message });
+  }
+}
+
+export async function removeGroupMember(req: AuthenticatedRequest, res: Response) {
+  const userId = req.user?.userId;
+  const { chatId } = req.params;
+  const memberId = req.params.memberId as string;
+
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+  try {
+    const chat = await Chat.findOne({ _id: chatId, participants: userId, isGroup: true } as any);
+    if (!chat) return res.status(404).json({ message: 'Group chat not found or unauthorized' });
+
+    const isAdmin = chat.admins.some((adminId) => adminId.toString() === userId);
+    if (!isAdmin) {
+      return res.status(403).json({ message: 'Forbidden: Only group admins can remove members' });
+    }
+
+    if (chat.creator && chat.creator.toString() === memberId) {
+      return res.status(400).json({ message: 'Cannot remove the group creator' });
+    }
+
+    chat.participants = chat.participants.filter(p => p.toString() !== memberId);
+    chat.admins = chat.admins.filter(a => a.toString() !== memberId);
+    chat.unreadCounts.delete(memberId);
+
+    await chat.save();
+
+    const populatedChat = await Chat.findById(chat._id)
+      .populate('participants', 'displayName email avatarUrl status connectId age lastSeen')
+      .populate({
+        path: 'lastMessage',
+        populate: { path: 'sender', select: 'displayName' },
+      });
+
+    const chatObj = populatedChat!.toObject();
+
+    const io = req.app.get('io') as Server;
+    if (io) {
+      // Broadcast to room before kicking their socket out
+      io.to(`chat:${chatId}`).emit('group_updated', chatObj);
+      io.to(`chat:${chatId}`).emit('member_removed', { chatId, userId: memberId });
+      io.to(`user:${memberId}`).emit('chat_deleted', { chatId });
+      io.in(`user:${memberId}`).socketsLeave(`chat:${chat._id}`);
+    }
+
+    return res.status(200).json({ chat: chatObj });
+  } catch (error: any) {
+    return res.status(500).json({ message: 'Error removing group member', error: error.message });
+  }
+}
+
+export async function leaveGroup(req: AuthenticatedRequest, res: Response) {
+  const userId = req.user?.userId;
+  const { chatId } = req.params;
+
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+  try {
+    const chat = await Chat.findOne({ _id: chatId, participants: userId, isGroup: true } as any);
+    if (!chat) return res.status(404).json({ message: 'Group chat not found or unauthorized' });
+
+    // Filter out the leaving user
+    const remainingParticipants = chat.participants.filter(p => p.toString() !== userId);
+
+    if (remainingParticipants.length === 0) {
+      // Last participant leaves, delete chat and its messages
+      await Chat.findByIdAndDelete(chatId);
+      await Message.deleteMany({ chat: chatId } as any);
+      
+      const io = req.app.get('io') as Server;
+      if (io) {
+        io.in(`user:${userId}`).socketsLeave(`chat:${chat._id}`);
+      }
+      return res.status(200).json({ success: true, message: 'Group deleted since no members remain' });
+    }
+
+    chat.participants = remainingParticipants;
+    chat.unreadCounts.delete(userId as string);
+
+    const isUserAdmin = chat.admins.some((adminId) => adminId.toString() === userId);
+    chat.admins = chat.admins.filter(a => a.toString() !== userId);
+
+    // If leaving user was the sole admin (or creator), promote the oldest remaining participant
+    if (isUserAdmin && chat.admins.length === 0 && remainingParticipants.length > 0) {
+      const nextAdminId = remainingParticipants[0];
+      if (nextAdminId) {
+        chat.admins.push(nextAdminId);
+        if (chat.creator && chat.creator.toString() === userId) {
+          chat.creator = nextAdminId; // delegate ownership
+        }
+      }
+    }
+
+    await chat.save();
+
+    const populatedChat = await Chat.findById(chat._id)
+      .populate('participants', 'displayName email avatarUrl status connectId age lastSeen')
+      .populate({
+        path: 'lastMessage',
+        populate: { path: 'sender', select: 'displayName' },
+      });
+
+    const chatObj = populatedChat!.toObject();
+
+    const io = req.app.get('io') as Server;
+    if (io) {
+      io.to(`chat:${chatId}`).emit('group_updated', chatObj);
+      io.to(`chat:${chatId}`).emit('member_left', { chatId, userId });
+      io.in(`user:${userId}`).socketsLeave(`chat:${chat._id}`);
+    }
+
+    return res.status(200).json({ success: true, chat: chatObj });
+  } catch (error: any) {
+    return res.status(500).json({ message: 'Error leaving group chat', error: error.message });
+  }
+}
+
+export async function promoteGroupAdmin(req: AuthenticatedRequest, res: Response) {
+  const userId = req.user?.userId;
+  const { chatId } = req.params;
+  const { userId: targetUserId, action } = req.body; // action: 'promote' | 'demote'
+
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+  if (!targetUserId || !action) {
+    return res.status(400).json({ message: 'Target userId and action are required' });
+  }
+
+  try {
+    const chat = await Chat.findOne({ _id: chatId, participants: userId, isGroup: true } as any);
+    if (!chat) return res.status(404).json({ message: 'Group chat not found or unauthorized' });
+
+    // Validate current user is admin
+    const isAdmin = chat.admins.some((adminId) => adminId.toString() === userId);
+    if (!isAdmin) {
+      return res.status(403).json({ message: 'Forbidden: Only group admins can manage admin roles' });
+    }
+
+    // Creator checks: Creator cannot be demoted
+    if (action === 'demote' && chat.creator && chat.creator.toString() === targetUserId) {
+      return res.status(400).json({ message: 'Cannot demote the group creator' });
+    }
+
+    const currentAdmins = chat.admins.map(a => a.toString());
+
+    if (action === 'promote') {
+      if (!currentAdmins.includes(targetUserId)) {
+        chat.admins.push(new mongoose.Types.ObjectId(targetUserId) as any);
+      }
+    } else if (action === 'demote') {
+      chat.admins = chat.admins.filter(a => a.toString() !== targetUserId);
+    } else {
+      return res.status(400).json({ message: 'Invalid action. Must be promote or demote' });
+    }
+
+    await chat.save();
+
+    const populatedChat = await Chat.findById(chat._id)
+      .populate('participants', 'displayName email avatarUrl status connectId age lastSeen')
+      .populate({
+        path: 'lastMessage',
+        populate: { path: 'sender', select: 'displayName' },
+      });
+
+    const chatObj = populatedChat!.toObject();
+
+    const io = req.app.get('io') as Server;
+    if (io) {
+      io.to(`chat:${chatId}`).emit('group_updated', chatObj);
+    }
+
+    return res.status(200).json({ chat: chatObj });
+  } catch (error: any) {
+    return res.status(500).json({ message: 'Error managing admin roles', error: error.message });
+  }
+}
+
+export async function searchMessages(req: AuthenticatedRequest, res: Response) {
+  const userId = req.user?.userId;
+  const { chatId } = req.params; // Optional: if provided, searches in this chat. If not, searches all user chats.
+  const { q } = req.query;
+
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+  if (!q || !q.toString().trim()) {
+    return res.status(400).json({ message: 'Search query required' });
+  }
+
+  const queryStr = q.toString().trim();
+
+  try {
+    let chatIds: any[] = [];
+
+    if (chatId) {
+      // Search in specific chat
+      const chat = await Chat.findOne({ _id: chatId, participants: userId });
+      if (!chat) return res.status(404).json({ message: 'Chat not found or unauthorized' });
+      chatIds = [chat._id];
+    } else {
+      // Search in all chats of user
+      const chats = await Chat.find({ participants: userId });
+      chatIds = chats.map((c) => c._id);
+    }
+
+    if (chatIds.length === 0) {
+      return res.status(200).json({ messages: [] });
+    }
+
+    const query = {
+      chat: { $in: chatIds },
+      text: { $regex: queryStr, $options: 'i' },
+      isDeleted: false,
+      deletedForUsers: { $ne: userId },
+    };
+
+    const messages = await Message.find(query)
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .populate('sender', 'displayName avatarUrl status')
+      .populate({
+        path: 'chat',
+        select: 'name isGroup participants',
+        populate: { path: 'participants', select: 'displayName' }
+      });
+
+    return res.status(200).json({ messages });
+  } catch (error: any) {
+    return res.status(500).json({ message: 'Error searching messages', error: error.message });
+  }
+}
+

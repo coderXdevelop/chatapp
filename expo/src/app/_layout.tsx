@@ -110,6 +110,8 @@ export default function RootLayout() {
         <Stack.Screen name="home" />
         <Stack.Screen name="profile" />
         <Stack.Screen name="chat/[id]" />
+        <Stack.Screen name="chat/group/create" />
+        <Stack.Screen name="chat/group/settings" />
       </Stack>
     </GestureHandlerRootView>
   );
