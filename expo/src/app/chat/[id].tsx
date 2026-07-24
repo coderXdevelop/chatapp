@@ -25,6 +25,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { MediaMessage } from '../../components/MediaMessage';
 import { pickMedia, compressImage, uploadToCloudinary, getCloudinarySignature } from '../../services/mediaUpload';
 import { useVoiceRecorder } from '../../hooks/useVoiceRecorder';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as MediaLibrary from 'expo-media-library';
 
 // Swipeable message row wrapper component
 const SwipeableRow = ({
@@ -110,6 +112,7 @@ export default function ChatScreen() {
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [currentUploadIndex, setCurrentUploadIndex] = useState<{ current: number; total: number } | null>(null);
+  const [fullscreenMedia, setFullscreenMedia] = useState<{ url: string; type: 'image' | 'video' | 'audio' } | null>(null);
 
   const { isRecording, startRecording, stopRecording } = useVoiceRecorder();
   
@@ -235,6 +238,28 @@ export default function ChatScreen() {
       delete updated[tempId];
       return updated;
     });
+  };
+
+  const downloadMediaFile = async (url: string, type: 'image' | 'video' | 'audio') => {
+    try {
+      const permission = await MediaLibrary.requestPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Permission Denied', 'Permission to access media library is required to save downloads!');
+        return;
+      }
+
+      const fileExtension = type === 'video' ? 'mp4' : type === 'audio' ? 'm4a' : 'jpg';
+      const filename = `ChatConnect_${Date.now()}.${fileExtension}`;
+      const localUri = `${FileSystem.documentDirectory}${filename}`;
+
+      const downloadResult = await FileSystem.downloadAsync(url, localUri);
+      await MediaLibrary.saveToLibraryAsync(downloadResult.uri);
+      
+      Alert.alert('Saved', 'Media successfully saved to your photos gallery!');
+    } catch (err: any) {
+      console.error(err);
+      Alert.alert('Download Failed', err.message || 'Could not download media file.');
+    }
   };
 
   const handleSelectImage = async () => {
@@ -556,6 +581,7 @@ export default function ChatScreen() {
         contentContainerStyle={styles.listContent}
         renderItem={({ item }) => {
           const isMe = item.sender._id === user?.id;
+          const onlyMedia = item.mediaUrl && !item.text && !item.isDeleted;
           return (
             <SwipeableRow item={item} isMe={isMe} onReply={() => setReplyingTo(item)}>
               <TouchableOpacity
@@ -563,7 +589,13 @@ export default function ChatScreen() {
                 activeOpacity={0.8}
                 style={[styles.messageRow, isMe ? styles.myMessageRow : styles.otherMessageRow]}
               >
-                <View style={[styles.bubble, isMe ? styles.myBubble : styles.otherBubble]}>
+                <View
+                  style={[
+                    styles.bubble,
+                    isMe ? styles.myBubble : styles.otherBubble,
+                    onlyMedia && styles.onlyMediaBubble,
+                  ]}
+                >
                   {/* Replied-To Message Header inside the bubble */}
                   {item.replyTo && !item.isDeleted && (
                     <View
@@ -589,7 +621,18 @@ export default function ChatScreen() {
                   )}
 
                   {item.mediaUrl && item.mediaType && !item.isDeleted && (
-                    <View style={{ marginBottom: item.text ? 8 : 0 }}>
+                    <TouchableOpacity
+                      activeOpacity={0.9}
+                      onPress={() => {
+                        if (item.status !== 'sending') {
+                          setFullscreenMedia({
+                            url: item.mediaUrl,
+                            type: item.mediaType,
+                          });
+                        }
+                      }}
+                      style={{ marginBottom: item.text ? 8 : 0 }}
+                    >
                       <MediaMessage
                         mediaUrl={item.mediaUrl}
                         mediaType={item.mediaType}
@@ -600,7 +643,7 @@ export default function ChatScreen() {
                         progress={uploadProgressMap[item.tempId || '']}
                         onCancel={() => handleCancelParticularUpload(item.tempId!)}
                       />
-                    </View>
+                    </TouchableOpacity>
                   )}
 
                   {(item.text ? true : false || item.isDeleted) && (
@@ -616,16 +659,21 @@ export default function ChatScreen() {
                   )}
                   
                   {!item.isDeleted && (
-                    <View style={styles.metaRow}>
+                    <View style={onlyMedia ? styles.metaRowOnlyMedia : styles.metaRow}>
                       {item.isEdited && <Text style={styles.editedText}>(edited)</Text>}
-                      <Text style={styles.timeText}>
+                      <Text style={onlyMedia ? styles.timeTextOnlyMedia : styles.timeText}>
                         {new Date(item.createdAt).toLocaleTimeString([], {
                           hour: '2-digit',
                           minute: '2-digit',
                         })}
                       </Text>
                       {isMe && (
-                        <Text style={[styles.statusText, item.status === 'read' && styles.statusRead]}>
+                        <Text
+                          style={[
+                            onlyMedia ? styles.statusTextOnlyMedia : styles.statusText,
+                            item.status === 'read' && styles.statusRead,
+                          ]}
+                        >
                           {item.status === 'sending' ? '⏳' : item.status === 'read' ? '✓✓' : '✓'}
                         </Text>
                       )}
@@ -954,6 +1002,70 @@ export default function ChatScreen() {
             />
           )}
         </TouchableOpacity>
+      </Modal>
+
+      {/* Fullscreen Media Viewer Modal */}
+      <Modal
+        visible={fullscreenMedia !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setFullscreenMedia(null)}
+      >
+        <SafeAreaView style={styles.fullscreenMediaOverlay}>
+          {/* Top Bar Controls */}
+          <View style={styles.fullscreenMediaHeader}>
+            <TouchableOpacity
+              onPress={() => setFullscreenMedia(null)}
+              style={styles.fullscreenHeaderButton}
+            >
+              <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+            
+            <Text style={styles.fullscreenHeaderTitle}>
+              {fullscreenMedia?.type === 'video' ? 'Video' : fullscreenMedia?.type === 'audio' ? 'Voice Note' : 'Photo'}
+            </Text>
+
+            {fullscreenMedia ? (
+              <TouchableOpacity
+                onPress={() => downloadMediaFile(fullscreenMedia.url, fullscreenMedia.type)}
+                style={styles.fullscreenHeaderButton}
+              >
+                <Ionicons name="download" size={24} color={COLORS.accent} />
+              </TouchableOpacity>
+            ) : (
+              <View style={{ width: 36 }} />
+            )}
+          </View>
+
+          {/* Centered Viewer Content */}
+          <View style={styles.fullscreenMediaContainer}>
+            {fullscreenMedia?.type === 'image' && (
+              <Image
+                source={{ uri: fullscreenMedia.url }}
+                style={styles.fullscreenImage}
+                resizeMode="contain"
+              />
+            )}
+
+            {fullscreenMedia?.type === 'video' && (
+              <View style={styles.fullscreenVideoWrapper}>
+                <MediaMessage
+                  mediaUrl={fullscreenMedia.url}
+                  mediaType="video"
+                />
+              </View>
+            )}
+
+            {fullscreenMedia?.type === 'audio' && (
+              <View style={styles.fullscreenAudioWrapper}>
+                <MediaMessage
+                  mediaUrl={fullscreenMedia.url}
+                  mediaType="audio"
+                />
+              </View>
+            )}
+          </View>
+        </SafeAreaView>
       </Modal>
     </SafeAreaView>
   );
@@ -1549,5 +1661,70 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '700',
+  },
+  onlyMediaBubble: {
+    paddingHorizontal: 3,
+    paddingVertical: 3,
+    borderRadius: 14,
+  },
+  metaRowOnlyMedia: {
+    position: 'absolute',
+    bottom: 6,
+    right: 6,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  timeTextOnlyMedia: {
+    fontSize: 9,
+    color: '#E2E8F0',
+  },
+  statusTextOnlyMedia: {
+    fontSize: 9,
+    color: '#E2E8F0',
+  },
+  fullscreenMediaOverlay: {
+    flex: 1,
+    backgroundColor: '#000000',
+  },
+  fullscreenMediaHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: 'rgba(7, 11, 19, 0.9)',
+  },
+  fullscreenHeaderButton: {
+    padding: 6,
+  },
+  fullscreenHeaderTitle: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  fullscreenMediaContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullscreenImage: {
+    width: '100%',
+    height: '80%',
+  },
+  fullscreenVideoWrapper: {
+    width: '100%',
+    height: 300,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullscreenAudioWrapper: {
+    width: '100%',
+    paddingHorizontal: 20,
+    alignItems: 'center',
   },
 });
