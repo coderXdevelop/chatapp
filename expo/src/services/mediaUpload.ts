@@ -51,7 +51,8 @@ export const uploadToCloudinary = async (
   localUri: string,
   mimeType: string,
   signatureData: { signature: string; timestamp: number; apiKey: string; cloudName: string; folder: string },
-  onProgress: UploadProgressCallback
+  onProgress: UploadProgressCallback,
+  signal?: AbortSignal
 ): Promise<string> => {
   const formData = new FormData();
   
@@ -73,6 +74,7 @@ export const uploadToCloudinary = async (
       headers: {
         'Content-Type': 'multipart/form-data',
       },
+      signal,
       onUploadProgress: (progressEvent) => {
         if (progressEvent.total) {
           const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);

@@ -20,6 +20,7 @@ import { Swipeable } from 'react-native-gesture-handler';
 import { useChatStore, Message } from '../../store/chatStore';
 import { useAuthStore } from '../../store/authStore';
 import { COLORS } from '../../styles/theme';
+import axios from 'axios';
 import { Ionicons } from '@expo/vector-icons';
 import { MediaMessage } from '../../components/MediaMessage';
 import { pickMedia, compressImage, uploadToCloudinary, getCloudinarySignature } from '../../services/mediaUpload';
@@ -127,6 +128,7 @@ export default function ChatScreen() {
   const chatTitle = recipient?.displayName || 'Conversation';
 
   const flatListRef = useRef<FlatList>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const isTypingRef = useRef(false);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -216,6 +218,16 @@ export default function ChatScreen() {
     setIsMediaMenuOpen(true);
   };
 
+  const handleCancelUpload = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setIsUploading(false);
+    setUploadProgress(null);
+    setCurrentUploadIndex(null);
+  };
+
   const handleSelectImage = async () => {
     setIsMediaMenuOpen(false);
     try {
@@ -223,6 +235,7 @@ export default function ChatScreen() {
       if (!assets || assets.length === 0) return;
 
       setIsUploading(true);
+      abortControllerRef.current = new AbortController();
       const signatureData = await getCloudinarySignature();
 
       for (let i = 0; i < assets.length; i++) {
@@ -236,7 +249,8 @@ export default function ChatScreen() {
           compressedUri,
           asset.mimeType || 'image/jpeg',
           signatureData,
-          (progress) => setUploadProgress(progress)
+          (progress) => setUploadProgress(progress),
+          abortControllerRef.current.signal
         );
 
         await sendMessage(chatId!, '', replyingTo?._id, {
@@ -250,12 +264,17 @@ export default function ChatScreen() {
 
       setReplyingTo(null);
     } catch (e: any) {
-      console.error(e);
-      Alert.alert('Upload Failed', e.message || 'Could not upload images.');
+      if (axios.isCancel(e) || e.name === 'AbortError') {
+        console.log('Image upload was canceled by the user.');
+      } else {
+        console.error(e);
+        Alert.alert('Upload Failed', e.message || 'Could not upload images.');
+      }
     } finally {
       setIsUploading(false);
       setUploadProgress(null);
       setCurrentUploadIndex(null);
+      abortControllerRef.current = null;
     }
   };
 
@@ -266,6 +285,7 @@ export default function ChatScreen() {
       if (!assets || assets.length === 0) return;
 
       setIsUploading(true);
+      abortControllerRef.current = new AbortController();
       const signatureData = await getCloudinarySignature();
 
       for (let i = 0; i < assets.length; i++) {
@@ -277,7 +297,8 @@ export default function ChatScreen() {
           asset.uri,
           asset.mimeType || 'video/mp4',
           signatureData,
-          (progress) => setUploadProgress(progress)
+          (progress) => setUploadProgress(progress),
+          abortControllerRef.current.signal
         );
 
         await sendMessage(chatId!, '', replyingTo?._id, {
@@ -292,12 +313,17 @@ export default function ChatScreen() {
 
       setReplyingTo(null);
     } catch (e: any) {
-      console.error(e);
-      Alert.alert('Upload Failed', e.message || 'Could not upload videos.');
+      if (axios.isCancel(e) || e.name === 'AbortError') {
+        console.log('Video upload was canceled by the user.');
+      } else {
+        console.error(e);
+        Alert.alert('Upload Failed', e.message || 'Could not upload videos.');
+      }
     } finally {
       setIsUploading(false);
       setUploadProgress(null);
       setCurrentUploadIndex(null);
+      abortControllerRef.current = null;
     }
   };
 
@@ -312,6 +338,7 @@ export default function ChatScreen() {
     try {
       setIsUploading(true);
       setUploadProgress(0);
+      abortControllerRef.current = new AbortController();
 
       const signatureData = await getCloudinarySignature();
 
@@ -319,7 +346,8 @@ export default function ChatScreen() {
         localUri,
         'audio/m4a',
         signatureData,
-        (progress) => setUploadProgress(progress)
+        (progress) => setUploadProgress(progress),
+        abortControllerRef.current.signal
       );
 
       await sendMessage(chatId!, '', replyingTo?._id, {
@@ -329,11 +357,16 @@ export default function ChatScreen() {
 
       setReplyingTo(null);
     } catch (e: any) {
-      console.error(e);
-      Alert.alert('Upload Failed', e.message || 'Could not upload voice note.');
+      if (axios.isCancel(e) || e.name === 'AbortError') {
+        console.log('Voice note upload was canceled by the user.');
+      } else {
+        console.error(e);
+        Alert.alert('Upload Failed', e.message || 'Could not upload voice note.');
+      }
     } finally {
       setIsUploading(false);
       setUploadProgress(null);
+      abortControllerRef.current = null;
     }
   };
 
@@ -582,6 +615,9 @@ export default function ChatScreen() {
               : `Uploading media... ${uploadProgress !== null ? `${uploadProgress}%` : ''}`
             }
           </Text>
+          <TouchableOpacity onPress={handleCancelUpload} style={styles.cancelUploadButton}>
+            <Text style={styles.cancelUploadButtonText}>Cancel</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -1441,6 +1477,18 @@ const styles = StyleSheet.create({
   mediaMenuCancelText: {
     color: COLORS.textPrimary,
     fontSize: 16,
+    fontWeight: '700',
+  },
+  cancelUploadButton: {
+    marginLeft: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#EF4444',
+  },
+  cancelUploadButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
     fontWeight: '700',
   },
 });
