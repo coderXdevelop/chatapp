@@ -181,10 +181,15 @@ export async function getMessages(req: AuthenticatedRequest, res: Response) {
 export async function sendMessageHttp(req: AuthenticatedRequest, res: Response) {
   const userId = req.user?.userId;
   const { chatId } = req.params;
-  const { text, tempId, replyTo } = req.body;
+  const { 
+    text, tempId, replyTo,
+    mediaUrl, mediaType, mediaDuration, mediaSize, mediaWidth, mediaHeight
+  } = req.body;
 
   if (!userId) return res.status(401).json({ message: 'Unauthorized' });
-  if (!text) return res.status(400).json({ message: 'Message text required' });
+  if (!text && !mediaUrl) {
+    return res.status(400).json({ message: 'Message text or media is required' });
+  }
 
   try {
     const chat = await Chat.findOne({ _id: chatId, participants: userId } as any);
@@ -193,10 +198,16 @@ export async function sendMessageHttp(req: AuthenticatedRequest, res: Response) 
     const message = new Message({
       chat: chatId,
       sender: userId,
-      text,
+      text: text || '',
       status: 'sent',
       tempId,
       replyTo: replyTo || null,
+      mediaUrl,
+      mediaType,
+      mediaDuration,
+      mediaSize,
+      mediaWidth,
+      mediaHeight,
     });
     await message.save();
 
@@ -228,12 +239,18 @@ export async function sendMessageHttp(req: AuthenticatedRequest, res: Response) 
 
         const senderName = (populatedMessage.sender as any).displayName || 'Someone';
 
+        let bodyText = text || '';
+        if (!bodyText && mediaType) {
+          const typeIcons: Record<string, string> = { image: '📷 Photo', video: '🎥 Video', audio: '🎵 Voice note' };
+          bodyText = typeIcons[mediaType] || 'Sent a file';
+        }
+
         chat.participants.forEach((pId) => {
           const recipientId = pId.toString();
           if (recipientId !== userId && !activeUserIds.has(recipientId)) {
             sendPushNotification(recipientId, {
               title: senderName,
-              body: text,
+              body: bodyText,
               data: { chatId, messageId: message._id.toString() },
             });
           }
@@ -332,6 +349,12 @@ export async function forwardMessages(req: AuthenticatedRequest, res: Response) 
           text: srcMsg.text,
           status: 'sent',
           isForwarded: true,
+          mediaUrl: srcMsg.mediaUrl,
+          mediaType: srcMsg.mediaType,
+          mediaDuration: srcMsg.mediaDuration,
+          mediaSize: srcMsg.mediaSize,
+          mediaWidth: srcMsg.mediaWidth,
+          mediaHeight: srcMsg.mediaHeight,
         });
         await message.save();
 
@@ -358,12 +381,18 @@ export async function forwardMessages(req: AuthenticatedRequest, res: Response) 
 
             const senderName = (populated.sender as any).displayName || 'Someone';
 
+            let bodyText = srcMsg.text || '';
+            if (!bodyText && srcMsg.mediaType) {
+              const typeIcons: Record<string, string> = { image: '📷 Photo', video: '🎥 Video', audio: '🎵 Voice note' };
+              bodyText = typeIcons[srcMsg.mediaType] || 'Sent a file';
+            }
+
             chat.participants.forEach((pId) => {
               const recipientId = pId.toString();
               if (recipientId !== userId && !activeUserIds.has(recipientId)) {
                 sendPushNotification(recipientId, {
                   title: senderName,
-                  body: srcMsg.text,
+                  body: bodyText,
                   data: { chatId, messageId: message._id.toString() },
                 });
               }

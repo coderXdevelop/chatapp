@@ -57,3 +57,25 @@ export async function deleteAvatar(publicId: string): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * Generate a signature for client-side uploads.
+ */
+export function generateUploadSignature(folder: string) {
+  const instance = getCloudinary();
+  const timestamp = Math.round(new Date().getTime() / 1000);
+  const signature = instance.utils.api_sign_request(
+    {
+      folder,
+      timestamp,
+    },
+    process.env.CLOUDINARY_API_SECRET || ''
+  );
+  return {
+    signature,
+    timestamp,
+    apiKey: process.env.CLOUDINARY_API_KEY || '',
+    cloudName: process.env.CLOUDINARY_CLOUD_NAME || '',
+    folder,
+  };
+}

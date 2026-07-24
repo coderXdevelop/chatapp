@@ -6,6 +6,7 @@ import mongoose from 'mongoose';
 import { Server } from 'socket.io';
 import authRoutes from './routes/auth.routes.js';
 import chatRoutes from './routes/chat.routes.js';
+import mediaRoutes from './routes/media.routes.js';
 import User from './models/User.js';
 import { setupSockets } from './sockets/socket.js';
 
@@ -29,6 +30,7 @@ app.use(express.urlencoded({ limit: '10mb', extended: true }));
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/chats', chatRoutes);
+app.use('/api/media', mediaRoutes);
 
 app.get('/health', (_, res) => res.send({ status: 'ok', timestamp: new Date() }));
 

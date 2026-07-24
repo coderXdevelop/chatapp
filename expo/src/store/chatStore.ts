@@ -12,8 +12,14 @@ export interface Message {
     displayName: string;
     avatarUrl?: string;
   };
-  text: string;
+  text?: string;
   status: 'sending' | 'sent' | 'delivered' | 'read';
+  mediaUrl?: string;
+  mediaType?: 'image' | 'video' | 'audio';
+  mediaDuration?: number;
+  mediaSize?: number;
+  mediaWidth?: number;
+  mediaHeight?: number;
   isEdited?: boolean;
   isDeleted?: boolean;
   replyTo?: {
@@ -58,7 +64,19 @@ interface ChatState {
   fetchChats: () => Promise<void>;
   createChat: (participantId: string) => Promise<Chat | null>;
   fetchMessages: (chatId: string, loadMore?: boolean) => Promise<void>;
-  sendMessage: (chatId: string, text: string, replyTo?: string) => Promise<void>;
+  sendMessage: (
+    chatId: string,
+    text: string,
+    replyTo?: string,
+    media?: {
+      url: string;
+      type: 'image' | 'video' | 'audio';
+      duration?: number;
+      size?: number;
+      width?: number;
+      height?: number;
+    }
+  ) => Promise<void>;
   editMessage: (chatId: string, messageId: string, newText: string) => Promise<boolean>;
   deleteMessage: (chatId: string, messageId: string, type: 'me' | 'everyone') => Promise<boolean>;
   forwardMessages: (messageIds: string[], chatIds: string[], searchContacts?: string[]) => Promise<boolean>;
@@ -152,7 +170,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
-  sendMessage: async (chatId, text, replyTo) => {
+  sendMessage: async (chatId, text, replyTo, media) => {
     const currentUser = useAuthStore.getState().user;
     if (!currentUser) return;
 
@@ -181,9 +199,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
         displayName: currentUser.displayName,
         avatarUrl: currentUser.avatarUrl,
       },
-      text,
+      text: text || '',
       status: 'sending',
       replyTo: replyToObj,
+      mediaUrl: media?.url,
+      mediaType: media?.type,
+      mediaDuration: media?.duration,
+      mediaSize: media?.size,
+      mediaWidth: media?.width,
+      mediaHeight: media?.height,
       createdAt: new Date().toISOString(),
     };
 
@@ -211,7 +235,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const handleFail = async () => {
       // Offline fallback: attempt HTTP post request directly
       try {
-        const res = await api.post(`/api/chats/${chatId}/messages`, { text, tempId, replyTo });
+        const res = await api.post(`/api/chats/${chatId}/messages`, {
+          text,
+          tempId,
+          replyTo,
+          mediaUrl: media?.url,
+          mediaType: media?.type,
+          mediaDuration: media?.duration,
+          mediaSize: media?.size,
+          mediaWidth: media?.width,
+          mediaHeight: media?.height,
+        });
         handleSuccess(res.data.message);
       } catch (err) {
         set((state) => {
@@ -228,7 +262,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (socket && get().socketConnected) {
       socket.emit(
         'send_message',
-        { chatId, text, tempId, replyTo },
+        {
+          chatId,
+          text,
+          tempId,
+          replyTo,
+          mediaUrl: media?.url,
+          mediaType: media?.type,
+          mediaDuration: media?.duration,
+          mediaSize: media?.size,
+          mediaWidth: media?.width,
+          mediaHeight: media?.height,
+        },
         (ack: { success: boolean; message?: Message; error?: string }) => {
           if (ack && ack.success && ack.message) {
             handleSuccess(ack.message);

@@ -20,6 +20,10 @@ import { Swipeable } from 'react-native-gesture-handler';
 import { useChatStore, Message } from '../../store/chatStore';
 import { useAuthStore } from '../../store/authStore';
 import { COLORS } from '../../styles/theme';
+import { Ionicons } from '@expo/vector-icons';
+import { MediaMessage } from '../../components/MediaMessage';
+import { pickMedia, compressImage, uploadToCloudinary, getCloudinarySignature } from '../../services/mediaUpload';
+import { useVoiceRecorder } from '../../hooks/useVoiceRecorder';
 
 // Swipeable message row wrapper component
 const SwipeableRow = ({
@@ -98,6 +102,11 @@ export default function ChatScreen() {
   const [text, setText] = useState('');
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
+  const [isMediaMenuOpen, setIsMediaMenuOpen] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+
+  const { isRecording, startRecording, stopRecording } = useVoiceRecorder();
   
   // States for long press options menu
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -199,6 +208,128 @@ export default function ChatScreen() {
       sendMessage(chatId, text.trim(), replyingTo?._id);
       setReplyingTo(null);
       setText('');
+    }
+  };
+
+  const handleAttachPress = () => {
+    setIsMediaMenuOpen(true);
+  };
+
+  const handleSelectImage = async () => {
+    setIsMediaMenuOpen(false);
+    try {
+      const asset = await pickMedia('image');
+      if (!asset) return;
+
+      setIsUploading(true);
+      setUploadProgress(0);
+
+      // Compress
+      const compressedUri = await compressImage(asset.uri);
+
+      // Signature
+      const signatureData = await getCloudinarySignature();
+
+      // Upload
+      const mediaUrl = await uploadToCloudinary(
+        compressedUri,
+        asset.mimeType || 'image/jpeg',
+        signatureData,
+        (progress) => setUploadProgress(progress)
+      );
+
+      // Send message
+      await sendMessage(chatId!, '', replyingTo?._id, {
+        url: mediaUrl,
+        type: 'image',
+        width: asset.width,
+        height: asset.height,
+        size: asset.fileSize,
+      });
+
+      setReplyingTo(null);
+    } catch (e: any) {
+      console.error(e);
+      Alert.alert('Upload Failed', e.message || 'Could not upload image.');
+    } finally {
+      setIsUploading(false);
+      setUploadProgress(null);
+    }
+  };
+
+  const handleSelectVideo = async () => {
+    setIsMediaMenuOpen(false);
+    try {
+      const asset = await pickMedia('video');
+      if (!asset) return;
+
+      setIsUploading(true);
+      setUploadProgress(0);
+
+      // Signature
+      const signatureData = await getCloudinarySignature();
+
+      // Upload
+      const mediaUrl = await uploadToCloudinary(
+        asset.uri,
+        asset.mimeType || 'video/mp4',
+        signatureData,
+        (progress) => setUploadProgress(progress)
+      );
+
+      // Send message
+      await sendMessage(chatId!, '', replyingTo?._id, {
+        url: mediaUrl,
+        type: 'video',
+        width: asset.width,
+        height: asset.height,
+        size: asset.fileSize,
+        duration: asset.duration ? asset.duration / 1000 : undefined,
+      });
+
+      setReplyingTo(null);
+    } catch (e: any) {
+      console.error(e);
+      Alert.alert('Upload Failed', e.message || 'Could not upload video.');
+    } finally {
+      setIsUploading(false);
+      setUploadProgress(null);
+    }
+  };
+
+  const handleStartVoice = async () => {
+    await startRecording();
+  };
+
+  const handleStopAndSendVoice = async () => {
+    const localUri = await stopRecording();
+    if (!localUri) return;
+
+    try {
+      setIsUploading(true);
+      setUploadProgress(0);
+
+      const signatureData = await getCloudinarySignature();
+
+      const mediaUrl = await uploadToCloudinary(
+        localUri,
+        'audio/m4a',
+        signatureData,
+        (progress) => setUploadProgress(progress)
+      );
+
+      await sendMessage(chatId!, '', replyingTo?._id, {
+        url: mediaUrl,
+        type: 'audio',
+      });
+
+      setReplyingTo(null);
+    } catch (e: any) {
+      console.error(e);
+      Alert.alert('Upload Failed', e.message || 'Could not upload voice note.');
+    } finally {
+      setIsUploading(false);
+      setUploadProgress(null);
     }
   };
 
@@ -348,15 +479,29 @@ export default function ChatScreen() {
                     </Text>
                   )}
 
-                  <Text
-                    style={[
-                      styles.bubbleText,
-                      isMe ? styles.myBubbleText : styles.otherBubbleText,
-                      item.isDeleted && styles.deletedBubbleText,
-                    ]}
-                  >
-                    {item.text}
-                  </Text>
+                  {item.mediaUrl && item.mediaType && !item.isDeleted && (
+                    <View style={{ marginBottom: item.text ? 8 : 0 }}>
+                      <MediaMessage
+                        mediaUrl={item.mediaUrl}
+                        mediaType={item.mediaType}
+                        mediaWidth={item.mediaWidth}
+                        mediaHeight={item.mediaHeight}
+                        mediaDuration={item.mediaDuration}
+                      />
+                    </View>
+                  )}
+
+                  {(item.text ? true : false || item.isDeleted) && (
+                    <Text
+                      style={[
+                        styles.bubbleText,
+                        isMe ? styles.myBubbleText : styles.otherBubbleText,
+                        item.isDeleted && styles.deletedBubbleText,
+                      ]}
+                    >
+                      {item.text}
+                    </Text>
+                  )}
                   
                   {!item.isDeleted && (
                     <View style={styles.metaRow}>
@@ -423,26 +568,93 @@ export default function ChatScreen() {
         </View>
       )}
 
+      {/* Upload progress indicator */}
+      {isUploading && (
+        <View style={styles.uploadProgressOverlay}>
+          <ActivityIndicator size="small" color={COLORS.accent} style={{ marginRight: 8 }} />
+          <Text style={styles.uploadProgressText}>
+            Uploading media... {uploadProgress !== null ? `${uploadProgress}%` : ''}
+          </Text>
+        </View>
+      )}
+
       {/* Input container */}
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={styles.inputContainer}>
-          <TextInput
-            placeholder={editingMessage ? "Edit message..." : "Type a message..."}
-            placeholderTextColor={COLORS.textSecondary}
-            value={text}
-            onChangeText={handleTextChange}
-            style={styles.textInput}
-            multiline
-          />
-          <TouchableOpacity
-            onPress={handleSend}
-            disabled={!text.trim()}
-            style={[styles.sendButton, !text.trim() && styles.sendButtonDisabled]}
-          >
-            <Text style={styles.sendButtonText}>{editingMessage ? 'Update' : 'Send'}</Text>
-          </TouchableOpacity>
+          {isRecording ? (
+            <View style={styles.recordingRow}>
+              <View style={styles.recordingDotContainer}>
+                <View style={styles.recordingDot} />
+                <Text style={styles.recordingText}>Recording Voice...</Text>
+              </View>
+              <View style={styles.recordingActions}>
+                <TouchableOpacity onPress={handleStopAndSendVoice} style={styles.voiceSendButton}>
+                  <Ionicons name="send" size={16} color="#070b13" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <>
+              <TouchableOpacity onPress={handleAttachPress} style={styles.attachButton}>
+                <Ionicons name="add" size={24} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+              <TextInput
+                placeholder={editingMessage ? "Edit message..." : "Type a message..."}
+                placeholderTextColor={COLORS.textSecondary}
+                value={text}
+                onChangeText={handleTextChange}
+                style={styles.textInput}
+                multiline
+              />
+              {text.trim() || editingMessage ? (
+                <TouchableOpacity
+                  onPress={handleSend}
+                  disabled={!text.trim()}
+                  style={[styles.sendButton, !text.trim() && styles.sendButtonDisabled]}
+                >
+                  <Text style={styles.sendButtonText}>{editingMessage ? 'Update' : 'Send'}</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity onPress={handleStartVoice} style={styles.micButton}>
+                  <Ionicons name="mic" size={22} color={COLORS.accent} />
+                </TouchableOpacity>
+              )}
+            </>
+          )}
         </View>
       </KeyboardAvoidingView>
+
+      {/* Media Options Action Sheet Modal */}
+      <Modal
+        visible={isMediaMenuOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsMediaMenuOpen(false)}
+      >
+        <TouchableOpacity
+          style={styles.mediaModalOverlay}
+          activeOpacity={1}
+          onPress={() => setIsMediaMenuOpen(false)}
+        >
+          <View style={styles.mediaMenuContainer}>
+            <Text style={styles.mediaMenuTitle}>Share Media</Text>
+            
+            <TouchableOpacity style={styles.mediaMenuItem} onPress={handleSelectImage}>
+              <Ionicons name="image-outline" size={22} color={COLORS.accent} style={styles.mediaMenuIcon} />
+              <Text style={styles.mediaMenuItemText}>Photo Library</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.mediaMenuItem} onPress={handleSelectVideo}>
+              <Ionicons name="videocam-outline" size={22} color={COLORS.accent} style={styles.mediaMenuIcon} />
+              <Text style={styles.mediaMenuItemText}>Video Library</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.mediaMenuCancelButton} onPress={() => setIsMediaMenuOpen(false)}>
+              <Text style={styles.mediaMenuCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Long Press Actions Modal */}
       <Modal
@@ -487,7 +699,7 @@ export default function ChatScreen() {
                 onPress={() => {
                   if (selectedMessage) {
                     setEditingMessage(selectedMessage);
-                    setText(selectedMessage.text);
+                    setText(selectedMessage.text || '');
                   }
                   setIsMenuOpen(false);
                 }}
@@ -1109,5 +1321,119 @@ const styles = StyleSheet.create({
   viewerImage: {
     width: '100%',
     height: '80%',
+  },
+  // Media Messaging & Upload styles
+  uploadProgressOverlay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(7, 11, 19, 0.95)',
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderColor: COLORS.border,
+  },
+  uploadProgressText: {
+    color: COLORS.textPrimary,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  recordingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  recordingDotContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  recordingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#EF4444',
+    marginRight: 8,
+  },
+  recordingText: {
+    color: '#EF4444',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  recordingActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  voiceSendButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  attachButton: {
+    paddingHorizontal: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  micButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+  mediaModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'flex-end',
+  },
+  mediaMenuContainer: {
+    backgroundColor: COLORS.cardBackground,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 24,
+    paddingTop: 20,
+    paddingBottom: Platform.OS === 'ios' ? 44 : 24,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  mediaMenuTitle: {
+    color: COLORS.textPrimary,
+    fontSize: 18,
+    fontWeight: '800',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  mediaMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#162235',
+  },
+  mediaMenuIcon: {
+    marginRight: 16,
+  },
+  mediaMenuItemText: {
+    color: COLORS.textPrimary,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  mediaMenuCancelButton: {
+    marginTop: 16,
+    backgroundColor: '#162235',
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: 'center',
+  },
+  mediaMenuCancelText: {
+    color: COLORS.textPrimary,
+    fontSize: 16,
+    fontWeight: '700',
   },
 });

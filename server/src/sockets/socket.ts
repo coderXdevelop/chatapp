@@ -67,9 +67,23 @@ export function setupSockets(io: Server) {
     }
 
     // Handle sending a message
-    socket.on('send_message', async (data: { chatId: string; text: string; tempId?: string; replyTo?: string }, callback) => {
+    socket.on('send_message', async (data: {
+      chatId: string;
+      text?: string;
+      tempId?: string;
+      replyTo?: string;
+      mediaUrl?: string;
+      mediaType?: 'image' | 'video' | 'audio';
+      mediaDuration?: number;
+      mediaSize?: number;
+      mediaWidth?: number;
+      mediaHeight?: number;
+    }, callback) => {
       try {
-        const { chatId, text, tempId, replyTo } = data;
+        const { 
+          chatId, text, tempId, replyTo,
+          mediaUrl, mediaType, mediaDuration, mediaSize, mediaWidth, mediaHeight
+        } = data;
         const chat = await Chat.findOne({ _id: chatId, participants: userId });
         if (!chat) {
           return callback && callback({ success: false, error: 'Unauthorized or chat not found' });
@@ -78,10 +92,16 @@ export function setupSockets(io: Server) {
         const message = new Message({
           chat: chatId,
           sender: userId,
-          text,
+          text: text || '',
           status: 'sent',
           tempId,
           replyTo: replyTo || null,
+          mediaUrl,
+          mediaType,
+          mediaDuration,
+          mediaSize,
+          mediaWidth,
+          mediaHeight,
         });
         await message.save();
 
@@ -111,12 +131,18 @@ export function setupSockets(io: Server) {
 
           const senderName = (populated.sender as any).displayName || 'Someone';
 
+          let bodyText = text || '';
+          if (!bodyText && mediaType) {
+            const typeIcons = { image: '📷 Photo', video: '🎥 Video', audio: '🎵 Voice note' };
+            bodyText = typeIcons[mediaType] || 'Sent a file';
+          }
+
           chat.participants.forEach((pId) => {
             const recipientId = pId.toString();
             if (recipientId !== userId && !activeUserIds.has(recipientId)) {
               sendPushNotification(recipientId, {
                 title: senderName,
-                body: text,
+                body: bodyText,
                 data: { chatId, messageId: message._id.toString() },
               });
             }

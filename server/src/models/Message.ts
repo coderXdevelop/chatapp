@@ -3,9 +3,15 @@ import mongoose, { Document, Schema } from 'mongoose';
 export interface IMessage extends Document {
   chat: mongoose.Types.ObjectId;
   sender: mongoose.Types.ObjectId;
-  text: string;
+  text?: string;
   status: 'sending' | 'sent' | 'delivered' | 'read';
   tempId?: string;
+  mediaUrl?: string;
+  mediaType?: 'image' | 'video' | 'audio';
+  mediaDuration?: number;
+  mediaSize?: number;
+  mediaWidth?: number;
+  mediaHeight?: number;
   isEdited?: boolean;
   isDeleted?: boolean;
   replyTo?: mongoose.Types.ObjectId | null;
@@ -30,7 +36,8 @@ const MessageSchema: Schema = new Schema(
     },
     text: {
       type: String,
-      required: true,
+      required: false,
+      default: '',
       trim: true,
     },
     status: {
@@ -40,6 +47,31 @@ const MessageSchema: Schema = new Schema(
     },
     tempId: {
       type: String,
+    },
+    mediaUrl: {
+      type: String,
+      default: null,
+    },
+    mediaType: {
+      type: String,
+      enum: ['image', 'video', 'audio', null],
+      default: null,
+    },
+    mediaDuration: {
+      type: Number,
+      default: null,
+    },
+    mediaSize: {
+      type: Number,
+      default: null,
+    },
+    mediaWidth: {
+      type: Number,
+      default: null,
+    },
+    mediaHeight: {
+      type: Number,
+      default: null,
     },
     isEdited: {
       type: Boolean,
