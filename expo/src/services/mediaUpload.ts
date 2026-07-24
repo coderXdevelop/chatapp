@@ -12,7 +12,10 @@ export const getCloudinarySignature = async () => {
   return response.data;
 };
 
-export const pickMedia = async (type: 'image' | 'video'): Promise<ImagePicker.ImagePickerAsset | null> => {
+export const pickMedia = async (
+  type: 'image' | 'video',
+  allowsMultipleSelection = false
+): Promise<ImagePicker.ImagePickerAsset[] | null> => {
   const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (!permission.granted) {
     alert('Permission to access camera roll is required!');
@@ -21,12 +24,13 @@ export const pickMedia = async (type: 'image' | 'video'): Promise<ImagePicker.Im
 
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: type === 'image' ? ['images'] : ['videos'],
-    allowsEditing: type === 'image',
+    allowsMultipleSelection,
+    allowsEditing: !allowsMultipleSelection && type === 'image',
     quality: 0.8,
     videoExportPreset: ImagePicker.VideoExportPreset.H264_1280x720,
   });
 
-  return result.canceled ? null : result.assets[0];
+  return result.canceled ? null : result.assets;
 };
 
 export const compressImage = async (uri: string): Promise<string> => {

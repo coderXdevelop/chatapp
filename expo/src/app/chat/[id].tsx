@@ -105,6 +105,7 @@ export default function ChatScreen() {
   const [isMediaMenuOpen, setIsMediaMenuOpen] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [currentUploadIndex, setCurrentUploadIndex] = useState<{ current: number; total: number } | null>(null);
 
   const { isRecording, startRecording, stopRecording } = useVoiceRecorder();
   
@@ -218,82 +219,85 @@ export default function ChatScreen() {
   const handleSelectImage = async () => {
     setIsMediaMenuOpen(false);
     try {
-      const asset = await pickMedia('image');
-      if (!asset) return;
+      const assets = await pickMedia('image', true);
+      if (!assets || assets.length === 0) return;
 
       setIsUploading(true);
-      setUploadProgress(0);
-
-      // Compress
-      const compressedUri = await compressImage(asset.uri);
-
-      // Signature
       const signatureData = await getCloudinarySignature();
 
-      // Upload
-      const mediaUrl = await uploadToCloudinary(
-        compressedUri,
-        asset.mimeType || 'image/jpeg',
-        signatureData,
-        (progress) => setUploadProgress(progress)
-      );
+      for (let i = 0; i < assets.length; i++) {
+        const asset = assets[i];
+        setUploadProgress(0);
+        setCurrentUploadIndex({ current: i + 1, total: assets.length });
 
-      // Send message
-      await sendMessage(chatId!, '', replyingTo?._id, {
-        url: mediaUrl,
-        type: 'image',
-        width: asset.width,
-        height: asset.height,
-        size: asset.fileSize,
-      });
+        const compressedUri = await compressImage(asset.uri);
+
+        const mediaUrl = await uploadToCloudinary(
+          compressedUri,
+          asset.mimeType || 'image/jpeg',
+          signatureData,
+          (progress) => setUploadProgress(progress)
+        );
+
+        await sendMessage(chatId!, '', replyingTo?._id, {
+          url: mediaUrl,
+          type: 'image',
+          width: asset.width,
+          height: asset.height,
+          size: asset.fileSize,
+        });
+      }
 
       setReplyingTo(null);
     } catch (e: any) {
       console.error(e);
-      Alert.alert('Upload Failed', e.message || 'Could not upload image.');
+      Alert.alert('Upload Failed', e.message || 'Could not upload images.');
     } finally {
       setIsUploading(false);
       setUploadProgress(null);
+      setCurrentUploadIndex(null);
     }
   };
 
   const handleSelectVideo = async () => {
     setIsMediaMenuOpen(false);
     try {
-      const asset = await pickMedia('video');
-      if (!asset) return;
+      const assets = await pickMedia('video', true);
+      if (!assets || assets.length === 0) return;
 
       setIsUploading(true);
-      setUploadProgress(0);
-
-      // Signature
       const signatureData = await getCloudinarySignature();
 
-      // Upload
-      const mediaUrl = await uploadToCloudinary(
-        asset.uri,
-        asset.mimeType || 'video/mp4',
-        signatureData,
-        (progress) => setUploadProgress(progress)
-      );
+      for (let i = 0; i < assets.length; i++) {
+        const asset = assets[i];
+        setUploadProgress(0);
+        setCurrentUploadIndex({ current: i + 1, total: assets.length });
 
-      // Send message
-      await sendMessage(chatId!, '', replyingTo?._id, {
-        url: mediaUrl,
-        type: 'video',
-        width: asset.width,
-        height: asset.height,
-        size: asset.fileSize,
-        duration: asset.duration ? asset.duration / 1000 : undefined,
-      });
+        const mediaUrl = await uploadToCloudinary(
+          asset.uri,
+          asset.mimeType || 'video/mp4',
+          signatureData,
+          (progress) => setUploadProgress(progress)
+        );
+
+        await sendMessage(chatId!, '', replyingTo?._id, {
+          url: mediaUrl,
+          type: 'video',
+          width: asset.width,
+          height: asset.height,
+          size: asset.fileSize,
+          duration: asset.duration ? asset.duration / 1000 : undefined,
+        });
+      }
 
       setReplyingTo(null);
     } catch (e: any) {
       console.error(e);
-      Alert.alert('Upload Failed', e.message || 'Could not upload video.');
+      Alert.alert('Upload Failed', e.message || 'Could not upload videos.');
     } finally {
       setIsUploading(false);
       setUploadProgress(null);
+      setCurrentUploadIndex(null);
     }
   };
 
@@ -573,7 +577,10 @@ export default function ChatScreen() {
         <View style={styles.uploadProgressOverlay}>
           <ActivityIndicator size="small" color={COLORS.accent} style={{ marginRight: 8 }} />
           <Text style={styles.uploadProgressText}>
-            Uploading media... {uploadProgress !== null ? `${uploadProgress}%` : ''}
+            {currentUploadIndex
+              ? `Uploading media (${currentUploadIndex.current}/${currentUploadIndex.total}): ${uploadProgress !== null ? `${uploadProgress}%` : ''}`
+              : `Uploading media... ${uploadProgress !== null ? `${uploadProgress}%` : ''}`
+            }
           </Text>
         </View>
       )}
