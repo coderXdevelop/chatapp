@@ -10,6 +10,7 @@ export interface IUser extends Document {
   avatarPublicId?: string;
   status: string;
   pushToken?: string;
+  lastSeen?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -59,6 +60,10 @@ const UserSchema: Schema = new Schema(
     pushToken: {
       type: String,
       default: '',
+    },
+    lastSeen: {
+      type: Date,
+      default: Date.now,
     },
   },
   {

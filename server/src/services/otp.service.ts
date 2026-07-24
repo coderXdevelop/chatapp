@@ -1,40 +1,7 @@
-import { Redis } from 'ioredis';
+import { redisClient } from './redis.service.js';
 
-let redisUrl = process.env.REDIS_URL;
-const redisToken = process.env.REDIS_TOKEN;
-
-if (redisUrl && (redisUrl.startsWith('http://') || redisUrl.startsWith('https://'))) {
-  try {
-    const host = new URL(redisUrl).hostname;
-    if (host && redisToken) {
-      redisUrl = `rediss://default:${redisToken}@${host}:6379`;
-    }
-  } catch {}
-}
-
-let redisClient: Redis | null = null;
 const memoryStore = new Map<string, { code: string; expiresAt: number }>();
 
-if (redisUrl && (redisUrl.startsWith('redis://') || redisUrl.startsWith('rediss://'))) {
-  try {
-    redisClient = new Redis(redisUrl, {
-      maxRetriesPerRequest: 3,
-      lazyConnect: true,
-      retryStrategy(times) {
-        if (times > 3) return null;
-        return Math.min(times * 200, 1000);
-      },
-    });
-    redisClient.on('error', (err: any) => {
-      console.warn('Redis client error, falling back to in-memory OTP store:', err.message);
-    });
-    redisClient.connect().catch((err: any) => {
-      console.warn('Redis connection failed, using in-memory OTP store fallback:', err.message);
-    });
-  } catch (e: any) {
-    console.warn('Failed to initialize Redis client, using in-memory OTP store:', e.message);
-  }
-}
 
 export function generateOTP(): string {
   // Generate 6-digit numeric string

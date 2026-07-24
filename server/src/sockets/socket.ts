@@ -2,6 +2,8 @@ import { Server, Socket } from 'socket.io';
 import { verifyAccessToken, type TokenPayload } from '../services/jwt.service.js';
 import Chat from '../models/Chat.js';
 import Message from '../models/Message.js';
+import User from '../models/User.js';
+import { redisClient } from '../services/redis.service.js';
 import { sendPushNotification } from '../services/push.service.js';
 
 export interface AuthenticatedSocket extends Socket {
@@ -32,13 +34,36 @@ export function setupSockets(io: Server) {
     await socket.join(`user:${userId}`);
 
     // Programmatically join socket to room for each of its active chats
+    let userChats: any[] = [];
     try {
-      const userChats = await Chat.find({ participants: userId });
+      userChats = await Chat.find({ participants: userId });
       userChats.forEach((chat) => {
         socket.join(`chat:${chat._id}`);
       });
     } catch (e) {
       console.error('Error joining chat rooms for connecting socket:', e);
+    }
+
+    // Presence: Track Redis connections
+    if (redisClient) {
+      try {
+        const connKey = `user:connections:${userId}`;
+        const presenceKey = `user:presence:${userId}`;
+        const currentConnections = await redisClient.incr(connKey);
+        
+        if (currentConnections === 1) {
+          await redisClient.set(presenceKey, 'online');
+          // Broadcast to all of the user's chats
+          userChats.forEach((chat) => {
+            socket.to(`chat:${chat._id}`).emit('presence_change', {
+              userId,
+              isOnline: true,
+            });
+          });
+        }
+      } catch (err) {
+        console.error('Redis presence connect error:', err);
+      }
     }
 
     // Handle sending a message
@@ -203,8 +228,49 @@ export function setupSockets(io: Server) {
       }
     });
 
-    socket.on('disconnect', () => {
+    // Typing indicators
+    socket.on('typing_start', (data: { chatId: string }) => {
+      socket.to(`chat:${data.chatId}`).emit('typing_start', {
+        chatId: data.chatId,
+        userId,
+      });
+    });
+
+    socket.on('typing_stop', (data: { chatId: string }) => {
+      socket.to(`chat:${data.chatId}`).emit('typing_stop', {
+        chatId: data.chatId,
+        userId,
+      });
+    });
+
+    socket.on('disconnect', async () => {
       console.log(`Socket client disconnected: ${userId}`);
+      if (redisClient) {
+        try {
+          const connKey = `user:connections:${userId}`;
+          const presenceKey = `user:presence:${userId}`;
+          const remainingConnections = await redisClient.decr(connKey);
+          
+          if (remainingConnections <= 0) {
+            await redisClient.del(connKey);
+            await redisClient.del(presenceKey);
+            
+            const lastSeenDate = new Date();
+            await User.findByIdAndUpdate(userId, { lastSeen: lastSeenDate });
+
+            // Broadcast offline state to all active chats of the user
+            userChats.forEach((chat) => {
+              io.to(`chat:${chat._id}`).emit('presence_change', {
+                userId,
+                isOnline: false,
+                lastSeen: lastSeenDate.toISOString(),
+              });
+            });
+          }
+        } catch (err) {
+          console.error('Redis presence disconnect error:', err);
+        }
+      }
     });
   });
 }

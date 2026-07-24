@@ -38,6 +38,8 @@ export interface Chat {
     status: string;
     connectId?: string;
     age?: number;
+    isOnline?: boolean;
+    lastSeen?: string;
   }>;
   lastMessage?: Message;
   unreadCounts: Record<string, number>;
@@ -51,6 +53,7 @@ interface ChatState {
   hasMoreMessages: Record<string, boolean>;
   socket: Socket | null;
   socketConnected: boolean;
+  typingStates: Record<string, string[]>;
 
   fetchChats: () => Promise<void>;
   createChat: (participantId: string) => Promise<Chat | null>;
@@ -62,6 +65,8 @@ interface ChatState {
   markAsRead: (chatId: string) => void;
   connectSocket: () => void;
   disconnectSocket: () => void;
+  sendTypingStart: (chatId: string) => void;
+  sendTypingStop: (chatId: string) => void;
 }
 
 // Extract base URL from Axios instance configuration
@@ -74,6 +79,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   hasMoreMessages: {},
   socket: null,
   socketConnected: false,
+  typingStates: {},
 
   fetchChats: async () => {
     try {
@@ -447,6 +453,49 @@ export const useChatStore = create<ChatState>((set, get) => ({
       });
     });
 
+    newSocket.on('presence_change', (data: { userId: string; isOnline: boolean; lastSeen?: string }) => {
+      set((state) => ({
+        chats: state.chats.map((c) => {
+          const updatedParticipants = c.participants.map((p) => {
+            if (p._id === data.userId) {
+              return {
+                ...p,
+                isOnline: data.isOnline,
+                lastSeen: data.lastSeen || p.lastSeen,
+              };
+            }
+            return p;
+          });
+          return { ...c, participants: updatedParticipants };
+        }),
+      }));
+    });
+
+    newSocket.on('typing_start', (data: { chatId: string; userId: string }) => {
+      set((state) => {
+        const currentTyping = state.typingStates[data.chatId] || [];
+        if (currentTyping.includes(data.userId)) return {};
+        return {
+          typingStates: {
+            ...state.typingStates,
+            [data.chatId]: [...currentTyping, data.userId],
+          },
+        };
+      });
+    });
+
+    newSocket.on('typing_stop', (data: { chatId: string; userId: string }) => {
+      set((state) => {
+        const currentTyping = state.typingStates[data.chatId] || [];
+        return {
+          typingStates: {
+            ...state.typingStates,
+            [data.chatId]: currentTyping.filter((id) => id !== data.userId),
+          },
+        };
+      });
+    });
+
     set({ socket: newSocket });
   },
 
@@ -454,7 +503,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const socket = get().socket;
     if (socket) {
       socket.disconnect();
-      set({ socket: null, socketConnected: false });
+      set({ socket: null, socketConnected: false, typingStates: {} });
+    }
+  },
+
+  sendTypingStart: (chatId: string) => {
+    const socket = get().socket;
+    if (socket && get().socketConnected) {
+      socket.emit('typing_start', { chatId });
+    }
+  },
+
+  sendTypingStop: (chatId: string) => {
+    const socket = get().socket;
+    if (socket && get().socketConnected) {
+      socket.emit('typing_stop', { chatId });
     }
   },
 }));

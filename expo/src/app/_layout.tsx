@@ -4,11 +4,32 @@ import { Stack, useSegments, useRouter } from "expo-router";
 import { useEffect } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { useAuthStore } from "../store/authStore";
+import { useAppState } from "../hooks/useAppState";
+import * as Notifications from "expo-notifications";
 
 export default function RootLayout() {
   const { user, isInitialized, checkAuth } = useAuthStore();
   const segments = useSegments();
   const router = useRouter();
+
+  // Handle socket connection and reconnection on app state focus transitions
+  useAppState();
+
+  // Route user when tapping notifications
+  useEffect(() => {
+    const responseSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
+      const data = response.notification.request.content.data;
+      if (data?.chatId) {
+        setTimeout(() => {
+          router.push(`/chat/${data.chatId}` as any);
+        }, 500);
+      }
+    });
+
+    return () => {
+      responseSubscription.remove();
+    };
+  }, []);
 
   useEffect(() => {
     checkAuth();

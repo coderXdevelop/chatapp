@@ -5,6 +5,7 @@ import Chat from '../models/Chat.js';
 import Message from '../models/Message.js';
 import User from '../models/User.js';
 import { sendPushNotification } from '../services/push.service.js';
+import { redisClient } from '../services/redis.service.js';
 
 export async function getChats(req: AuthenticatedRequest, res: Response) {
   const userId = req.user?.userId;
@@ -12,14 +13,43 @@ export async function getChats(req: AuthenticatedRequest, res: Response) {
 
   try {
     const chats = await Chat.find({ participants: userId })
-      .populate('participants', 'displayName email avatarUrl status connectId age')
+      .populate('participants', 'displayName email avatarUrl status connectId age lastSeen')
       .populate({
         path: 'lastMessage',
         populate: { path: 'sender', select: 'displayName' },
       })
       .sort({ updatedAt: -1 });
 
-    return res.status(200).json({ chats });
+    const uniqueParticipantIds = Array.from(
+      new Set(
+        chats.flatMap((chat) => chat.participants.map((p) => (p as any)._id.toString()))
+      )
+    );
+
+    const presenceMap = new Map<string, boolean>();
+
+    if (redisClient && uniqueParticipantIds.length > 0) {
+      try {
+        const keys = uniqueParticipantIds.map((id) => `user:presence:${id}`);
+        const results = await redisClient.mget(...keys);
+        uniqueParticipantIds.forEach((id, idx) => {
+          presenceMap.set(id, results[idx] === 'online');
+        });
+      } catch (err) {
+        console.error('Error fetching presence from Redis MGET:', err);
+      }
+    }
+
+    const chatsWithPresence = chats.map((chat) => {
+      const chatObj = chat.toObject();
+      chatObj.participants = chatObj.participants.map((p: any) => ({
+        ...p,
+        isOnline: presenceMap.get(p._id.toString()) || false,
+      }));
+      return chatObj;
+    });
+
+    return res.status(200).json({ chats: chatsWithPresence });
   } catch (error: any) {
     return res.status(500).json({ message: 'Error retrieving chats', error: error.message });
   }
@@ -64,9 +94,32 @@ export async function createChat(req: AuthenticatedRequest, res: Response) {
       participants: { $all: [userId, targetUserId] },
     });
 
+    const enrichPresenceSingle = async (chatDoc: any) => {
+      const populated = await chatDoc.populate('participants', 'displayName email avatarUrl status connectId age lastSeen');
+      const chatObj = populated.toObject();
+      const presenceKeys = chatObj.participants.map((p: any) => `user:presence:${p._id.toString()}`);
+      if (redisClient && presenceKeys.length > 0) {
+        try {
+          const results = await redisClient.mget(...presenceKeys);
+          chatObj.participants = chatObj.participants.map((p: any, idx: number) => ({
+            ...p,
+            isOnline: results[idx] === 'online',
+          }));
+        } catch (err) {
+          console.error('Error fetching presence for single chat:', err);
+        }
+      } else {
+        chatObj.participants = chatObj.participants.map((p: any) => ({
+          ...p,
+          isOnline: false,
+        }));
+      }
+      return chatObj;
+    };
+
     if (chat) {
-      const populatedChat = await chat.populate('participants', 'displayName email avatarUrl status connectId age');
-      return res.status(200).json({ chat: populatedChat, isNew: false });
+      const chatWithPresence = await enrichPresenceSingle(chat);
+      return res.status(200).json({ chat: chatWithPresence, isNew: false });
     }
 
     // Create new chat
@@ -76,7 +129,7 @@ export async function createChat(req: AuthenticatedRequest, res: Response) {
     });
 
     await chat.save();
-    const populatedChat = await chat.populate('participants', 'displayName email avatarUrl status connectId age');
+    const chatWithPresence = await enrichPresenceSingle(chat);
 
     // Programmatically join socket rooms for both participants on backend if they are connected
     const io = req.app.get('io') as Server;
@@ -84,10 +137,10 @@ export async function createChat(req: AuthenticatedRequest, res: Response) {
       io.in(`user:${userId}`).socketsJoin(`chat:${chat._id}`);
       io.in(`user:${targetUserId}`).socketsJoin(`chat:${chat._id}`);
       // Notify the other user that a chat has been created
-      io.to(`user:${targetUserId}`).emit('chat_created', populatedChat);
+      io.to(`user:${targetUserId}`).emit('chat_created', chatWithPresence);
     }
 
-    return res.status(201).json({ chat: populatedChat, isNew: true });
+    return res.status(201).json({ chat: chatWithPresence, isNew: true });
   } catch (error: any) {
     return res.status(500).json({ message: 'Error creating chat', error: error.message });
   }

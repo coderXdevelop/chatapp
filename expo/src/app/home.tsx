@@ -120,13 +120,16 @@ export default function HomeScreen() {
                     onPress={() => router.push(`/chat/${item._id}` as any)}
                     activeOpacity={0.7}
                   >
-                    {partner?.avatarUrl ? (
-                      <Image source={{ uri: partner.avatarUrl }} style={styles.avatar} />
-                    ) : (
-                      <View style={styles.avatarPlaceholder}>
-                        <Text style={styles.avatarText}>{initial}</Text>
-                      </View>
-                    )}
+                    <View style={styles.avatarContainer}>
+                      {partner?.avatarUrl ? (
+                        <Image source={{ uri: partner.avatarUrl }} style={styles.avatar} />
+                      ) : (
+                        <View style={styles.avatarPlaceholder}>
+                          <Text style={styles.avatarText}>{initial}</Text>
+                        </View>
+                      )}
+                      {partner?.isOnline && <View style={styles.onlineBadge} />}
+                    </View>
                     <View style={styles.chatInfo}>
                       <View style={styles.chatHeaderRow}>
                         <Text style={styles.chatName} numberOfLines={1}>
@@ -353,6 +356,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
   },
+  avatarContainer: {
+    position: 'relative',
+    width: 48,
+    height: 48,
+  },
   avatar: {
     width: 48,
     height: 48,
@@ -365,6 +373,17 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.accent,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  onlineBadge: {
+    position: 'absolute',
+    bottom: -1,
+    right: -1,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#CCFF00', // COLORS.primary (Neon lime)
+    borderWidth: 2,
+    borderColor: COLORS.cardBackground,
   },
   avatarText: {
     fontSize: 20,

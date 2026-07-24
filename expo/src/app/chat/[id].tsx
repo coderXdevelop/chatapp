@@ -90,6 +90,9 @@ export default function ChatScreen() {
     deleteMessage,
     markAsRead,
     connectSocket,
+    typingStates,
+    sendTypingStart,
+    sendTypingStop,
   } = useChatStore();
 
   const [text, setText] = useState('');
@@ -115,16 +118,74 @@ export default function ChatScreen() {
 
   const flatListRef = useRef<FlatList>(null);
 
+  const isTypingRef = useRef(false);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const formatLastSeen = (dateString?: string) => {
+    if (!dateString) return 'Offline';
+    try {
+      const date = new Date(dateString);
+      const now = new Date();
+      const diffMs = now.getTime() - date.getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMins / 60);
+
+      if (diffMins < 1) return 'Last seen just now';
+      if (diffMins < 60) return `Last seen ${diffMins}m ago`;
+      if (diffHours < 24) {
+        return `Last seen today at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+      }
+      return `Last seen on ${date.toLocaleDateString([], { month: 'short', day: 'numeric' })}`;
+    } catch {
+      return 'Offline';
+    }
+  };
+
+  const handleTextChange = (val: string) => {
+    setText(val);
+    if (!chatId) return;
+
+    if (!isTypingRef.current) {
+      isTypingRef.current = true;
+      sendTypingStart(chatId);
+    }
+
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    typingTimeoutRef.current = setTimeout(() => {
+      sendTypingStop(chatId);
+      isTypingRef.current = false;
+    }, 3000);
+  };
+
   useEffect(() => {
     if (!chatId) return;
 
     connectSocket();
     fetchMessages(chatId);
     markAsRead(chatId);
+
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+      if (chatId && isTypingRef.current) {
+        sendTypingStop(chatId);
+      }
+    };
   }, [chatId]);
 
   const handleSend = async () => {
     if (!text.trim() || !chatId) return;
+
+    // Instantly stop typing indicators on send
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    sendTypingStop(chatId);
+    isTypingRef.current = false;
 
     if (editingMessage) {
       const success = await editMessage(chatId, editingMessage._id, text.trim());
@@ -218,8 +279,22 @@ export default function ChatScreen() {
           <Text style={styles.headerTitle} numberOfLines={1}>
             {chatTitle}
           </Text>
-          <Text style={styles.connectionStatus}>
-            {socketConnected ? '🟢 Online' : '🔴 Reconnecting...'}
+          <Text
+            style={[
+              styles.connectionStatus,
+              recipient && typingStates[chatId || '']?.includes(recipient._id) && {
+                color: COLORS.primary,
+                fontWeight: '700',
+              },
+            ]}
+          >
+            {!socketConnected
+              ? '🔴 Reconnecting...'
+              : recipient && typingStates[chatId || '']?.includes(recipient._id)
+              ? 'typing...'
+              : recipient?.isOnline
+              ? '🟢 Online'
+              : formatLastSeen(recipient?.lastSeen)}
           </Text>
         </TouchableOpacity>
         <View style={styles.headerRightPlaceholder} />
@@ -355,7 +430,7 @@ export default function ChatScreen() {
             placeholder={editingMessage ? "Edit message..." : "Type a message..."}
             placeholderTextColor={COLORS.textSecondary}
             value={text}
-            onChangeText={setText}
+            onChangeText={handleTextChange}
             style={styles.textInput}
             multiline
           />
