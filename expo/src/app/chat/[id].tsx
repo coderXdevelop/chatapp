@@ -26,7 +26,6 @@ import { MediaMessage } from '../../components/MediaMessage';
 import { pickMedia, compressImage, uploadToCloudinary, getCloudinarySignature } from '../../services/mediaUpload';
 import { useVoiceRecorder } from '../../hooks/useVoiceRecorder';
 import * as FileSystem from 'expo-file-system/legacy';
-import * as MediaLibrary from 'expo-media-library';
 
 // Swipeable message row wrapper component
 const SwipeableRow = ({
@@ -242,20 +241,40 @@ export default function ChatScreen() {
 
   const downloadMediaFile = async (url: string, type: 'image' | 'video' | 'audio') => {
     try {
-      const permission = await MediaLibrary.requestPermissionsAsync();
-      if (!permission.granted) {
-        Alert.alert('Permission Denied', 'Permission to access media library is required to save downloads!');
-        return;
-      }
-
       const fileExtension = type === 'video' ? 'mp4' : type === 'audio' ? 'm4a' : 'jpg';
       const filename = `ChatConnect_${Date.now()}.${fileExtension}`;
       const localUri = `${FileSystem.documentDirectory}${filename}`;
 
       const downloadResult = await FileSystem.downloadAsync(url, localUri);
-      await MediaLibrary.saveToLibraryAsync(downloadResult.uri);
-      
-      Alert.alert('Saved', 'Media successfully saved to your photos gallery!');
+
+      let saved = false;
+      try {
+        const MediaLibrary = require('expo-media-library');
+        if (MediaLibrary) {
+          const permission = await MediaLibrary.requestPermissionsAsync();
+          if (permission.granted) {
+            await MediaLibrary.saveToLibraryAsync(downloadResult.uri);
+            saved = true;
+            Alert.alert('Saved', 'Media successfully saved to your photos gallery!');
+          }
+        }
+      } catch (mediaErr) {
+        console.warn('Native MediaLibrary is not available in this client, falling back to Sharing.', mediaErr);
+      }
+
+      if (!saved) {
+        try {
+          const Sharing = require('expo-sharing');
+          if (Sharing && await Sharing.isAvailableAsync()) {
+            await Sharing.shareAsync(downloadResult.uri);
+          } else {
+            Alert.alert('Download Complete', `Saved locally to device:\n${downloadResult.uri}`);
+          }
+        } catch (shareErr) {
+          console.error(shareErr);
+          Alert.alert('Download Complete', `Saved locally to device:\n${downloadResult.uri}`);
+        }
+      }
     } catch (err: any) {
       console.error(err);
       Alert.alert('Download Failed', err.message || 'Could not download media file.');
