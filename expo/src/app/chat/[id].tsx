@@ -111,7 +111,7 @@ export default function ChatScreen() {
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [currentUploadIndex, setCurrentUploadIndex] = useState<{ current: number; total: number } | null>(null);
-  const [fullscreenMedia, setFullscreenMedia] = useState<{ url: string; type: 'image' | 'video' | 'audio' } | null>(null);
+  const [fullscreenMedia, setFullscreenMedia] = useState<{ messageId: string; url: string; type: 'image' | 'video' | 'audio' } | null>(null);
 
   const { isRecording, startRecording, stopRecording } = useVoiceRecorder();
   
@@ -645,6 +645,7 @@ export default function ChatScreen() {
                       onPress={() => {
                         if (item.status !== 'sending') {
                           setFullscreenMedia({
+                            messageId: item._id,
                             url: item.mediaUrl,
                             type: item.mediaType,
                           });
@@ -653,6 +654,7 @@ export default function ChatScreen() {
                       style={{ marginBottom: item.text ? 8 : 0 }}
                     >
                       <MediaMessage
+                        messageId={item._id}
                         mediaUrl={item.mediaUrl}
                         mediaType={item.mediaType}
                         mediaWidth={item.mediaWidth}
@@ -1059,16 +1061,21 @@ export default function ChatScreen() {
           {/* Centered Viewer Content */}
           <View style={styles.fullscreenMediaContainer}>
             {fullscreenMedia?.type === 'image' && (
-              <Image
-                source={{ uri: fullscreenMedia.url }}
-                style={styles.fullscreenImage}
-                resizeMode="contain"
-              />
+              <View style={styles.fullscreenImageWrapper}>
+                <MediaMessage
+                  messageId={fullscreenMedia.messageId}
+                  mediaUrl={fullscreenMedia.url}
+                  mediaType="image"
+                  mediaWidth={600}
+                  mediaHeight={800}
+                />
+              </View>
             )}
 
             {fullscreenMedia?.type === 'video' && (
               <View style={styles.fullscreenVideoWrapper}>
                 <MediaMessage
+                  messageId={fullscreenMedia.messageId}
                   mediaUrl={fullscreenMedia.url}
                   mediaType="video"
                 />
@@ -1078,6 +1085,7 @@ export default function ChatScreen() {
             {fullscreenMedia?.type === 'audio' && (
               <View style={styles.fullscreenAudioWrapper}>
                 <MediaMessage
+                  messageId={fullscreenMedia.messageId}
                   mediaUrl={fullscreenMedia.url}
                   mediaType="audio"
                 />
@@ -1734,6 +1742,12 @@ const styles = StyleSheet.create({
   fullscreenImage: {
     width: '100%',
     height: '80%',
+  },
+  fullscreenImageWrapper: {
+    width: '100%',
+    height: '80%',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   fullscreenVideoWrapper: {
     width: '100%',

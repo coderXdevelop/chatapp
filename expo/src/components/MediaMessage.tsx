@@ -1,11 +1,13 @@
-import React from 'react';
-import { View, StyleSheet, Text, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, Text, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { Image } from 'expo-image';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { Ionicons } from '@expo/vector-icons';
+import * as FileSystem from 'expo-file-system/legacy';
 
 interface MediaMessageProps {
+  messageId: string;
   mediaUrl: string;
   mediaType: 'image' | 'video' | 'audio';
   mediaWidth?: number;
@@ -17,6 +19,7 @@ interface MediaMessageProps {
 }
 
 export const MediaMessage: React.FC<MediaMessageProps> = ({
+  messageId,
   mediaUrl,
   mediaType,
   mediaWidth = 200,
@@ -29,6 +32,59 @@ export const MediaMessage: React.FC<MediaMessageProps> = ({
   const aspectRatio = (mediaWidth && mediaHeight) ? mediaWidth / mediaHeight : 4 / 3;
   const maxWidth = 260;
   const height = Math.min(maxWidth / aspectRatio, 320);
+
+  const [isDownloaded, setIsDownloaded] = useState(false);
+  const [localUri, setLocalUri] = useState<string | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
+
+  const fileExtension = mediaType === 'video' ? 'mp4' : mediaType === 'audio' ? 'm4a' : 'jpg';
+  const localCachePath = `${FileSystem.documentDirectory}media_${messageId}.${fileExtension}`;
+
+  useEffect(() => {
+    const checkCache = async () => {
+      if (mediaUrl.startsWith('file://') || mediaUrl.startsWith('ph://')) {
+        setIsDownloaded(true);
+        setLocalUri(mediaUrl);
+        return;
+      }
+
+      try {
+        const info = await FileSystem.getInfoAsync(localCachePath);
+        if (info.exists) {
+          setIsDownloaded(true);
+          setLocalUri(localCachePath);
+        } else {
+          setIsDownloaded(false);
+          setLocalUri(null);
+        }
+      } catch (e) {
+        console.error('Cache check failed:', e);
+      }
+    };
+
+    checkCache();
+  }, [mediaUrl, messageId]);
+
+  const startDownload = async () => {
+    try {
+      setIsDownloading(true);
+      const downloadResult = await FileSystem.downloadAsync(mediaUrl, localCachePath);
+      setLocalUri(downloadResult.uri);
+      setIsDownloaded(true);
+    } catch (err) {
+      console.error('Download failed:', err);
+      Alert.alert('Error', 'Failed to download media file.');
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const getBlurredUrl = (url: string): string => {
+    if (url.startsWith('http') && url.includes('cloudinary.com')) {
+      return url.replace('/upload/', '/upload/e_blur:1000,w_100,q_auto/');
+    }
+    return url;
+  };
 
   const renderSendingOverlay = () => {
     if (!isSending) return null;
@@ -46,43 +102,65 @@ export const MediaMessage: React.FC<MediaMessageProps> = ({
     );
   };
 
-  if (mediaType === 'image') {
+  const renderDownloadOverlay = () => {
+    if (isSending || isDownloaded) return null;
     return (
-      <View style={{ width: maxWidth, height, position: 'relative' }}>
+      <View style={[StyleSheet.absoluteFill, styles.downloadOverlay]}>
+        {isDownloading ? (
+          <ActivityIndicator size="small" color="#FFFFFF" />
+        ) : (
+          <TouchableOpacity onPress={startDownload} style={styles.downloadCircle}>
+            <Ionicons name="arrow-down" size={22} color="#FFFFFF" />
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  };
+
+  const renderContent = () => {
+    const activeUrl = isDownloaded && localUri ? localUri : getBlurredUrl(mediaUrl);
+
+    if (mediaType === 'image') {
+      return (
         <Image
-          source={{ uri: mediaUrl }}
+          source={{ uri: activeUrl }}
           style={[styles.image, { width: maxWidth, height }]}
           contentFit="cover"
           transition={250}
           cachePolicy="disk"
         />
-        {renderSendingOverlay()}
-      </View>
-    );
-  }
+      );
+    }
 
-  if (mediaType === 'video') {
-    return (
-      <View style={{ width: maxWidth, height, position: 'relative' }}>
-        <VideoMessageItem url={mediaUrl} width={maxWidth} height={height} />
-        {renderSendingOverlay()}
-      </View>
-    );
-  }
+    if (mediaType === 'video') {
+      return <VideoMessageItem url={activeUrl} width={maxWidth} height={height} isLocked={!isDownloaded} />;
+    }
 
-  if (mediaType === 'audio') {
-    return (
-      <View style={{ position: 'relative', width: 240 }}>
-        <VoiceMessageItem url={mediaUrl} duration={mediaDuration} />
-        {renderSendingOverlay()}
-      </View>
-    );
-  }
+    if (mediaType === 'audio') {
+      return <VoiceMessageItem url={activeUrl} duration={mediaDuration} isLocked={!isDownloaded} onPlayPress={startDownload} />;
+    }
 
-  return null;
+    return null;
+  };
+
+  return (
+    <View style={{ width: mediaType === 'audio' ? 240 : maxWidth, height: mediaType === 'audio' ? 'auto' : height, position: 'relative' }}>
+      {renderContent()}
+      {renderSendingOverlay()}
+      {renderDownloadOverlay()}
+    </View>
+  );
 };
 
-const VideoMessageItem: React.FC<{ url: string; width: number; height: number }> = ({ url, width, height }) => {
+const VideoMessageItem: React.FC<{ url: string; width: number; height: number; isLocked: boolean }> = ({ url, width, height, isLocked }) => {
+  if (isLocked) {
+    return (
+      <View style={[styles.videoContainer, { width, height, justifyContent: 'center', alignItems: 'center' }]}>
+        <Ionicons name="videocam" size={40} color="rgba(255,255,255,0.4)" />
+      </View>
+    );
+  }
+
   const player = useVideoPlayer(url, (playerInstance) => {
     playerInstance.loop = false;
     playerInstance.muted = false;
@@ -102,7 +180,32 @@ const VideoMessageItem: React.FC<{ url: string; width: number; height: number }>
   );
 };
 
-const VoiceMessageItem: React.FC<{ url: string; duration?: number }> = ({ url, duration }) => {
+const VoiceMessageItem: React.FC<{ url: string; duration?: number; isLocked: boolean; onPlayPress: () => void }> = ({ url, duration, isLocked, onPlayPress }) => {
+  if (isLocked) {
+    const totalTime = formatTime(duration || 0);
+    return (
+      <View style={styles.voiceContainer}>
+        <TouchableOpacity onPress={onPlayPress} style={styles.playButton}>
+          <Ionicons
+            name="arrow-down"
+            size={20}
+            color="#FFD700"
+          />
+        </TouchableOpacity>
+        
+        <View style={styles.progressBarWrapper}>
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressFill, { width: '0%' }]} />
+          </View>
+          <View style={styles.timeRow}>
+            <Text style={styles.timeText}>0:00</Text>
+            <Text style={styles.timeText}>{totalTime} (Tap to download)</Text>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
   const player = useAudioPlayer(url);
   const status = useAudioPlayerStatus(player);
 
@@ -233,6 +336,22 @@ const styles = StyleSheet.create({
     height: 18,
     borderRadius: 9,
     backgroundColor: '#EF4444',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+  },
+  downloadOverlay: {
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 12,
+  },
+  downloadCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(7, 11, 19, 0.85)',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1.5,
