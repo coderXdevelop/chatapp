@@ -73,7 +73,7 @@ export function setupSockets(io: Server) {
       tempId?: string;
       replyTo?: string;
       mediaUrl?: string;
-      mediaType?: 'image' | 'video' | 'audio';
+      mediaType?: 'image' | 'video' | 'audio' | 'document';
       mediaDuration?: number;
       mediaSize?: number;
       mediaWidth?: number;
@@ -133,7 +133,7 @@ export function setupSockets(io: Server) {
 
           let bodyText = text || '';
           if (!bodyText && mediaType) {
-            const typeIcons = { image: '📷 Photo', video: '🎥 Video', audio: '🎵 Voice note' };
+            const typeIcons = { image: '📷 Photo', video: '🎥 Video', audio: '🎵 Voice note', document: '📄 Document' };
             bodyText = typeIcons[mediaType] || 'Sent a file';
           }
 

@@ -15,7 +15,7 @@ export interface Message {
   text?: string;
   status: 'sending' | 'sent' | 'delivered' | 'read';
   mediaUrl?: string;
-  mediaType?: 'image' | 'video' | 'audio';
+  mediaType?: 'image' | 'video' | 'audio' | 'document';
   mediaDuration?: number;
   mediaSize?: number;
   mediaWidth?: number;
@@ -92,11 +92,12 @@ interface ChatState {
     tempId: string,
     mediaPayload: {
       url: string;
-      type: 'image' | 'video' | 'audio';
+      type: 'image' | 'video' | 'audio' | 'document';
       duration?: number;
       size?: number;
       width?: number;
       height?: number;
+      text?: string;
     }
   ) => Promise<void>;
 }
@@ -615,7 +616,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const handleFail = async () => {
       try {
         const res = await api.post(`/api/chats/${chatId}/messages`, {
-          text: '',
+          text: mediaPayload.text || '',
           tempId,
           mediaUrl: mediaPayload.url,
           mediaType: mediaPayload.type,
@@ -640,7 +641,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         'send_message',
         {
           chatId,
-          text: '',
+          text: mediaPayload.text || '',
           tempId,
           mediaUrl: mediaPayload.url,
           mediaType: mediaPayload.type,

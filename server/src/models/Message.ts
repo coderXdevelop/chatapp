@@ -7,7 +7,7 @@ export interface IMessage extends Document {
   status: 'sending' | 'sent' | 'delivered' | 'read';
   tempId?: string;
   mediaUrl?: string;
-  mediaType?: 'image' | 'video' | 'audio';
+  mediaType?: 'image' | 'video' | 'audio' | 'document';
   mediaDuration?: number;
   mediaSize?: number;
   mediaWidth?: number;
@@ -54,7 +54,7 @@ const MessageSchema: Schema = new Schema(
     },
     mediaType: {
       type: String,
-      enum: ['image', 'video', 'audio', null],
+      enum: ['image', 'video', 'audio', 'document', null],
       default: null,
     },
     mediaDuration: {

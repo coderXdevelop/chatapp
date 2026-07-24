@@ -26,6 +26,7 @@ import { MediaMessage } from '../../components/MediaMessage';
 import { pickMedia, compressImage, uploadToCloudinary, getCloudinarySignature } from '../../services/mediaUpload';
 import { useVoiceRecorder } from '../../hooks/useVoiceRecorder';
 import * as FileSystem from 'expo-file-system/legacy';
+import * as DocumentPicker from 'expo-document-picker';
 
 // Swipeable message row wrapper component
 const SwipeableRow = ({
@@ -278,6 +279,70 @@ export default function ChatScreen() {
     } catch (err: any) {
       console.error(err);
       Alert.alert('Download Failed', err.message || 'Could not download media file.');
+    }
+  };
+
+  const handleSelectDocument = async () => {
+    setIsMediaMenuOpen(false);
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: '*/*',
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) return;
+
+      const asset = result.assets[0];
+      const signatureData = await getCloudinarySignature();
+
+      const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const controller = new AbortController();
+      activeUploadsRef.current[tempId] = controller;
+
+      const optimisticMsg: Message = {
+        _id: tempId,
+        tempId,
+        chat: chatId!,
+        sender: { _id: user!.id, displayName: user!.displayName, avatarUrl: user!.avatarUrl },
+        status: 'sending',
+        mediaUrl: asset.uri,
+        mediaType: 'document',
+        mediaSize: asset.size,
+        text: asset.name,
+        createdAt: new Date().toISOString(),
+      };
+      addOptimisticMessage(chatId!, optimisticMsg);
+
+      try {
+        const mediaUrl = await uploadToCloudinary(
+          asset.uri,
+          asset.mimeType || 'application/octet-stream',
+          signatureData,
+          (progress) => {
+            setUploadProgressMap((prev) => ({ ...prev, [tempId]: progress }));
+          },
+          controller.signal
+        );
+
+        delete activeUploadsRef.current[tempId];
+        await sendFinalizedMessage(chatId!, tempId, {
+          url: mediaUrl,
+          type: 'document',
+          size: asset.size,
+          text: asset.name,
+        });
+      } catch (uploadErr: any) {
+        if (axios.isCancel(uploadErr)) {
+          console.log('Document upload cancelled:', tempId);
+        } else {
+          console.error('Document upload failed:', uploadErr);
+          removeMessage(chatId!, tempId);
+          Alert.alert('Error', 'Failed to upload document.');
+        }
+      }
+    } catch (err: any) {
+      console.error(err);
+      Alert.alert('Error', 'Failed to select document.');
     }
   };
 
@@ -642,11 +707,16 @@ export default function ChatScreen() {
                   {item.mediaUrl && item.mediaType && !item.isDeleted && (
                     <TouchableOpacity
                       activeOpacity={0.9}
-                      onPress={() => {
+                      onPress={async () => {
                         if (item.status !== 'sending') {
+                          const fileExtension = item.mediaType === 'video' ? 'mp4' : item.mediaType === 'audio' ? 'm4a' : 'jpg';
+                          const localPath = `${FileSystem.documentDirectory}media_${item._id}.${fileExtension}`;
+                          const info = await FileSystem.getInfoAsync(localPath);
+                          const activeUrl = info.exists ? localPath : item.mediaUrl;
+
                           setFullscreenMedia({
                             messageId: item._id,
-                            url: item.mediaUrl,
+                            url: activeUrl,
                             type: item.mediaType,
                           });
                         }
@@ -818,6 +888,11 @@ export default function ChatScreen() {
             <TouchableOpacity style={styles.mediaMenuItem} onPress={handleSelectVideo}>
               <Ionicons name="videocam-outline" size={22} color={COLORS.accent} style={styles.mediaMenuIcon} />
               <Text style={styles.mediaMenuItemText}>Video Library</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.mediaMenuItem} onPress={handleSelectDocument}>
+              <Ionicons name="document-outline" size={22} color={COLORS.accent} style={styles.mediaMenuIcon} />
+              <Text style={styles.mediaMenuItemText}>Document</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.mediaMenuCancelButton} onPress={() => setIsMediaMenuOpen(false)}>
@@ -1061,15 +1136,11 @@ export default function ChatScreen() {
           {/* Centered Viewer Content */}
           <View style={styles.fullscreenMediaContainer}>
             {fullscreenMedia?.type === 'image' && (
-              <View style={styles.fullscreenImageWrapper}>
-                <MediaMessage
-                  messageId={fullscreenMedia.messageId}
-                  mediaUrl={fullscreenMedia.url}
-                  mediaType="image"
-                  mediaWidth={600}
-                  mediaHeight={800}
-                />
-              </View>
+              <Image
+                source={{ uri: fullscreenMedia.url }}
+                style={{ width: '100%', height: '90%' }}
+                resizeMode="contain"
+              />
             )}
 
             {fullscreenMedia?.type === 'video' && (

@@ -26,8 +26,8 @@ export const pickMedia = async (
     mediaTypes: type === 'image' ? ['images'] : ['videos'],
     allowsMultipleSelection,
     allowsEditing: !allowsMultipleSelection && type === 'image',
-    quality: 0.8,
-    videoExportPreset: ImagePicker.VideoExportPreset.H264_1280x720,
+    quality: type === 'image' ? 0.8 : 0.7,
+    videoExportPreset: ImagePicker.VideoExportPreset.H264_960x540,
   });
 
   return result.canceled ? null : result.assets;
@@ -68,7 +68,7 @@ export const uploadToCloudinary = async (
   formData.append('folder', signatureData.folder);
 
   const response = await axios.post(
-    `https://api.cloudinary.com/v1_1/${signatureData.cloudName}/upload`,
+    `https://api.cloudinary.com/v1_1/${signatureData.cloudName}/auto/upload`,
     formData,
     {
       headers: {

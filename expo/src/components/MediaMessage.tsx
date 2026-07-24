@@ -9,10 +9,12 @@ import * as FileSystem from 'expo-file-system/legacy';
 interface MediaMessageProps {
   messageId: string;
   mediaUrl: string;
-  mediaType: 'image' | 'video' | 'audio';
+  mediaType: 'image' | 'video' | 'audio' | 'document';
   mediaWidth?: number;
   mediaHeight?: number;
   mediaDuration?: number;
+  mediaSize?: number;
+  text?: string;
   isSending?: boolean;
   progress?: number;
   onCancel?: () => void;
@@ -25,6 +27,8 @@ export const MediaMessage: React.FC<MediaMessageProps> = ({
   mediaWidth = 200,
   mediaHeight = 150,
   mediaDuration,
+  mediaSize,
+  text,
   isSending = false,
   progress = 0,
   onCancel,
@@ -103,7 +107,7 @@ export const MediaMessage: React.FC<MediaMessageProps> = ({
   };
 
   const renderDownloadOverlay = () => {
-    if (isSending || isDownloaded) return null;
+    if (isSending || isDownloaded || mediaType === 'document') return null;
     return (
       <View style={[StyleSheet.absoluteFill, styles.downloadOverlay]}>
         {isDownloading ? (
@@ -137,14 +141,73 @@ export const MediaMessage: React.FC<MediaMessageProps> = ({
     }
 
     if (mediaType === 'audio') {
-      return <VoiceMessageItem url={activeUrl} duration={mediaDuration} isLocked={!isDownloaded} onPlayPress={startDownload} />;
+      return (
+        <VoiceMessageItem
+          messageId={messageId}
+          url={activeUrl}
+          duration={mediaDuration}
+          isLocked={!isDownloaded}
+          onPlayPress={startDownload}
+        />
+      );
+    }
+
+    if (mediaType === 'document') {
+      const docName = text || 'Document';
+      const docSize = formatFileSize(mediaSize);
+      const isPdf = docName.toLowerCase().endsWith('.pdf');
+      const iconName = isPdf ? 'document-text' : 'document';
+      const iconColor = isPdf ? '#EF4444' : '#F59E0B';
+
+      const handlePress = async () => {
+        if (!isDownloaded) {
+          await startDownload();
+        } else if (localUri) {
+          try {
+            const Sharing = require('expo-sharing');
+            if (Sharing && await Sharing.isAvailableAsync()) {
+              await Sharing.shareAsync(localUri);
+            } else {
+              Alert.alert('File Location', `Saved locally at:\n${localUri}`);
+            }
+          } catch (e) {
+            console.error('Sharing failed:', e);
+            Alert.alert('File Location', `Saved locally at:\n${localUri}`);
+          }
+        }
+      };
+
+      return (
+        <TouchableOpacity onPress={handlePress} style={styles.documentCard}>
+          <View style={styles.documentIconContainer}>
+            <Ionicons name={iconName} size={26} color={iconColor} />
+          </View>
+          <View style={styles.documentInfo}>
+            <Text style={styles.documentName} numberOfLines={1}>
+              {docName}
+            </Text>
+            <Text style={styles.documentMetadata}>
+              {isDownloaded ? docSize : `${docSize} • Tap to download`}
+            </Text>
+          </View>
+          {!isDownloaded && (
+            <View style={styles.documentDownloadIcon}>
+              {isDownloading ? (
+                <ActivityIndicator size="small" color="#F59E0B" />
+              ) : (
+                <Ionicons name="arrow-down-circle" size={22} color="#64748B" />
+              )}
+            </View>
+          )}
+        </TouchableOpacity>
+      );
     }
 
     return null;
   };
 
   return (
-    <View style={{ width: mediaType === 'audio' ? 240 : maxWidth, height: mediaType === 'audio' ? 'auto' : height, position: 'relative' }}>
+    <View style={{ width: (mediaType === 'audio' || mediaType === 'document') ? 240 : maxWidth, height: (mediaType === 'audio' || mediaType === 'document') ? 'auto' : height, position: 'relative' }}>
       {renderContent()}
       {renderSendingOverlay()}
       {renderDownloadOverlay()}
@@ -180,7 +243,24 @@ const VideoMessageItem: React.FC<{ url: string; width: number; height: number; i
   );
 };
 
-const VoiceMessageItem: React.FC<{ url: string; duration?: number; isLocked: boolean; onPlayPress: () => void }> = ({ url, duration, isLocked, onPlayPress }) => {
+const VoiceMessageItem: React.FC<{
+  messageId: string;
+  url: string;
+  duration?: number;
+  isLocked: boolean;
+  onPlayPress: () => void;
+}> = ({ messageId, url, duration, isLocked, onPlayPress }) => {
+  const peaks = React.useMemo(() => {
+    const seed = messageId || 'defaultMsg';
+    const list = [];
+    for (let i = 0; i < 28; i++) {
+      const code = seed.charCodeAt(i % seed.length) || 30;
+      const h = 4 + (code % 16);
+      list.push(h);
+    }
+    return list;
+  }, [messageId]);
+
   if (isLocked) {
     const totalTime = formatTime(duration || 0);
     return (
@@ -194,12 +274,14 @@ const VoiceMessageItem: React.FC<{ url: string; duration?: number; isLocked: boo
         </TouchableOpacity>
         
         <View style={styles.progressBarWrapper}>
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: '0%' }]} />
+          <View style={styles.waveformContainer}>
+            {peaks.map((h, i) => (
+              <View key={i} style={[styles.waveformBar, { height: h, backgroundColor: '#1f293d' }]} />
+            ))}
           </View>
           <View style={styles.timeRow}>
             <Text style={styles.timeText}>0:00</Text>
-            <Text style={styles.timeText}>{totalTime} (Tap to download)</Text>
+            <Text style={styles.timeText}>{totalTime} (Download)</Text>
           </View>
         </View>
       </View>
@@ -232,8 +314,22 @@ const VoiceMessageItem: React.FC<{ url: string; duration?: number; isLocked: boo
       </TouchableOpacity>
       
       <View style={styles.progressBarWrapper}>
-        <View style={styles.progressTrack}>
-          <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
+        <View style={styles.waveformContainer}>
+          {peaks.map((h, i) => {
+            const isActive = progress >= (i / peaks.length);
+            return (
+              <View
+                key={i}
+                style={[
+                  styles.waveformBar,
+                  {
+                    height: h,
+                    backgroundColor: isActive ? '#F59E0B' : '#1f293d',
+                  }
+                ]}
+              />
+            );
+          })}
         </View>
         <View style={styles.timeRow}>
           <Text style={styles.timeText}>{displayTime}</Text>
@@ -248,6 +344,13 @@ const formatTime = (secs: number) => {
   const m = Math.floor(secs / 60);
   const s = Math.floor(secs % 60);
   return `${m}:${s < 10 ? '0' : ''}${s}`;
+};
+
+const formatFileSize = (bytes?: number) => {
+  if (!bytes) return 'Unknown size';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
 const styles = StyleSheet.create({
@@ -285,17 +388,6 @@ const styles = StyleSheet.create({
   },
   progressBarWrapper: {
     flex: 1,
-  },
-  progressTrack: {
-    height: 4,
-    backgroundColor: '#1f293d',
-    borderRadius: 2,
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#F59E0B',
   },
   timeRow: {
     flexDirection: 'row',
@@ -356,5 +448,52 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1.5,
     borderColor: '#FFFFFF',
+  },
+  waveformContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    height: 24,
+    marginVertical: 4,
+  },
+  waveformBar: {
+    width: 3,
+    borderRadius: 1.5,
+  },
+  documentCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    backgroundColor: '#101622',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#1f293d',
+    width: 240,
+  },
+  documentIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    backgroundColor: '#070b13',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  documentInfo: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  documentName: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  documentMetadata: {
+    color: '#64748B',
+    fontSize: 11,
+  },
+  documentDownloadIcon: {
+    marginLeft: 8,
   },
 });

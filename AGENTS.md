@@ -87,7 +87,7 @@ EXPO_PUBLIC_API_URL
 - [ ] Phase 2 — Contacts & User Discovery
 - [ ] Phase 3 — Core 1:1 Messaging
 - [ ] Phase 4 — Presence & Notifications
-- [ ] Phase 5 — Media Messages
+- [x] Phase 5 — Media Messages
 - [ ] Phase 6 — Groups & Extras
 - [ ] Phase 7 — End-to-End Encryption
 
