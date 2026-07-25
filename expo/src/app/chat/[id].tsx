@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -17,7 +17,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Swipeable } from 'react-native-gesture-handler';
 import { useChatStore, Message } from '../../store/chatStore';
 import { useAuthStore } from '../../store/authStore';
 import { COLORS, globalStyles } from '../../styles/theme';
@@ -28,59 +27,8 @@ import { pickMedia, compressImage, uploadToCloudinary, getCloudinarySignature } 
 import { useVoiceRecorder } from '../../hooks/useVoiceRecorder';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as DocumentPicker from 'expo-document-picker';
-
-// Swipeable message row wrapper component
-const SwipeableRow = ({
-  item,
-  children,
-  onReply,
-  isMe,
-}: {
-  item: Message;
-  children: React.ReactNode;
-  onReply: () => void;
-  isMe: boolean;
-}) => {
-  const swipeableRef = useRef<any>(null);
-
-  const renderLeftActions = () => {
-    return (
-      <View style={styles.replyIconContainerLeft}>
-        <Text style={styles.replyIconText}>↩</Text>
-      </View>
-    );
-  };
-
-  const renderRightActions = () => {
-    return (
-      <View style={styles.replyIconContainerRight}>
-        <Text style={styles.replyIconText}>↩</Text>
-      </View>
-    );
-  };
-
-  const handleSwipeWillOpen = () => {
-    if (swipeableRef.current) {
-      swipeableRef.current.close();
-    }
-    Vibration.vibrate(15);
-    onReply();
-  };
-
-  return (
-    <Swipeable
-      ref={swipeableRef}
-      friction={2}
-      leftThreshold={50}
-      rightThreshold={50}
-      renderLeftActions={!isMe && !item.isDeleted ? renderLeftActions : undefined}
-      renderRightActions={isMe && !item.isDeleted ? renderRightActions : undefined}
-      onSwipeableWillOpen={handleSwipeWillOpen}
-    >
-      {children}
-    </Swipeable>
-  );
-};
+import { MemoizedMessageItem } from '../../components/MemoizedMessageItem';
+import { ScrollToBottomButton } from '../../components/ScrollToBottomButton';
 
 export default function ChatScreen() {
   const { id: chatId } = useLocalSearchParams<{ id: string }>();
@@ -144,6 +92,7 @@ export default function ChatScreen() {
   // States for viewing user profile details and viewing avatar fullscreen
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isAvatarViewerOpen, setIsAvatarViewerOpen] = useState(false);
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
 
   const chatMessages = messages[chatId || ''] || [];
   const isLoading = loadingMessages[chatId || ''] || false;
@@ -845,6 +794,70 @@ export default function ChatScreen() {
 
   const isTypingList = typingStates[chatId || ''] || [];
 
+  const handleReplyMessage = useCallback((msg: Message) => {
+    setReplyingTo(msg);
+  }, []);
+
+  const handleLongPressMsg = useCallback((msg: Message) => {
+    handleLongPressMessage(msg);
+  }, [handleLongPressMessage]);
+
+  const handleSelectMsg = useCallback((msgId: string) => {
+    handleToggleMessageSelection(msgId);
+  }, [handleToggleMessageSelection]);
+
+  const handleMediaPress = useCallback((mediaInfo: { messageId: string; url: string; type: 'image' | 'video' | 'audio' }) => {
+    setFullscreenMedia(mediaInfo);
+  }, []);
+
+  const handleCancelUpload = useCallback((tempId: string) => {
+    handleCancelParticularUpload(tempId);
+  }, [handleCancelParticularUpload]);
+
+  const scrollToBottom = useCallback(() => {
+    flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+  }, []);
+
+  const keyExtractor = useCallback((item: Message) => item._id, []);
+
+  const renderMessageItem = useCallback(
+    ({ item }: { item: Message }) => {
+      const isMe = item.sender._id === user?.id;
+      const isSelected = selectedMessageIds.includes(item._id);
+
+      return (
+        <MemoizedMessageItem
+          item={item}
+          isMe={isMe}
+          isGroup={Boolean(currentChat?.isGroup)}
+          userId={user?.id || ''}
+          isSelected={isSelected}
+          isSelectionMode={isSelectionMode}
+          isHighlighted={item._id === highlightedMessageId}
+          uploadProgress={uploadProgressMap[item.tempId || '']}
+          onReply={() => handleReplyMessage(item)}
+          onLongPress={handleLongPressMsg}
+          onSelect={handleSelectMsg}
+          onMediaPress={handleMediaPress}
+          onCancelUpload={handleCancelUpload}
+        />
+      );
+    },
+    [
+      user?.id,
+      currentChat?.isGroup,
+      selectedMessageIds,
+      isSelectionMode,
+      highlightedMessageId,
+      uploadProgressMap,
+      handleReplyMessage,
+      handleLongPressMsg,
+      handleSelectMsg,
+      handleMediaPress,
+      handleCancelUpload,
+    ]
+  );
+
   return (
     <SafeAreaView style={styles.safeArea}>
       {/* Custom Header Bar */}
@@ -923,170 +936,42 @@ export default function ChatScreen() {
 
 
       {/* Message List */}
-      <FlatList
-        ref={flatListRef}
-        data={chatMessages}
-        keyExtractor={(item) => item._id}
-        inverted // Renders list from bottom to top
-        onEndReached={handleLoadMore}
-        onEndReachedThreshold={0.2}
-        ListFooterComponent={
-          isLoading ? (
-            <ActivityIndicator size="small" color={COLORS.primary} style={{ marginVertical: 12 }} />
-          ) : null
-        }
-        contentContainerStyle={styles.listContent}
-        renderItem={({ item }) => {
-          const isMe = item.sender._id === user?.id;
-          const onlyMedia = item.mediaUrl && !item.text && !item.isDeleted;
-          const isSelected = selectedMessageIds.includes(item._id);
+      <View style={{ flex: 1, position: 'relative' }}>
+        <FlatList
+          ref={flatListRef}
+          data={chatMessages}
+          keyExtractor={keyExtractor}
+          inverted // Renders list from bottom to top
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.3}
+          initialNumToRender={15}
+          maxToRenderPerBatch={10}
+          windowSize={11}
+          removeClippedSubviews={Platform.OS === 'android'}
+          maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+          scrollEventThrottle={16}
+          onScroll={(e) => {
+            const offset = e.nativeEvent.contentOffset.y;
+            if (offset > 300 && !showScrollToBottom) {
+              setShowScrollToBottom(true);
+            } else if (offset <= 300 && showScrollToBottom) {
+              setShowScrollToBottom(false);
+            }
+          }}
+          ListFooterComponent={
+            isLoading ? (
+              <ActivityIndicator size="small" color={COLORS.primary} style={{ marginVertical: 12 }} />
+            ) : null
+          }
+          contentContainerStyle={styles.listContent}
+          renderItem={renderMessageItem}
+        />
 
-          return (
-            <SwipeableRow item={item} isMe={isMe} onReply={() => setReplyingTo(item)}>
-              <View style={styles.messageRowWrapper}>
-                {isSelectionMode && (
-                  <TouchableOpacity
-                    onPress={() => handleToggleMessageSelection(item._id)}
-                    style={styles.selectionCheckboxWrapper}
-                  >
-                    <View style={[styles.checkboxCircle, isSelected && styles.checkboxCircleSelected]}>
-                      {isSelected && <Text style={styles.checkboxCheckmark}>✓</Text>}
-                    </View>
-                  </TouchableOpacity>
-                )}
-                
-                <TouchableOpacity
-                  onPress={() => {
-                    if (isSelectionMode) {
-                      handleToggleMessageSelection(item._id);
-                    }
-                  }}
-                  onLongPress={() => {
-                    if (isSelectionMode) {
-                      handleToggleMessageSelection(item._id);
-                    } else {
-                      handleLongPressMessage(item);
-                    }
-                  }}
-                  activeOpacity={0.8}
-                  style={[
-                    styles.messageRow,
-                    isMe ? styles.myMessageRow : styles.otherMessageRow,
-                    isSelectionMode && { flex: 1 },
-                  ]}
-                >
-                  <View
-                    style={[
-                      styles.bubble,
-                      isMe ? styles.myBubble : styles.otherBubble,
-                      onlyMedia && styles.onlyMediaBubble,
-                      item._id === highlightedMessageId && styles.highlightedBubble,
-                      isSelected && styles.selectedBubble,
-                    ]}
-                  >
-                    {/* Group Sender Name */}
-                    {currentChat?.isGroup && !isMe && (
-                      <Text style={styles.groupSenderName}>
-                        {item.sender?.displayName || 'Someone'}
-                      </Text>
-                    )}
-                    {/* Replied-To Message Header inside the bubble */}
-                    {item.replyTo && !item.isDeleted && (
-                      <View
-                        style={[
-                          styles.bubbleReplyPreview,
-                          isMe ? styles.myBubbleReplyPreview : styles.otherBubbleReplyPreview,
-                        ]}
-                      >
-                        <Text style={styles.bubbleReplySender} numberOfLines={1}>
-                          {item.replyTo.sender._id === user?.id ? 'You' : item.replyTo.sender.displayName}
-                        </Text>
-                        <Text style={styles.bubbleReplyText} numberOfLines={1}>
-                          {item.replyTo.text}
-                        </Text>
-                      </View>
-                    )}
-
-                    {/* Forwarded Tag */}
-                    {item.isForwarded && !item.isDeleted && (
-                      <Text style={[styles.forwardedText, isMe ? styles.myForwardedText : styles.otherForwardedText]}>
-                        ↪ Forwarded
-                      </Text>
-                    )}
-
-                    {item.mediaUrl && item.mediaType && !item.isDeleted && (
-                      <TouchableOpacity
-                        activeOpacity={0.9}
-                        onPress={async () => {
-                          if (item.status !== 'sending') {
-                            const fileExtension = item.mediaType === 'video' ? 'mp4' : item.mediaType === 'audio' ? 'm4a' : 'jpg';
-                            const localPath = `${FileSystem.documentDirectory}media_${item._id}.${fileExtension}`;
-                            const info = await FileSystem.getInfoAsync(localPath);
-                            const activeUrl = info.exists ? localPath : item.mediaUrl;
-
-                            setFullscreenMedia({
-                              messageId: item._id,
-                              url: activeUrl,
-                              type: item.mediaType,
-                            });
-                          }
-                        }}
-                        style={{ marginBottom: item.text ? 8 : 0 }}
-                      >
-                        <MediaMessage
-                          messageId={item._id}
-                          mediaUrl={item.mediaUrl}
-                          mediaType={item.mediaType}
-                          mediaWidth={item.mediaWidth}
-                          mediaHeight={item.mediaHeight}
-                          mediaDuration={item.mediaDuration}
-                          isSending={item.status === 'sending'}
-                          progress={uploadProgressMap[item.tempId || '']}
-                          onCancel={() => handleCancelParticularUpload(item.tempId!)}
-                        />
-                      </TouchableOpacity>
-                    )}
-
-                    {(item.text ? true : false || item.isDeleted) && (
-                      <Text
-                        style={[
-                          styles.bubbleText,
-                          isMe ? styles.myBubbleText : styles.otherBubbleText,
-                          item.isDeleted && styles.deletedBubbleText,
-                        ]}
-                      >
-                        {item.text}
-                      </Text>
-                    )}
-                    
-                    {!item.isDeleted && (
-                      <View style={onlyMedia ? styles.metaRowOnlyMedia : styles.metaRow}>
-                        {item.isEdited && <Text style={styles.editedText}>(edited)</Text>}
-                        <Text style={onlyMedia ? styles.timeTextOnlyMedia : styles.timeText}>
-                          {new Date(item.createdAt).toLocaleTimeString([], {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </Text>
-                        {isMe && (
-                          <Text
-                            style={[
-                              onlyMedia ? styles.statusTextOnlyMedia : styles.statusText,
-                              item.status === 'read' && styles.statusRead,
-                            ]}
-                          >
-                            {item.status === 'sending' ? '⏳' : item.status === 'read' ? '✓✓' : '✓'}
-                          </Text>
-                        )}
-                      </View>
-                    )}
-                  </View>
-                </TouchableOpacity>
-              </View>
-            </SwipeableRow>
-          );
-        }}
-      />
+        <ScrollToBottomButton
+          visible={showScrollToBottom}
+          onPress={scrollToBottom}
+        />
+      </View>
 
       {/* Reply Preview Banner */}
       {replyingTo && (
