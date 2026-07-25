@@ -6,6 +6,8 @@ import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { Ionicons } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system/legacy';
 
+import { openDocumentFile } from '../services/documentViewer';
+
 interface MediaMessageProps {
   messageId: string;
   mediaUrl: string;
@@ -162,18 +164,9 @@ export const MediaMessage: React.FC<MediaMessageProps> = ({
       const handlePress = async () => {
         if (!isDownloaded) {
           await startDownload();
-        } else if (localUri) {
-          try {
-            const Sharing = require('expo-sharing');
-            if (Sharing && await Sharing.isAvailableAsync()) {
-              await Sharing.shareAsync(localUri);
-            } else {
-              Alert.alert('File Location', `Saved locally at:\n${localUri}`);
-            }
-          } catch (e) {
-            console.error('Sharing failed:', e);
-            Alert.alert('File Location', `Saved locally at:\n${localUri}`);
-          }
+        } else {
+          const target = localUri || mediaUrl;
+          await openDocumentFile(target, docName);
         }
       };
 

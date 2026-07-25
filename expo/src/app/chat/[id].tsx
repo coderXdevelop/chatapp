@@ -29,6 +29,8 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as DocumentPicker from 'expo-document-picker';
 import { MemoizedMessageItem } from '../../components/MemoizedMessageItem';
 import { ScrollToBottomButton } from '../../components/ScrollToBottomButton';
+import { ZoomableImageViewer } from '../../components/ZoomableImageViewer';
+import { FullscreenVideoViewer } from '../../components/FullscreenVideoViewer';
 
 export default function ChatScreen() {
   const { id: chatId } = useLocalSearchParams<{ id: string }>();
@@ -1398,71 +1400,31 @@ export default function ChatScreen() {
         </TouchableOpacity>
       </Modal>
 
-      {/* Fullscreen Media Viewer Modal */}
-      <Modal
-        visible={fullscreenMedia !== null}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setFullscreenMedia(null)}
-      >
-        <SafeAreaView style={styles.fullscreenMediaOverlay}>
-          {/* Top Bar Controls */}
-          <View style={styles.fullscreenMediaHeader}>
-            <TouchableOpacity
-              onPress={() => setFullscreenMedia(null)}
-              style={styles.fullscreenHeaderButton}
-            >
-              <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
-            </TouchableOpacity>
-            
-            <Text style={styles.fullscreenHeaderTitle}>
-              {fullscreenMedia?.type === 'video' ? 'Video' : fullscreenMedia?.type === 'audio' ? 'Voice Note' : 'Photo'}
-            </Text>
+      {/* Zoomable Image Viewer Component */}
+      <ZoomableImageViewer
+        visible={fullscreenMedia?.type === 'image'}
+        imageUri={fullscreenMedia?.url || ''}
+        title="Photo"
+        onClose={() => setFullscreenMedia(null)}
+        onDownload={() => {
+          if (fullscreenMedia?.url) {
+            downloadMediaFile(fullscreenMedia.url, 'image');
+          }
+        }}
+      />
 
-            {fullscreenMedia ? (
-              <TouchableOpacity
-                onPress={() => downloadMediaFile(fullscreenMedia.url, fullscreenMedia.type)}
-                style={styles.fullscreenHeaderButton}
-              >
-                <Ionicons name="download" size={24} color={COLORS.accent} />
-              </TouchableOpacity>
-            ) : (
-              <View style={{ width: 36 }} />
-            )}
-          </View>
-
-          {/* Centered Viewer Content */}
-          <View style={styles.fullscreenMediaContainer}>
-            {fullscreenMedia?.type === 'image' && (
-              <Image
-                source={{ uri: fullscreenMedia.url }}
-                style={{ width: '100%', height: '90%' }}
-                resizeMode="contain"
-              />
-            )}
-
-            {fullscreenMedia?.type === 'video' && (
-              <View style={styles.fullscreenVideoWrapper}>
-                <MediaMessage
-                  messageId={fullscreenMedia.messageId}
-                  mediaUrl={fullscreenMedia.url}
-                  mediaType="video"
-                />
-              </View>
-            )}
-
-            {fullscreenMedia?.type === 'audio' && (
-              <View style={styles.fullscreenAudioWrapper}>
-                <MediaMessage
-                  messageId={fullscreenMedia.messageId}
-                  mediaUrl={fullscreenMedia.url}
-                  mediaType="audio"
-                />
-              </View>
-            )}
-          </View>
-        </SafeAreaView>
-      </Modal>
+      {/* In-App Video Player Viewer Component */}
+      <FullscreenVideoViewer
+        visible={fullscreenMedia?.type === 'video'}
+        videoUrl={fullscreenMedia?.url || ''}
+        title="Video"
+        onClose={() => setFullscreenMedia(null)}
+        onDownload={() => {
+          if (fullscreenMedia?.url) {
+            downloadMediaFile(fullscreenMedia.url, 'video');
+          }
+        }}
+      />
 
       {/* Search Messages Modal */}
       <Modal
