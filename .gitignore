@@ -38,9 +38,16 @@ yarn-error.*
 
 example
 
+# Gradle & Native caches
+.gradle/
+**/.gradle/
+**/android/.gradle/
+
 # generated native folders
-/ios
-/android
+android/
+ios/
+**/android/
+**/ios/
 
 # Ignore all env files
 .env
