@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "chatapp",
-    "slug": "chatapp",
+    "slug": "chatapp-root",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -56,12 +56,16 @@
           "supportsBackgroundPlayback": false,
           "supportsPictureInPicture": false
         }
-      ],
-      "expo-sharing"
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "1c680cd5-500f-4b34-b0a9-479ae61bd45a"
+      }
     }
   }
 }
