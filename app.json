@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "1c680cd5-500f-4b34-b0a9-479ae61bd45a"
+      }
+    },
+    "android": {
+      "package": "com.coderxdevelop.chatapproot"
+    }
+  }
+}
