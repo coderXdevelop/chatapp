@@ -1,3 +1,7 @@
+node_modules/
+.expo/
+.gradle/
+android/.gradle/
 expo-env.d.ts
 .env*
 !.env.example

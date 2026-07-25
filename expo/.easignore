@@ -1,0 +1,8 @@
+.gradle/
+**/.gradle/
+android/.gradle/
+node_modules/
+.expo/
+dist/
+web-build/
+*.log
