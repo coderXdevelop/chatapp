@@ -119,6 +119,7 @@ interface ChatState {
   leaveGroup: (chatId: string) => Promise<boolean>;
   promoteGroupAdmin: (chatId: string, targetUserId: string, action: 'promote' | 'demote') => Promise<Chat | null>;
   searchMessages: (chatId: string | null, query: string) => Promise<Message[]>;
+  clearChat: (chatId: string) => Promise<boolean>;
 }
 
 // Extract base URL from Axios instance configuration
@@ -392,6 +393,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
       });
     }
     return false;
+  },
+
+  clearChat: async (chatId) => {
+    try {
+      await api.post(`/chats/${chatId}/clear`);
+      set((state) => ({
+        messages: { ...state.messages, [chatId]: [] },
+      }));
+      return true;
+    } catch (error) {
+      console.error('Failed to clear chat:', error);
+      return false;
+    }
   },
 
   forwardMessages: async (messageIds, chatIds, searchContacts = []) => {

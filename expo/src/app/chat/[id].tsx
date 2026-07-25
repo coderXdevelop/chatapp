@@ -542,7 +542,59 @@ export default function ChatScreen() {
     setIsSelectionMode(true);
     setSelectedMessageIds([msg._id]);
     setSelectedMessage(msg);
-    setIsMenuOpen(true);
+  };
+
+  const handleSelectionOptions = () => {
+    const selectedMsgs = selectedMessageIds
+      .map((id) => chatMessages.find((m) => m._id === id))
+      .filter(Boolean) as Message[];
+    const singleMsg = selectedMsgs.length === 1 ? selectedMsgs[0] : null;
+    const isMe = singleMsg?.sender._id === user?.id;
+
+    const options: any[] = [];
+
+    if (singleMsg && singleMsg.text) {
+      options.push({
+        text: 'Copy Text',
+        onPress: () => {
+          Alert.alert('Copied', 'Message text copied to clipboard!');
+          setIsSelectionMode(false);
+          setSelectedMessageIds([]);
+        },
+      });
+    }
+
+    if (singleMsg && isMe && !singleMsg.isDeleted && singleMsg.text) {
+      options.push({
+        text: 'Edit Message',
+        onPress: () => {
+          setEditingMessage(singleMsg);
+          setText(singleMsg.text || '');
+          setIsSelectionMode(false);
+          setSelectedMessageIds([]);
+        },
+      });
+    }
+
+    if (chatMessages.length > 0) {
+      options.push({
+        text: 'Select All',
+        onPress: () => {
+          setSelectedMessageIds(chatMessages.map((m) => m._id));
+        },
+      });
+    }
+
+    options.push({
+      text: 'Report Selected',
+      onPress: () => {
+        setIsReportModalOpen(true);
+      },
+    });
+
+    options.push({ text: 'Cancel', style: 'cancel' as const });
+
+    Alert.alert('Message Options', undefined, options, { cancelable: true });
   };
 
   const handleDeleteMessage = (msg: Message) => {
@@ -710,6 +762,35 @@ export default function ChatScreen() {
     }
 
     options.push({
+      text: 'Clear Chat',
+      style: 'destructive' as const,
+      onPress: () => {
+        Alert.alert(
+          'Clear Chat',
+          'Are you sure you want to clear all messages in this chat? This cannot be undone.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Clear Chat',
+              style: 'destructive',
+              onPress: async () => {
+                if (chatId) {
+                  const clearStore = useChatStore.getState().clearChat;
+                  const success = await clearStore(chatId);
+                  if (success) {
+                    Alert.alert('Chat Cleared', 'All messages cleared.');
+                  } else {
+                    Alert.alert('Error', 'Failed to clear chat.');
+                  }
+                }
+              },
+            },
+          ]
+        );
+      },
+    });
+
+    options.push({
       text: currentChat?.isGroup ? 'Report Group' : 'Report User',
       onPress: () => {
         setIsReportModalOpen(true);
@@ -863,23 +944,60 @@ export default function ChatScreen() {
       {/* Custom Header Bar */}
       <View style={styles.header}>
         {isSelectionMode ? (
-          <>
+          <View style={styles.selectionHeaderBar}>
             <TouchableOpacity
               onPress={() => {
                 setIsSelectionMode(false);
                 setSelectedMessageIds([]);
               }}
-              style={styles.backButton}
+              style={styles.headerIconButton}
             >
-              <Text style={styles.backText}>Cancel</Text>
+              <Ionicons name="close" size={24} color={COLORS.textPrimary} />
             </TouchableOpacity>
-            <View style={styles.headerTitleContainer}>
-              <Text style={styles.headerTitle}>
-                {selectedMessageIds.length} selected
-              </Text>
+
+            <Text style={styles.selectionCountTitle}>
+              {selectedMessageIds.length}
+            </Text>
+
+            <View style={styles.selectionHeaderActions}>
+              {selectedMessageIds.length === 1 && (
+                <TouchableOpacity
+                  onPress={() => {
+                    const targetMsg = chatMessages.find(m => m._id === selectedMessageIds[0]);
+                    if (targetMsg) {
+                      setReplyingTo(targetMsg);
+                      setIsSelectionMode(false);
+                      setSelectedMessageIds([]);
+                    }
+                  }}
+                  style={styles.headerIconButton}
+                >
+                  <Ionicons name="arrow-undo-outline" size={22} color={COLORS.textPrimary} />
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity
+                onPress={handleDeleteSelected}
+                style={styles.headerIconButton}
+              >
+                <Ionicons name="trash-outline" size={22} color="#FCA5A5" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={handleForwardSelected}
+                style={styles.headerIconButton}
+              >
+                <Ionicons name="arrow-redo-outline" size={22} color={COLORS.primary} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={handleSelectionOptions}
+                style={styles.headerIconButton}
+              >
+                <Ionicons name="ellipsis-vertical" size={22} color={COLORS.accent} />
+              </TouchableOpacity>
             </View>
-            <View style={styles.headerRightPlaceholder} />
-          </>
+          </View>
         ) : (
           <>
             <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
@@ -1124,75 +1242,7 @@ export default function ChatScreen() {
         </TouchableOpacity>
       </Modal>
 
-      {/* Long Press Actions Modal */}
-      <Modal
-        visible={isMenuOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setIsMenuOpen(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setIsMenuOpen(false)}
-        >
-          <View style={styles.menuContainer}>
-            <Text style={styles.menuTitle} numberOfLines={1}>
-              Message Actions
-            </Text>
 
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => {
-                if (selectedMessage) setReplyingTo(selectedMessage);
-                setIsMenuOpen(false);
-              }}
-            >
-              <Text style={styles.menuItemText}>↩ Reply</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => {
-                if (selectedMessage) handleForwardMessage(selectedMessage);
-                setIsMenuOpen(false);
-              }}
-            >
-              <Text style={styles.menuItemText}>➡️ Forward</Text>
-            </TouchableOpacity>
-
-
-            {selectedMessage?.sender._id === user?.id && !selectedMessage?.mediaUrl && (
-              <TouchableOpacity
-                style={styles.menuItem}
-                onPress={() => {
-                  if (selectedMessage) {
-                    setEditingMessage(selectedMessage);
-                    setText(selectedMessage.text || '');
-                  }
-                  setIsMenuOpen(false);
-                }}
-              >
-                <Text style={styles.menuItemText}>✏️ Edit</Text>
-              </TouchableOpacity>
-            )}
-
-            <TouchableOpacity
-              style={[styles.menuItem, styles.menuItemDelete]}
-              onPress={() => {
-                if (selectedMessage) handleDeleteMessage(selectedMessage);
-                setIsMenuOpen(false);
-              }}
-            >
-              <Text style={styles.menuItemDeleteText}>🗑️ Delete Message</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.menuCancelButton} onPress={() => setIsMenuOpen(false)}>
-              <Text style={styles.menuCancelText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </Modal>
 
       {/* User Profile Modal */}
       <Modal
@@ -1581,6 +1631,24 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
     backgroundColor: COLORS.cardBackground,
+  },
+  selectionHeaderBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  selectionCountTitle: {
+    color: COLORS.textPrimary,
+    fontSize: 18,
+    fontWeight: '800',
+    marginLeft: 12,
+    flex: 1,
+  },
+  selectionHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   backButton: {
     paddingVertical: 4,

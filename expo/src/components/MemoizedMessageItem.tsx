@@ -120,19 +120,7 @@ const MemoizedMessageItemComponent: React.FC<MemoizedMessageItemProps> = ({
           <Text style={styles.replyIconText}>↩</Text>
         </Animated.View>
 
-        <View style={styles.messageRowWrapper}>
-          {isSelectionMode && (
-            <TouchableOpacity
-              onPress={() => onSelect(item._id)}
-              style={styles.selectionCheckboxWrapper}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.checkboxCircle, isSelected && styles.checkboxCircleSelected]}>
-                {isSelected && <Text style={styles.checkboxCheckmark}>✓</Text>}
-              </View>
-            </TouchableOpacity>
-          )}
-
+        <View style={[styles.messageRowWrapper, isSelected && styles.selectedRowHighlight]}>
           <TouchableOpacity
             onPress={() => {
               if (isSelectionMode) {
@@ -159,7 +147,6 @@ const MemoizedMessageItemComponent: React.FC<MemoizedMessageItemProps> = ({
                 isMe ? styles.myBubble : styles.otherBubble,
                 onlyMedia && styles.onlyMediaBubble,
                 isHighlighted && styles.highlightedBubble,
-                isSelected && styles.selectedBubble,
               ]}
             >
               {/* Group Sender Name */}
@@ -305,6 +292,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     width: '100%',
+    borderRadius: 8,
+  },
+  selectedRowHighlight: {
+    backgroundColor: 'rgba(204, 255, 0, 0.16)',
+    paddingVertical: 2,
   },
   selectionCheckboxWrapper: {
     paddingRight: 10,

@@ -829,3 +829,29 @@ export async function searchMessages(req: AuthenticatedRequest, res: Response) {
   }
 }
 
+export async function clearChat(req: AuthenticatedRequest, res: Response) {
+  const userId = req.user?.userId;
+  const { chatId } = req.params;
+
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+  try {
+    const chat = await Chat.findOne({ _id: chatId, participants: userId } as any);
+    if (!chat) return res.status(403).json({ message: 'Forbidden' });
+
+    // Soft delete all messages in this chat for this user
+    await Message.updateMany(
+      { chat: chatId } as any,
+      { $addToSet: { deletedForUsers: userId } } as any
+    );
+
+    // Reset unread counter for this user
+    chat.unreadCounts.set(userId.toString(), 0);
+    await chat.save();
+
+    return res.status(200).json({ message: 'Chat cleared successfully' });
+  } catch (error: any) {
+    return res.status(500).json({ message: 'Error clearing chat', error: error.message });
+  }
+}
+

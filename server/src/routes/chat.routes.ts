@@ -11,7 +11,8 @@ import {
   removeGroupMember,
   leaveGroup,
   promoteGroupAdmin,
-  searchMessages
+  searchMessages,
+  clearChat
 } from '../controllers/chat.controller.js';
 import { authenticateJWT } from '../middleware/auth.middleware.js';
 
@@ -37,6 +38,7 @@ router.get('/:chatId/search', searchMessages); // search single chat
 
 router.get('/:chatId/messages', getMessages);
 router.post('/:chatId/messages', sendMessageHttp);
+router.post('/:chatId/clear', clearChat);
 
 export default router;
 
