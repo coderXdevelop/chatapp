@@ -10,6 +10,9 @@ export interface IChat extends Document {
   avatarPublicId: string;
   creator?: mongoose.Types.ObjectId;
   admins: mongoose.Types.ObjectId[];
+  favourites?: mongoose.Types.ObjectId[];
+  deletedForUsers?: mongoose.Types.ObjectId[];
+  isFavourite?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -55,6 +58,18 @@ const ChatSchema: Schema = new Schema(
       default: null,
     },
     admins: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
+      },
+    ],
+    favourites: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
+      },
+    ],
+    deletedForUsers: [
       {
         type: Schema.Types.ObjectId,
         ref: 'User',

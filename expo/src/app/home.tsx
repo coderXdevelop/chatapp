@@ -36,6 +36,10 @@ export default function HomeScreen() {
   const { chats, fetchChats, connectSocket, socketConnected } = useChatStore();
 
   const [activeTab, setActiveTab] = useState<'HOME' | 'PROFILE' | 'HELP'>('HOME');
+  const [filterTab, setFilterTab] = useState<'ALL' | 'CHATS' | 'GROUPS' | 'FAVOURITES'>('ALL');
+  const [selectedChatIds, setSelectedChatIds] = useState<string[]>([]);
+
+  const isSelectionMode = selectedChatIds.length > 0;
 
   // Modal states for adding contact
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -80,19 +84,144 @@ export default function HomeScreen() {
     }
   };
 
+  const filteredChats = chats.filter((item) => {
+    if (filterTab === 'CHATS') return !item.isGroup;
+    if (filterTab === 'GROUPS') return !!item.isGroup;
+    if (filterTab === 'FAVOURITES') return !!item.isFavourite;
+    return true;
+  });
+
+  const toggleSelectChat = (chatId: string) => {
+    setSelectedChatIds((prev) =>
+      prev.includes(chatId) ? prev.filter((id) => id !== chatId) : [...prev, chatId]
+    );
+  };
+
+  const handleSelectAll = () => {
+    if (selectedChatIds.length === filteredChats.length) {
+      setSelectedChatIds([]);
+    } else {
+      setSelectedChatIds(filteredChats.map((c) => c._id));
+    }
+  };
+
+  const handleToggleFavoriteSelected = async () => {
+    if (selectedChatIds.length === 0) return;
+    const { toggleFavoriteChat } = useChatStore.getState();
+    for (const chatId of selectedChatIds) {
+      await toggleFavoriteChat(chatId);
+    }
+    setSelectedChatIds([]);
+  };
+
+  const handleDeleteSelected = () => {
+    if (selectedChatIds.length === 0) return;
+    Alert.alert(
+      'Permanently Delete Chat(s)',
+      `Are you sure you want to permanently delete ${selectedChatIds.length} selected conversation(s)? This will clear all messages and remove the chat from your account.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            const { deleteChats } = useChatStore.getState();
+            const success = await deleteChats(selectedChatIds);
+            if (success) {
+              setSelectedChatIds([]);
+            } else {
+              Alert.alert('Error', 'Failed to delete selected chats.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.contentContainer}>
         {activeTab === 'HOME' && (
           <View style={styles.tabContent}>
-            {/* Header */}
-            <View style={styles.header}>
-              <View>
-                <Text style={styles.headerTitle}>Chats</Text>
-                <Text style={styles.connectionStatus}>
-                  {socketConnected ? '🟢 Connected' : '🔴 Connecting...'}
-                </Text>
+            {/* Dynamic Header: Selection vs Normal */}
+            {isSelectionMode ? (
+              <View style={styles.selectionHeader}>
+                <TouchableOpacity
+                  style={styles.selectionCloseBtn}
+                  onPress={() => setSelectedChatIds([])}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Text style={styles.selectionCloseText}>✕</Text>
+                </TouchableOpacity>
+                <Text style={styles.selectionTitle}>{selectedChatIds.length} Selected</Text>
+                <View style={styles.selectionActions}>
+                  <TouchableOpacity style={styles.selectionTextBtn} onPress={handleSelectAll}>
+                    <Text style={styles.selectionTextBtnLabel}>
+                      {selectedChatIds.length === filteredChats.length ? 'Deselect' : 'All'}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.selectionIconBtn} onPress={handleToggleFavoriteSelected}>
+                    <Text style={styles.actionIconText}>⭐</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.selectionIconBtn, styles.deleteIconBtn]} onPress={handleDeleteSelected}>
+                    <Text style={styles.actionIconText}>🗑️</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
+            ) : (
+              <View style={styles.header}>
+                <View>
+                  <Text style={styles.headerTitle}>Chats</Text>
+                  <Text style={styles.connectionStatus}>
+                    {socketConnected ? '🟢 Connected' : '🔴 Connecting...'}
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {/* Top Filter Chips */}
+            <View style={styles.filterContainer}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.filterScroll}
+              >
+                <TouchableOpacity
+                  style={[styles.filterChip, filterTab === 'ALL' && styles.filterChipActive]}
+                  onPress={() => setFilterTab('ALL')}
+                >
+                  <Text style={[styles.filterText, filterTab === 'ALL' && styles.filterTextActive]}>
+                    All ({chats.length})
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.filterChip, filterTab === 'CHATS' && styles.filterChipActive]}
+                  onPress={() => setFilterTab('CHATS')}
+                >
+                  <Text style={[styles.filterText, filterTab === 'CHATS' && styles.filterTextActive]}>
+                    Chats ({chats.filter((c) => !c.isGroup).length})
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.filterChip, filterTab === 'GROUPS' && styles.filterChipActive]}
+                  onPress={() => setFilterTab('GROUPS')}
+                >
+                  <Text style={[styles.filterText, filterTab === 'GROUPS' && styles.filterTextActive]}>
+                    Groups ({chats.filter((c) => c.isGroup).length})
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.filterChip, filterTab === 'FAVOURITES' && styles.filterChipActive]}
+                  onPress={() => setFilterTab('FAVOURITES')}
+                >
+                  <Text style={[styles.filterText, filterTab === 'FAVOURITES' && styles.filterTextActive]}>
+                    ⭐ Favourites ({chats.filter((c) => c.isFavourite).length})
+                  </Text>
+                </TouchableOpacity>
+              </ScrollView>
             </View>
 
             {/* List of active chat threads */}
@@ -100,70 +229,103 @@ export default function HomeScreen() {
               <ChatListSkeleton />
             ) : (
               <FlatList
-                data={chats}
+                data={filteredChats}
                 keyExtractor={(item) => item._id}
                 contentContainerStyle={styles.listContainer}
-              ListEmptyComponent={
-                <View style={styles.emptyContainer}>
-                  <Text style={styles.emptyIcon}>💬</Text>
-                  <Text style={styles.emptyText}>No chat threads yet.</Text>
-                  <Text style={styles.emptySubtext}>
-                    Tap the "+" button in the top right to start a secure conversation by typing a User ID or Email.
-                  </Text>
-                </View>
-              }
-              renderItem={({ item }) => {
-                const partner = item.participants.find((p) => p._id !== user?.id);
-                const displayName = item.isGroup ? item.name : (partner?.displayName || 'ChatConnect User');
-                const avatarUrl = item.isGroup ? item.avatarUrl : partner?.avatarUrl;
-                const initial = (displayName || 'C').charAt(0).toUpperCase();
-                const unreadCount = item.unreadCounts?.[user?.id || ''] || 0;
+                ListEmptyComponent={
+                  <View style={styles.emptyContainer}>
+                    <Text style={styles.emptyIcon}>💬</Text>
+                    <Text style={styles.emptyText}>
+                      {filterTab === 'FAVOURITES'
+                        ? 'No favourite chats yet.'
+                        : filterTab === 'GROUPS'
+                        ? 'No group chats yet.'
+                        : 'No chat threads found.'}
+                    </Text>
+                    <Text style={styles.emptySubtext}>
+                      {filterTab === 'FAVOURITES'
+                        ? 'Long-press any chat or tap the ⭐ button to add it to your favourites.'
+                        : 'Tap the "+" button in the bottom right to start a secure conversation or create a group.'}
+                    </Text>
+                  </View>
+                }
+                renderItem={({ item }) => {
+                  const partner = item.participants.find((p) => p._id !== user?.id);
+                  const displayName = item.isGroup ? item.name : (partner?.displayName || 'ChatConnect User');
+                  const avatarUrl = item.isGroup ? item.avatarUrl : partner?.avatarUrl;
+                  const initial = (displayName || 'C').charAt(0).toUpperCase();
+                  const unreadCount = item.unreadCounts?.[user?.id || ''] || 0;
+                  const isSelected = selectedChatIds.includes(item._id);
 
-                return (
-                  <TouchableOpacity
-                    style={styles.chatRow}
-                    onPress={() => router.push(`/chat/${item._id}` as any)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.avatarContainer}>
-                      {avatarUrl ? (
-                        <Image source={{ uri: avatarUrl }} style={styles.avatar} />
-                      ) : (
-                        <View style={styles.avatarPlaceholder}>
-                          <Text style={styles.avatarText}>{initial}</Text>
+                  return (
+                    <TouchableOpacity
+                      style={[styles.chatRow, isSelected && styles.chatRowSelected]}
+                      onPress={() => {
+                        if (isSelectionMode) {
+                          toggleSelectChat(item._id);
+                        } else {
+                          router.push(`/chat/${item._id}` as any);
+                        }
+                      }}
+                      onLongPress={() => {
+                        if (!isSelectionMode) {
+                          setSelectedChatIds([item._id]);
+                        }
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      {isSelectionMode && (
+                        <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+                          {isSelected && <Text style={styles.checkmark}>✓</Text>}
                         </View>
                       )}
-                      {!item.isGroup && partner?.isOnline && <View style={styles.onlineBadge} />}
-                    </View>
-                    <View style={styles.chatInfo}>
-                      <View style={styles.chatHeaderRow}>
-                        <Text style={styles.chatName} numberOfLines={1}>
-                          {displayName}
-                        </Text>
-                        {item.lastMessage && (
-                          <Text style={styles.chatTime}>
-                            {new Date(item.lastMessage.createdAt).toLocaleTimeString([], {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </Text>
-                        )}
-                      </View>
-                      <View style={styles.chatBodyRow}>
-                        <Text style={styles.lastMessage} numberOfLines={1}>
-                          {item.lastMessage ? item.lastMessage.text : (item.isGroup ? 'Tap to open group chat' : `Tap to chat with ${partner?.displayName}`)}
-                        </Text>
-                        {unreadCount > 0 && (
-                          <View style={styles.unreadBadge}>
-                            <Text style={styles.unreadCountText}>{unreadCount}</Text>
+
+                      <View style={styles.avatarContainer}>
+                        {avatarUrl ? (
+                          <Image source={{ uri: avatarUrl }} style={styles.avatar} />
+                        ) : (
+                          <View style={styles.avatarPlaceholder}>
+                            <Text style={styles.avatarText}>{initial}</Text>
                           </View>
                         )}
+                        {!item.isGroup && partner?.isOnline && <View style={styles.onlineBadge} />}
                       </View>
-                    </View>
-                  </TouchableOpacity>
-                );
-              }}
-            />
+                      <View style={styles.chatInfo}>
+                        <View style={styles.chatHeaderRow}>
+                          <Text style={styles.chatName} numberOfLines={1}>
+                            {displayName}
+                          </Text>
+                          {item.lastMessage && (
+                            <Text style={styles.chatTime}>
+                              {new Date(item.lastMessage.createdAt).toLocaleTimeString([], {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </Text>
+                          )}
+                        </View>
+                        <View style={styles.chatBodyRow}>
+                          <Text style={styles.lastMessage} numberOfLines={1}>
+                            {item.lastMessage
+                              ? item.lastMessage.text
+                              : item.isGroup
+                              ? 'Tap to open group chat'
+                              : `Tap to chat with ${partner?.displayName}`}
+                          </Text>
+                          <View style={styles.rowRightBadges}>
+                            {item.isFavourite && <Text style={styles.favBadgeText}>⭐</Text>}
+                            {unreadCount > 0 && (
+                              <View style={styles.unreadBadge}>
+                                <Text style={styles.unreadCountText}>{unreadCount}</Text>
+                              </View>
+                            )}
+                          </View>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                }}
+              />
             )}
           </View>
         )}
@@ -602,5 +764,126 @@ const styles = StyleSheet.create({
     color: COLORS.primaryText,
     fontWeight: '700',
     fontSize: 15,
+  },
+  // Selection Header & Actions
+  selectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    backgroundColor: '#1E293B',
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  selectionCloseBtn: {
+    padding: 6,
+    marginRight: 8,
+  },
+  selectionCloseText: {
+    color: COLORS.textPrimary,
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  selectionTitle: {
+    color: COLORS.textPrimary,
+    fontSize: 18,
+    fontWeight: '700',
+    flex: 1,
+  },
+  selectionActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  selectionTextBtn: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+  },
+  selectionTextBtnLabel: {
+    color: COLORS.primary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  selectionIconBtn: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    padding: 8,
+    borderRadius: 18,
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteIconBtn: {
+    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+  },
+  actionIconText: {
+    fontSize: 16,
+  },
+  // Filter Tabs Bar
+  filterContainer: {
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    backgroundColor: COLORS.background,
+    paddingVertical: 10,
+  },
+  filterScroll: {
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  filterChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: COLORS.cardBackground,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  filterChipActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  filterText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  filterTextActive: {
+    color: COLORS.primaryText,
+    fontWeight: '800',
+  },
+  // Selection Row Checkbox & Badges
+  chatRowSelected: {
+    backgroundColor: 'rgba(204, 255, 0, 0.08)',
+    borderColor: COLORS.primary,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: COLORS.textSecondary,
+    marginRight: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxSelected: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  checkmark: {
+    color: COLORS.primaryText,
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  rowRightBadges: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  favBadgeText: {
+    fontSize: 14,
   },
 });

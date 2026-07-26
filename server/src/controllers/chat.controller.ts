@@ -14,7 +14,10 @@ export async function getChats(req: AuthenticatedRequest, res: Response) {
   if (!userId) return res.status(401).json({ message: 'Unauthorized' });
 
   try {
-    const chats = await Chat.find({ participants: userId })
+    const chats = await Chat.find({
+      participants: userId,
+      deletedForUsers: { $ne: userId },
+    })
       .populate('participants', 'displayName email avatarUrl status connectId age lastSeen')
       .populate({
         path: 'lastMessage',
@@ -48,6 +51,9 @@ export async function getChats(req: AuthenticatedRequest, res: Response) {
         ...p,
         isOnline: presenceMap.get(p._id.toString()) || false,
       }));
+      chatObj.isFavourite = (chat.favourites || []).some(
+        (fId: any) => fId.toString() === userId.toString()
+      );
       return chatObj;
     });
 
@@ -853,6 +859,68 @@ export async function clearChat(req: AuthenticatedRequest, res: Response) {
     return res.status(200).json({ message: 'Chat cleared successfully' });
   } catch (error: any) {
     return res.status(500).json({ message: 'Error clearing chat', error: error.message });
+  }
+}
+
+export async function toggleFavoriteChat(req: AuthenticatedRequest, res: Response) {
+  const userId = req.user?.userId;
+  const { chatId } = req.params;
+
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+  try {
+    const chat = await Chat.findOne({ _id: chatId, participants: userId } as any);
+    if (!chat) return res.status(404).json({ message: 'Chat not found' });
+
+    const isFav = (chat.favourites || []).some((id: any) => id.toString() === userId.toString());
+
+    if (isFav) {
+      chat.favourites = (chat.favourites || []).filter((id: any) => id.toString() !== userId.toString());
+    } else {
+      if (!chat.favourites) chat.favourites = [];
+      chat.favourites.push(new mongoose.Types.ObjectId(userId) as any);
+    }
+
+    await chat.save();
+    return res.status(200).json({
+      success: true,
+      chatId,
+      isFavourite: !isFav,
+    });
+  } catch (error: any) {
+    return res.status(500).json({ message: 'Error toggling favorite status', error: error.message });
+  }
+}
+
+export async function deleteChats(req: AuthenticatedRequest, res: Response) {
+  const userId = req.user?.userId;
+  const { chatIds } = req.body;
+
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+  if (!Array.isArray(chatIds) || chatIds.length === 0) {
+    return res.status(400).json({ message: 'chatIds array required' });
+  }
+
+  try {
+    // 1. Mark chats as deleted for this user
+    await Chat.updateMany(
+      { _id: { $in: chatIds }, participants: userId } as any,
+      { $addToSet: { deletedForUsers: userId } } as any
+    );
+
+    // 2. Clear / delete all messages in these chats for this user
+    await Message.updateMany(
+      { chat: { $in: chatIds } } as any,
+      { $addToSet: { deletedForUsers: userId } } as any
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: 'Selected chats permanently deleted for user',
+      chatIds,
+    });
+  } catch (error: any) {
+    return res.status(500).json({ message: 'Error deleting chats', error: error.message });
   }
 }
 

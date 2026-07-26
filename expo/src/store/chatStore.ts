@@ -66,6 +66,7 @@ export interface Chat {
   avatarPublicId?: string;
   creator?: string;
   admins?: string[];
+  isFavourite?: boolean;
 }
 
 interface ChatState {
@@ -138,6 +139,8 @@ interface ChatState {
   promoteGroupAdmin: (chatId: string, targetUserId: string, action: 'promote' | 'demote') => Promise<Chat | null>;
   searchMessages: (chatId: string | null, query: string) => Promise<Message[]>;
   clearChat: (chatId: string) => Promise<boolean>;
+  toggleFavoriteChat: (chatId: string) => Promise<boolean>;
+  deleteChats: (chatIds: string[]) => Promise<boolean>;
 }
 
 // Extract base URL from Axios instance configuration
@@ -420,13 +423,40 @@ export const useChatStore = create<ChatState>()(
 
   clearChat: async (chatId) => {
     try {
-      await api.post(`/chats/${chatId}/clear`);
+      await api.post(`/api/chats/${chatId}/clear`);
       set((state) => ({
         messages: { ...state.messages, [chatId]: [] },
       }));
       return true;
     } catch (error) {
       console.error('Failed to clear chat:', error);
+      return false;
+    }
+  },
+
+  toggleFavoriteChat: async (chatId) => {
+    try {
+      const res = await api.post(`/api/chats/${chatId}/favorite`);
+      const { isFavourite } = res.data;
+      set((state) => ({
+        chats: state.chats.map((c) => (c._id === chatId ? { ...c, isFavourite } : c)),
+      }));
+      return true;
+    } catch (error) {
+      console.error('Failed to toggle favorite chat:', error);
+      return false;
+    }
+  },
+
+  deleteChats: async (chatIds) => {
+    try {
+      await api.post('/api/chats/delete-multiple', { chatIds });
+      set((state) => ({
+        chats: state.chats.filter((c) => !chatIds.includes(c._id)),
+      }));
+      return true;
+    } catch (error) {
+      console.error('Failed to delete chats:', error);
       return false;
     }
   },

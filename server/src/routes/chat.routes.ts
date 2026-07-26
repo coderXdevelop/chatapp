@@ -12,7 +12,9 @@ import {
   leaveGroup,
   promoteGroupAdmin,
   searchMessages,
-  clearChat
+  clearChat,
+  toggleFavoriteChat,
+  deleteChats
 } from '../controllers/chat.controller.js';
 import { authenticateJWT } from '../middleware/auth.middleware.js';
 
@@ -23,6 +25,7 @@ router.use(authenticateJWT);
 router.get('/', getChats);
 router.post('/', createChat);
 router.post('/forward', forwardMessages);
+router.post('/delete-multiple', deleteChats);
 
 // Group management routes
 router.post('/group', createGroup);
@@ -39,6 +42,7 @@ router.get('/:chatId/search', searchMessages); // search single chat
 router.get('/:chatId/messages', getMessages);
 router.post('/:chatId/messages', sendMessageHttp);
 router.post('/:chatId/clear', clearChat);
+router.post('/:chatId/favorite', toggleFavoriteChat);
 
 export default router;
 
