@@ -286,6 +286,23 @@ export default function ProfileScreen() {
 
             <View style={styles.divider} />
 
+            {/* Storage & Data Settings */}
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => router.push('/storage-settings' as any)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.menuItemLeft}>
+                <View style={styles.iconCircle}>
+                  <Text style={styles.menuIcon}>💾</Text>
+                </View>
+                <Text style={styles.menuItemText}>Storage & Data</Text>
+              </View>
+              <Text style={styles.menuChevron}>›</Text>
+            </TouchableOpacity>
+
+            <View style={styles.divider} />
+
             {/* Password Reset */}
             <TouchableOpacity
               style={styles.menuItem}

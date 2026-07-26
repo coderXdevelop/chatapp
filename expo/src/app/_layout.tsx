@@ -94,6 +94,14 @@ export default function RootLayout() {
     }
   }, [user]);
 
+  useEffect(() => {
+    import("../services/storageManager").then(({ initStorageDirectories, runAutoCleanup }) => {
+      initStorageDirectories().then(() => {
+        runAutoCleanup().catch((err) => console.error("Auto cleanup background error:", err));
+      });
+    }).catch((err) => console.error("Failed to load storageManager:", err));
+  }, []);
+
   if (!isInitialized) {
     return (
       <View style={styles.splashContainer}>
@@ -109,6 +117,7 @@ export default function RootLayout() {
         <Stack.Screen name="login" />
         <Stack.Screen name="home" />
         <Stack.Screen name="profile" />
+        <Stack.Screen name="storage-settings" />
         <Stack.Screen name="chat/[id]" />
         <Stack.Screen name="chat/group/create" />
         <Stack.Screen name="chat/group/settings" />

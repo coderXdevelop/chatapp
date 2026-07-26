@@ -2,6 +2,7 @@ import { Platform, Alert } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as Linking from 'expo-linking';
+import { getCategoryPath } from './storageManager';
 
 export const getMimeTypeFromExtension = (filename: string): string => {
   const ext = filename.split('.').pop()?.toLowerCase();
@@ -47,7 +48,7 @@ export const openDocumentFile = async (
     // Check if remote URL; if so, download to local cache
     if (!url.startsWith('file://') && !url.startsWith('content://')) {
       const safeFilename = filename || `doc_${Date.now()}.${url.split('.').pop()?.split('?')[0] || 'pdf'}`;
-      const cachePath = `${FileSystem.documentDirectory}${safeFilename}`;
+      const cachePath = getCategoryPath('documents', safeFilename);
       const info = await FileSystem.getInfoAsync(cachePath);
 
       if (!info.exists) {

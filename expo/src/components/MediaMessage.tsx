@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system/legacy';
 
 import { openDocumentFile } from '../services/documentViewer';
+import { getCategoryPath, MediaCategory } from '../services/storageManager';
 
 interface MediaMessageProps {
   messageId: string;
@@ -43,8 +44,11 @@ export const MediaMessage: React.FC<MediaMessageProps> = ({
   const [localUri, setLocalUri] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
 
-  const fileExtension = mediaType === 'video' ? 'mp4' : mediaType === 'audio' ? 'm4a' : 'jpg';
-  const localCachePath = `${FileSystem.documentDirectory}media_${messageId}.${fileExtension}`;
+  const category: MediaCategory = mediaType === 'video' ? 'videos' : mediaType === 'audio' ? 'audio' : mediaType === 'document' ? 'documents' : 'images';
+  const fileExtension = mediaType === 'video' ? 'mp4' : mediaType === 'audio' ? 'm4a' : mediaType === 'document' ? (text?.split('.').pop() || 'pdf') : 'jpg';
+  const filename = `media_${messageId}.${fileExtension}`;
+  const localCachePath = getCategoryPath(category, filename);
+  const legacyCachePath = `${FileSystem.documentDirectory}${filename}`;
 
   useEffect(() => {
     const checkCache = async () => {
@@ -59,10 +63,18 @@ export const MediaMessage: React.FC<MediaMessageProps> = ({
         if (info.exists) {
           setIsDownloaded(true);
           setLocalUri(localCachePath);
-        } else {
-          setIsDownloaded(false);
-          setLocalUri(null);
+          return;
         }
+
+        const legacyInfo = await FileSystem.getInfoAsync(legacyCachePath);
+        if (legacyInfo.exists) {
+          setIsDownloaded(true);
+          setLocalUri(legacyCachePath);
+          return;
+        }
+
+        setIsDownloaded(false);
+        setLocalUri(null);
       } catch (e) {
         console.error('Cache check failed:', e);
       }
