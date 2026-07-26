@@ -210,6 +210,7 @@ export async function sendMessageHttp(req: AuthenticatedRequest, res: Response) 
       mediaSize,
       mediaWidth,
       mediaHeight,
+      linkPreview: req.body.linkPreview || null,
     });
     await message.save();
 

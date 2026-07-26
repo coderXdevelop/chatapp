@@ -52,10 +52,12 @@ const MemoizedMessageItemComponent: React.FC<MemoizedMessageItemProps> = ({
   uploadProgress,
   onReply,
   onLongPress,
+  onReact,
   onSelect,
   onMediaPress,
   onCancelUpload,
 }) => {
+  const [showQuickReactions, setShowQuickReactions] = React.useState(false);
   const translateX = useSharedValue(0);
   const hasVibrated = useSharedValue(false);
 
@@ -124,9 +126,31 @@ const MemoizedMessageItemComponent: React.FC<MemoizedMessageItemProps> = ({
         </Animated.View>
 
         <View style={[styles.messageRowWrapper, isSelected && styles.selectedRowHighlight]}>
+          {/* Floating Quick Emoji Reaction Bar */}
+          {showQuickReactions && !item.isDeleted && (
+            <View style={[styles.floatingReactionToolbar, isMe ? styles.myFloatingToolbar : styles.otherFloatingToolbar]}>
+              {['👍', '❤️', '😂', '😮', '😢', '🙏'].map((emoji) => (
+                <TouchableOpacity
+                  key={emoji}
+                  onPress={() => {
+                    if (onReact) onReact(emoji);
+                    setShowQuickReactions(false);
+                    triggerHaptic();
+                  }}
+                  style={styles.floatingEmojiItem}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.floatingEmojiText}>{emoji}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
           <TouchableOpacity
             onPress={() => {
-              if (isSelectionMode) {
+              if (showQuickReactions) {
+                setShowQuickReactions(false);
+              } else if (isSelectionMode) {
                 onSelect(item._id);
               }
             }}
@@ -134,6 +158,7 @@ const MemoizedMessageItemComponent: React.FC<MemoizedMessageItemProps> = ({
               if (isSelectionMode) {
                 onSelect(item._id);
               } else {
+                setShowQuickReactions((prev) => !prev);
                 onLongPress(item);
               }
             }}
@@ -303,7 +328,9 @@ const arePropsEqual = (prevProps: MemoizedMessageItemProps, nextProps: MemoizedM
     prevProps.isHighlighted === nextProps.isHighlighted &&
     prevProps.uploadProgress === nextProps.uploadProgress &&
     prevProps.isMe === nextProps.isMe &&
-    prevProps.isGroup === nextProps.isGroup
+    prevProps.isGroup === nextProps.isGroup &&
+    JSON.stringify(prevProps.item.reactions) === JSON.stringify(nextProps.item.reactions) &&
+    JSON.stringify(prevProps.item.linkPreview) === JSON.stringify(nextProps.item.linkPreview)
   );
 };
 
@@ -550,36 +577,69 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 14,
   },
+  floatingReactionToolbar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0F172A',
+    borderRadius: 24,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1.5,
+    borderColor: '#334155',
+    marginVertical: 4,
+    gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    elevation: 8,
+    zIndex: 99,
+  },
+  myFloatingToolbar: {
+    alignSelf: 'flex-end',
+    marginRight: 8,
+  },
+  otherFloatingToolbar: {
+    alignSelf: 'flex-start',
+    marginLeft: 8,
+  },
+  floatingEmojiItem: {
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+  },
+  floatingEmojiText: {
+    fontSize: 22,
+  },
   reactionsBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    position: 'absolute',
-    bottom: -10,
-    gap: 3,
+    marginTop: 4,
+    gap: 4,
     backgroundColor: '#1E293B',
     borderRadius: 12,
-    paddingHorizontal: 5,
+    paddingHorizontal: 6,
     paddingVertical: 2,
-    borderWidth: 1.5,
-    borderColor: '#0F172A',
+    borderWidth: 1,
+    borderColor: '#334155',
+    alignSelf: 'flex-start',
   },
   myReactionsBadge: {
-    right: 8,
+    alignSelf: 'flex-end',
   },
   otherReactionsBadge: {
-    left: 8,
+    alignSelf: 'flex-start',
   },
   reactionPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    gap: 3,
   },
   reactionEmojiText: {
-    fontSize: 12,
+    fontSize: 13,
   },
   reactionCountText: {
     color: '#F8FAFC',
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '800',
   },
 });

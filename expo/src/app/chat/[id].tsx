@@ -240,10 +240,15 @@ export default function ChatScreen() {
       }
     } else {
       let linkPreviewData: any = undefined;
-      const urlMatch = messageText.match(/(https?:\/\/[^\s]+)/gi);
+      const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+|[a-zA-Z0-9-]+\.(?:com|org|net|io|dev|app|co|in|edu|gov|me|ai)(?:\/[^\s]*)?)/gi;
+      const urlMatch = messageText.match(urlRegex);
       if (urlMatch && urlMatch[0]) {
+        let rawUrl = urlMatch[0];
+        if (!rawUrl.startsWith('http://') && !rawUrl.startsWith('https://')) {
+          rawUrl = `https://${rawUrl}`;
+        }
         try {
-          const previewRes = await api.post('/api/media/link-preview', { url: urlMatch[0] });
+          const previewRes = await api.post('/api/media/link-preview', { url: rawUrl });
           if (previewRes.data && previewRes.data.url) {
             linkPreviewData = previewRes.data;
           }

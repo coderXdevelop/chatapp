@@ -17,6 +17,23 @@ export async function getCloudinarySignature(req: AuthenticatedRequest, res: Res
 }
 
 /**
+ * Extracts a meta property value safely regardless of attribute order (e.g. content before property)
+ */
+function extractMetaTag(html: string, key: string): string {
+  const regexes = [
+    new RegExp(`<meta[^>]*(?:property|name)=["'](?:og:|twitter:)?${key}["'][^>]*content=["']([^"']+)["']`, 'i'),
+    new RegExp(`<meta[^>]*content=["']([^"']+)["'][^>]*(?:property|name)=["'](?:og:|twitter:)?${key}["']`, 'i'),
+  ];
+  for (const reg of regexes) {
+    const match = html.match(reg);
+    if (match && match[1]) {
+      return match[1].trim();
+    }
+  }
+  return '';
+}
+
+/**
  * Parses OpenGraph metadata (title, description, image, domain) from a given URL for rich link previews.
  */
 export async function getLinkPreview(req: AuthenticatedRequest, res: Response) {
@@ -26,7 +43,11 @@ export async function getLinkPreview(req: AuthenticatedRequest, res: Response) {
   }
 
   try {
-    const targetUrl = url.startsWith('http://') || url.startsWith('https://') ? url : `https://${url}`;
+    let targetUrl = url.trim();
+    if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+      targetUrl = `https://${targetUrl}`;
+    }
+
     const domain = new URL(targetUrl).hostname.replace(/^www\./, '');
 
     const controller = new AbortController();
@@ -34,8 +55,10 @@ export async function getLinkPreview(req: AuthenticatedRequest, res: Response) {
 
     const response = await fetch(targetUrl, {
       signal: controller.signal,
+      redirect: 'follow',
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       },
     });
 
@@ -53,15 +76,14 @@ export async function getLinkPreview(req: AuthenticatedRequest, res: Response) {
 
     const html = await response.text();
 
-    const titleMatch = html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i) ||
-                       html.match(/<title[^>]*>([^<]+)<\/title>/i);
-    const descMatch = html.match(/<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']+)["']/i) ||
-                      html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i);
-    const imgMatch = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i);
+    let title = extractMetaTag(html, 'title');
+    if (!title) {
+      const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+      title = titleMatch ? titleMatch[1]?.trim() || '' : '';
+    }
 
-    const title = titleMatch ? titleMatch[1]?.trim() : domain;
-    const description = descMatch ? descMatch[1]?.trim() : '';
-    let image = imgMatch ? imgMatch[1]?.trim() : '';
+    let description = extractMetaTag(html, 'description');
+    let image = extractMetaTag(html, 'image');
 
     if (image && !image.startsWith('http')) {
       const origin = new URL(targetUrl).origin;
@@ -70,24 +92,26 @@ export async function getLinkPreview(req: AuthenticatedRequest, res: Response) {
 
     return res.json({
       url: targetUrl,
-      domain,
-      title: title || domain,
+      domain: domain || 'Link',
+      title: title || domain || targetUrl,
       description: description || '',
       image: image || '',
     });
   } catch (error: any) {
     console.warn('[MediaController] Link preview fetch timeout or error:', error?.message || error);
     try {
-      const fallbackDomain = new URL(url.startsWith('http') ? url : `https://${url}`).hostname.replace(/^www\./, '');
+      const cleanUrl = url.trim();
+      const targetUrl = cleanUrl.startsWith('http') ? cleanUrl : `https://${cleanUrl}`;
+      const fallbackDomain = new URL(targetUrl).hostname.replace(/^www\./, '');
       return res.json({
-        url,
-        domain: fallbackDomain,
-        title: fallbackDomain,
+        url: targetUrl,
+        domain: fallbackDomain || 'Link',
+        title: fallbackDomain || cleanUrl,
         description: '',
         image: '',
       });
     } catch (e) {
-      return res.json({ url, domain: '', title: url, description: '', image: '' });
+      return res.json({ url, domain: 'Link', title: url, description: '', image: '' });
     }
   }
 }
