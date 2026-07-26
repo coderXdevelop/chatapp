@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Dimensions,
 } from 'react-native';
+import EmojiSelector from 'react-native-emoji-selector';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../styles/theme';
@@ -17,51 +18,6 @@ import { fetchTrendingGifs, searchGifs, GiphyGifItem, GIF_CATEGORIES } from '../
 import { STICKER_PACKS } from '../services/stickerPacks';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-// Categorized Emojis
-const EMOJI_CATEGORIES = [
-  {
-    name: 'Smileys & Emotion',
-    icon: '😀',
-    emojis: [
-      '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '🥹', '😊',
-      '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😙',
-      '😚', '😋', '😛', '😝', '😜', '🤪', '🤨', '🧐', '🤓', '😎',
-      '🥸', '🤩', '🥳', '😏', '😒', '😞', '😔', '😟', '😕', '🙁',
-      '😣', '😖', '😫', '😩', '🥺', '😢', '😭', '😮‍💨', '😤', '😠',
-    ],
-  },
-  {
-    name: 'Gestures & Hearts',
-    icon: '❤️',
-    emojis: [
-      '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔',
-      '❤️‍🔥', '💖', '💗', '💓', '💞', '💕', '👍', '👎', '👏', '🙌',
-      '🫶', '👐', '🤲', '🤝', '🙏', '✌️', '🫰', '🤙', '👈', '👉',
-      '👆', '👇', '☝️', '🖐️', '✋', '🖖', '👋', '💪', '🧠', '🫀',
-    ],
-  },
-  {
-    name: 'Animals & Nature',
-    icon: '🐶',
-    emojis: [
-      '🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐻‍❄️', '🐨',
-      '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🙈', '🙉', '🙊', '🐒',
-      '🐔', '🐧', '🐦', '🐤', '🐣', '🐥', '🦆', '🦅', '🦉', '🦇',
-      '🔥', '✨', '🌟', '💫', '⚡️', '🌈', '☀️', '🌤️', '⛅️', '☁️',
-    ],
-  },
-  {
-    name: 'Food & Objects',
-    icon: '🍕',
-    emojis: [
-      '🍕', '🍔', '🍟', '🌭', '🍿', '🥓', '🍳', '🧇', '🥞', '🧈',
-      '🍞', '🥐', '🥖', '🫓', '🥨', '🥯', '🍩', '🍪', '🎂', '🍰',
-      '🧁', '🥧', '🍫', '🍬', '🍭', '🍺', '🍻', '🥂', '🍷', '🥃',
-      '🚀', '🏆', '🎉', '🎁', '⚽️', '🏀', '🎮', '💡', '💣', '💵',
-    ],
-  },
-];
 
 interface EmojiGifStickerPickerProps {
   visible: boolean;
@@ -81,10 +37,6 @@ export const EmojiGifStickerPicker: React.FC<EmojiGifStickerPickerProps> = ({
   onSelectSticker,
 }) => {
   const [activeTab, setActiveTab] = useState<PickerTab>('emoji');
-
-  // Emoji state
-  const [emojiSearch, setEmojiSearch] = useState('');
-  const [selectedEmojiCategory, setSelectedEmojiCategory] = useState(0);
 
   // GIF state
   const [gifQuery, setGifQuery] = useState('');
@@ -125,14 +77,6 @@ export const EmojiGifStickerPicker: React.FC<EmojiGifStickerPickerProps> = ({
 
   if (!visible) return null;
 
-  const filteredEmojiCategories = EMOJI_CATEGORIES.map((cat) => {
-    if (!emojiSearch.trim()) return cat;
-    return {
-      ...cat,
-      emojis: cat.emojis.filter((e) => e.includes(emojiSearch.trim())),
-    };
-  }).filter((cat) => cat.emojis.length > 0);
-
   return (
     <View style={styles.sheetContainer}>
       {/* Top Header Tab Switcher */}
@@ -165,42 +109,18 @@ export const EmojiGifStickerPicker: React.FC<EmojiGifStickerPickerProps> = ({
         </TouchableOpacity>
       </View>
 
-      {/* TAB 1: EMOJI PICKER */}
+      {/* TAB 1: EMOJI PICKER (Powered by react-native-emoji-selector) */}
       {activeTab === 'emoji' && (
-        <View style={styles.tabContent}>
-          {/* Emoji Category Sub-bar */}
-          <View style={styles.categorySubBar}>
-            {EMOJI_CATEGORIES.map((cat, idx) => (
-              <TouchableOpacity
-                key={cat.name}
-                onPress={() => setSelectedEmojiCategory(idx)}
-                style={[
-                  styles.categoryIconBtn,
-                  selectedEmojiCategory === idx && styles.categoryIconBtnActive,
-                ]}
-              >
-                <Text style={{ fontSize: 18 }}>{cat.icon}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {/* Emoji Grid List */}
-          <FlatList
-            data={
-              filteredEmojiCategories[selectedEmojiCategory]?.emojis ||
-              EMOJI_CATEGORIES[0].emojis
-            }
-            keyExtractor={(item, index) => `emoji_${item}_${index}`}
-            numColumns={8}
-            contentContainerStyle={styles.emojiGridContent}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                onPress={() => onSelectEmoji(item)}
-                style={styles.emojiItem}
-              >
-                <Text style={styles.emojiText}>{item}</Text>
-              </TouchableOpacity>
-            )}
+        <View style={styles.emojiSelectorWrapper}>
+          <EmojiSelector
+            onEmojiSelected={(emoji) => onSelectEmoji(emoji)}
+            showTabs={true}
+            showSearchBar={true}
+            showHistory={true}
+            showSectionTitles={false}
+            columns={8}
+            placeholder="Search emoji..."
+            theme={COLORS.primary}
           />
         </View>
       )}
@@ -333,7 +253,7 @@ export const EmojiGifStickerPicker: React.FC<EmojiGifStickerPickerProps> = ({
 
 const styles = StyleSheet.create({
   sheetContainer: {
-    height: 295,
+    height: 310,
     backgroundColor: COLORS.cardBackground,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
@@ -369,36 +289,12 @@ const styles = StyleSheet.create({
   closeBtn: {
     padding: 6,
   },
+  emojiSelectorWrapper: {
+    flex: 1,
+    backgroundColor: COLORS.cardBackground,
+  },
   tabContent: {
     flex: 1,
-  },
-  categorySubBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    paddingVertical: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.05)',
-  },
-  categoryIconBtn: {
-    padding: 6,
-    borderRadius: 12,
-  },
-  categoryIconBtnActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  emojiGridContent: {
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-  },
-  emojiItem: {
-    width: (SCREEN_WIDTH - 16) / 8,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  emojiText: {
-    fontSize: 24,
   },
   searchBarContainer: {
     flexDirection: 'row',
