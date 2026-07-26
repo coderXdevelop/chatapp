@@ -69,6 +69,8 @@ export default function ChatScreen() {
     unblockUser,
     submitReport,
     searchMessages,
+    toggleStarMessage,
+    togglePinMessage,
   } = useChatStore();
 
   const [text, setText] = useState('');
@@ -845,6 +847,30 @@ export default function ChatScreen() {
         onPress: () => {
           setEditingMessage(singleMsg);
           setText(singleMsg.text || '');
+          setIsSelectionMode(false);
+          setSelectedMessageIds([]);
+        },
+      });
+    }
+
+    if (singleMsg) {
+      const isStarred = singleMsg.starredByUsers?.includes(user?.id as any);
+      options.push({
+        text: isStarred ? '⭐ Unstar Message' : '⭐ Star Message',
+        onPress: async () => {
+          await toggleStarMessage(chatId!, singleMsg._id);
+          setIsSelectionMode(false);
+          setSelectedMessageIds([]);
+        },
+      });
+
+      options.push({
+        text: '📌 Pin / Unpin Message',
+        onPress: async () => {
+          const res = await togglePinMessage(chatId!, singleMsg._id);
+          if (res) {
+            Alert.alert('Message Pin', res.isPinned ? 'Message pinned to chat top.' : 'Message unpinned.');
+          }
           setIsSelectionMode(false);
           setSelectedMessageIds([]);
         },

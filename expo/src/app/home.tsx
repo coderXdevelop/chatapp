@@ -33,11 +33,12 @@ interface SearchUser {
 export default function HomeScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
-  const { chats, fetchChats, connectSocket, socketConnected } = useChatStore();
+  const { chats, fetchChats, connectSocket, socketConnected, activeStatuses, fetchStatusFeed } = useChatStore();
 
   const [activeTab, setActiveTab] = useState<'HOME' | 'PROFILE' | 'HELP'>('HOME');
   const [filterTab, setFilterTab] = useState<'ALL' | 'CHATS' | 'GROUPS' | 'FAVOURITES'>('ALL');
   const [selectedChatIds, setSelectedChatIds] = useState<string[]>([]);
+  const [globalSearchQuery, setGlobalSearchQuery] = useState('');
 
   const isSelectionMode = selectedChatIds.length > 0;
 
@@ -50,10 +51,12 @@ export default function HomeScreen() {
   useEffect(() => {
     connectSocket();
     fetchChats().finally(() => setInitialLoading(false));
+    fetchStatusFeed();
 
     const interval = setInterval(() => {
       if (activeTab === 'HOME') {
         fetchChats();
+        fetchStatusFeed();
       }
     }, 15000);
 
@@ -85,6 +88,19 @@ export default function HomeScreen() {
   };
 
   const filteredChats = chats.filter((item) => {
+    if (globalSearchQuery.trim()) {
+      const q = globalSearchQuery.trim().toLowerCase();
+      const partner = item.participants.find((p) => p._id !== user?.id);
+      const nameMatch = (item.isGroup ? item.name : partner?.displayName)?.toLowerCase().includes(q);
+      const emailMatch = partner?.email?.toLowerCase().includes(q);
+      const idMatch = partner?.connectId?.toLowerCase().includes(q);
+      const msgMatch = item.lastMessage?.text?.toLowerCase().includes(q);
+
+      if (!nameMatch && !emailMatch && !idMatch && !msgMatch) {
+        return false;
+      }
+    }
+
     if (filterTab === 'CHATS') return !item.isGroup;
     if (filterTab === 'GROUPS') return !!item.isGroup;
     if (filterTab === 'FAVOURITES') return !!item.isFavourite;
@@ -192,6 +208,101 @@ export default function HomeScreen() {
                 </View>
               </View>
             )}
+
+            {/* Global Search Bar */}
+            <View style={{ marginBottom: 16 }}>
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: '#0F172A',
+                borderRadius: 14,
+                paddingHorizontal: 14,
+                height: 44,
+                borderWidth: 1,
+                borderColor: '#1E293B',
+              }}>
+                <Text style={{ fontSize: 16, marginRight: 8 }}>🔍</Text>
+                <TextInput
+                  style={{ flex: 1, color: '#F8FAFC', fontSize: 14 }}
+                  placeholder="Search chats, contacts, or messages..."
+                  placeholderTextColor="#64748B"
+                  value={globalSearchQuery}
+                  onChangeText={setGlobalSearchQuery}
+                />
+                {globalSearchQuery ? (
+                  <TouchableOpacity onPress={() => setGlobalSearchQuery('')}>
+                    <Text style={{ color: '#64748B', fontSize: 16 }}>✕</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+            </View>
+
+            {/* Status / Stories Bar */}
+            <View style={{ marginBottom: 18 }}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 14 }}>
+                {/* My Status Item */}
+                <TouchableOpacity
+                  style={{ alignItems: 'center', width: 64 }}
+                  onPress={() => {
+                    const myStory = activeStatuses.find((s) => s.user?._id === user?.id);
+                    if (myStory) {
+                      router.push(`/status/view?userId=${user?.id}` as any);
+                    } else {
+                      router.push('/status/create' as any);
+                    }
+                  }}
+                >
+                  <View style={{ position: 'relative', width: 54, height: 54 }}>
+                    <Image
+                      source={{ uri: user?.avatarUrl || 'https://via.placeholder.com/150' }}
+                      style={{ width: 54, height: 54, borderRadius: 27, borderWidth: 2, borderColor: '#F59E0B' }}
+                    />
+                    <TouchableOpacity
+                      style={{
+                        position: 'absolute',
+                        bottom: -2,
+                        right: -2,
+                        width: 20,
+                        height: 20,
+                        borderRadius: 10,
+                        backgroundColor: '#F59E0B',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        borderWidth: 1.5,
+                        borderColor: '#030712',
+                      }}
+                      onPress={() => router.push('/status/create' as any)}
+                    >
+                      <Text style={{ color: '#0F172A', fontSize: 12, fontWeight: 'bold' }}>+</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={{ color: '#F8FAFC', fontSize: 11, marginTop: 4, fontWeight: '600' }} numberOfLines={1}>
+                    My Status
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Contact Stories */}
+                {activeStatuses
+                  .filter((group) => group.user?._id !== user?.id)
+                  .map((group) => (
+                    <TouchableOpacity
+                      key={group.user._id}
+                      style={{ alignItems: 'center', width: 64 }}
+                      onPress={() => router.push(`/status/view?userId=${group.user._id}` as any)}
+                    >
+                      <View style={{ width: 54, height: 54, borderRadius: 27, padding: 2, borderWidth: 2, borderColor: '#F59E0B' }}>
+                        <Image
+                          source={{ uri: group.user?.avatarUrl || 'https://via.placeholder.com/150' }}
+                          style={{ width: '100%', height: '100%', borderRadius: 25 }}
+                        />
+                      </View>
+                      <Text style={{ color: '#F8FAFC', fontSize: 11, marginTop: 4, fontWeight: '600' }} numberOfLines={1}>
+                        {group.user?.displayName || 'Contact'}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+              </ScrollView>
+            </View>
 
             {/* Top Filter Chips */}
             <View style={styles.filterContainer}>

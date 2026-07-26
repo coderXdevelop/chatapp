@@ -42,6 +42,7 @@ export interface Message {
     text: string;
   } | null;
   isForwarded?: boolean;
+  starredByUsers?: string[];
   createdAt: string;
 }
 
@@ -80,6 +81,8 @@ interface ChatState {
   activeChatId: string | null;
   typingStates: Record<string, string[]>;
   blockedUsers: any[];
+  starredMessages: Message[];
+  activeStatuses: Array<{ user: any; items: any[] }>;
 
   enterChatRoom: (chatId: string) => void;
   leaveChatRoom: (chatId: string) => void;
@@ -145,6 +148,13 @@ interface ChatState {
   clearChat: (chatId: string) => Promise<boolean>;
   toggleFavoriteChat: (chatId: string) => Promise<boolean>;
   deleteChats: (chatIds: string[]) => Promise<boolean>;
+  toggleStarMessage: (chatId: string, messageId: string) => Promise<boolean>;
+  togglePinMessage: (chatId: string, messageId: string) => Promise<any>;
+  fetchStarredMessages: () => Promise<void>;
+  fetchStatusFeed: () => Promise<void>;
+  postStatus: (payload: { text?: string; mediaUrl?: string; mediaType?: 'image' | 'video'; caption?: string; backgroundColor?: string }) => Promise<boolean>;
+  deleteStatus: (statusId: string) => Promise<boolean>;
+  globalSearchAll: (query: string) => Promise<{ chats: Chat[]; messages: Message[] }>;
 }
 
 // Extract base URL from Axios instance configuration
@@ -162,6 +172,8 @@ export const useChatStore = create<ChatState>()(
   activeChatId: null,
   typingStates: {},
   blockedUsers: [],
+  starredMessages: [],
+  activeStatuses: [],
 
   enterChatRoom: (chatId: string) => {
     set({ activeChatId: chatId });
@@ -986,6 +998,89 @@ export const useChatStore = create<ChatState>()(
     } catch (e) {
       console.error('Search messages error:', e);
       return [];
+    }
+  },
+
+  toggleStarMessage: async (chatId, messageId) => {
+    try {
+      const res = await api.post('/api/chats/star-message', { chatId, messageId });
+      if (res.data.success) {
+        get().fetchStarredMessages();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      console.error('Toggle star message error:', e);
+      return false;
+    }
+  },
+
+  togglePinMessage: async (chatId, messageId) => {
+    try {
+      const res = await api.post('/api/chats/pin-message', { chatId, messageId });
+      if (res.data.success) {
+        return res.data;
+      }
+      return null;
+    } catch (e) {
+      console.error('Toggle pin message error:', e);
+      return null;
+    }
+  },
+
+  fetchStarredMessages: async () => {
+    try {
+      const res = await api.get('/api/chats/starred-messages');
+      set({ starredMessages: res.data.starredMessages || [] });
+    } catch (e) {
+      console.error('Fetch starred messages error:', e);
+    }
+  },
+
+  fetchStatusFeed: async () => {
+    try {
+      const res = await api.get('/api/status/feed');
+      set({ activeStatuses: res.data.feed || [] });
+    } catch (e) {
+      console.error('Fetch status feed error:', e);
+    }
+  },
+
+  postStatus: async (payload) => {
+    try {
+      const res = await api.post('/api/status', payload);
+      if (res.status === 201) {
+        get().fetchStatusFeed();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      console.error('Post status error:', e);
+      return false;
+    }
+  },
+
+  deleteStatus: async (statusId) => {
+    try {
+      const res = await api.delete(`/api/status/${statusId}`);
+      if (res.status === 200) {
+        get().fetchStatusFeed();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      console.error('Delete status error:', e);
+      return false;
+    }
+  },
+
+  globalSearchAll: async (query) => {
+    try {
+      const res = await api.get('/api/chats/global-search', { params: { query } });
+      return res.data || { chats: [], messages: [] };
+    } catch (e) {
+      console.error('Global search error:', e);
+      return { chats: [], messages: [] };
     }
   },
     }),

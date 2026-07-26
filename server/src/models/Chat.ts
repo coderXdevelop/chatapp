@@ -12,6 +12,7 @@ export interface IChat extends Document {
   admins: mongoose.Types.ObjectId[];
   favourites?: mongoose.Types.ObjectId[];
   deletedForUsers?: mongoose.Types.ObjectId[];
+  pinnedMessages?: mongoose.Types.ObjectId[];
   isFavourite?: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -73,6 +74,12 @@ const ChatSchema: Schema = new Schema(
       {
         type: Schema.Types.ObjectId,
         ref: 'User',
+      },
+    ],
+    pinnedMessages: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: 'Message',
       },
     ],
   },

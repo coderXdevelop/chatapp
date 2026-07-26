@@ -936,3 +936,165 @@ export async function deleteChats(req: AuthenticatedRequest, res: Response) {
   }
 }
 
+export async function toggleStarMessage(req: AuthenticatedRequest, res: Response) {
+  const userId = req.user?.userId;
+  const { chatId, messageId } = req.body;
+
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+  if (!chatId || !messageId) {
+    return res.status(400).json({ message: 'chatId and messageId required' });
+  }
+
+  try {
+    const chat = await Chat.findOne({ _id: chatId, participants: userId });
+    if (!chat) return res.status(403).json({ message: 'Unauthorized or chat not found' });
+
+    const message = await Message.findOne({ _id: messageId, chat: chatId });
+    if (!message) return res.status(404).json({ message: 'Message not found' });
+
+    if (!message.starredByUsers) message.starredByUsers = [];
+
+    const userObjId = userId as any;
+    const existsIdx = message.starredByUsers.findIndex((u) => u.toString() === userId);
+    let isStarred = false;
+
+    if (existsIdx > -1) {
+      message.starredByUsers.splice(existsIdx, 1);
+      isStarred = false;
+    } else {
+      message.starredByUsers.push(userObjId);
+      isStarred = true;
+    }
+
+    await message.save();
+
+    return res.status(200).json({
+      success: true,
+      messageId,
+      isStarred,
+    });
+  } catch (error: any) {
+    return res.status(500).json({ message: 'Error toggling starred message', error: error.message });
+  }
+}
+
+export async function togglePinMessage(req: AuthenticatedRequest, res: Response) {
+  const userId = req.user?.userId;
+  const { chatId, messageId } = req.body;
+
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+  if (!chatId || !messageId) {
+    return res.status(400).json({ message: 'chatId and messageId required' });
+  }
+
+  try {
+    const chat = await Chat.findOne({ _id: chatId, participants: userId });
+    if (!chat) return res.status(403).json({ message: 'Unauthorized or chat not found' });
+
+    const message = await Message.findOne({ _id: messageId, chat: chatId });
+    if (!message) return res.status(404).json({ message: 'Message not found' });
+
+    if (!chat.pinnedMessages) chat.pinnedMessages = [];
+
+    const msgObjId = message._id as any;
+    const existsIdx = chat.pinnedMessages.findIndex((m) => m.toString() === messageId);
+    let isPinned = false;
+
+    if (existsIdx > -1) {
+      chat.pinnedMessages.splice(existsIdx, 1);
+      isPinned = false;
+    } else {
+      if (chat.pinnedMessages.length >= 3) {
+        chat.pinnedMessages.shift(); // Keep maximum 3 pinned messages
+      }
+      chat.pinnedMessages.push(msgObjId);
+      isPinned = true;
+    }
+
+    await chat.save();
+
+    const populatedChat = await Chat.findById(chatId).populate({
+      path: 'pinnedMessages',
+      populate: { path: 'sender', select: 'displayName avatarUrl' },
+    });
+
+    return res.status(200).json({
+      success: true,
+      messageId,
+      isPinned,
+      pinnedMessages: populatedChat?.pinnedMessages || [],
+    });
+  } catch (error: any) {
+    return res.status(500).json({ message: 'Error toggling pinned message', error: error.message });
+  }
+}
+
+export async function getStarredMessages(req: AuthenticatedRequest, res: Response) {
+  const userId = req.user?.userId;
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+  try {
+    const starredMessages = await Message.find({
+      starredByUsers: userId,
+      deletedForUsers: { $ne: userId },
+    })
+      .sort({ createdAt: -1 })
+      .populate('sender', 'displayName avatarUrl email connectId')
+      .populate('chat', 'name isGroup avatarUrl participants');
+
+    return res.status(200).json({ starredMessages });
+  } catch (error: any) {
+    return res.status(500).json({ message: 'Error fetching starred messages', error: error.message });
+  }
+}
+
+export async function globalSearch(req: AuthenticatedRequest, res: Response) {
+  const userId = req.user?.userId;
+  const { query } = req.query;
+
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+  if (!query || typeof query !== 'string' || !query.trim()) {
+    return res.status(200).json({ chats: [], contacts: [], messages: [] });
+  }
+
+  const q = query.trim();
+  const regex = new RegExp(q, 'i');
+
+  try {
+    // 1. Search chats
+    const userChats = await Chat.find({
+      participants: userId,
+      deletedForUsers: { $ne: userId },
+    }).populate('participants', 'displayName email avatarUrl status connectId');
+
+    const matchingChats = userChats.filter((chat) => {
+      if (chat.isGroup && chat.name && regex.test(chat.name)) return true;
+      const partner = (chat.participants as any[]).find((p: any) => p && p._id && p._id.toString() !== userId);
+      if (partner && (regex.test(partner.displayName || '') || regex.test(partner.email || '') || (partner.connectId && regex.test(partner.connectId)))) {
+        return true;
+      }
+      return false;
+    });
+
+    // 2. Search message contents
+    const userChatIds = userChats.map((c) => c._id);
+    const matchingMessages = await Message.find({
+      chat: { $in: userChatIds },
+      text: { $regex: regex },
+      deletedForUsers: { $ne: userId },
+    })
+      .sort({ createdAt: -1 })
+      .limit(30)
+      .populate('sender', 'displayName avatarUrl')
+      .populate('chat', 'name isGroup avatarUrl');
+
+    return res.status(200).json({
+      chats: matchingChats,
+      messages: matchingMessages,
+    });
+  } catch (error: any) {
+    return res.status(500).json({ message: 'Error performing global search', error: error.message });
+  }
+}
+
+

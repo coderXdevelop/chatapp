@@ -19,6 +19,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '../store/authStore';
 import { COLORS, globalStyles } from '../styles/theme';
+import { QRCodeModal } from '../components/QRCodeModal';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -37,6 +38,7 @@ export default function ProfileScreen() {
   const [currentView, setCurrentView] = useState<'MAIN' | 'PERSONAL_INFO'>('MAIN');
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   const [isResetLoading, setIsResetLoading] = useState(false);
+  const [isQRModalOpen, setIsQRModalOpen] = useState(false);
 
   // Profile Edit fields
   const [newDisplayName, setNewDisplayName] = useState('');
@@ -258,6 +260,40 @@ export default function ProfileScreen() {
                   <Text style={styles.menuIcon}>👤</Text>
                 </View>
                 <Text style={styles.menuItemText}>Personal Information</Text>
+              </View>
+              <Text style={styles.menuChevron}>›</Text>
+            </TouchableOpacity>
+
+            <View style={styles.divider} />
+
+            {/* My QR Code */}
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => setIsQRModalOpen(true)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.menuItemLeft}>
+                <View style={styles.iconCircle}>
+                  <Text style={styles.menuIcon}>📷</Text>
+                </View>
+                <Text style={styles.menuItemText}>My QR Code & Share</Text>
+              </View>
+              <Text style={styles.menuChevron}>›</Text>
+            </TouchableOpacity>
+
+            <View style={styles.divider} />
+
+            {/* Starred Messages */}
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => router.push('/starred-messages' as any)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.menuItemLeft}>
+                <View style={styles.iconCircle}>
+                  <Text style={styles.menuIcon}>⭐</Text>
+                </View>
+                <Text style={styles.menuItemText}>Starred Messages</Text>
               </View>
               <Text style={styles.menuChevron}>›</Text>
             </TouchableOpacity>
@@ -567,6 +603,13 @@ export default function ProfileScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* QR Code Modal Component */}
+      <QRCodeModal
+        visible={isQRModalOpen}
+        onClose={() => setIsQRModalOpen(false)}
+        user={user}
+      />
     </SafeAreaView>
   );
 }

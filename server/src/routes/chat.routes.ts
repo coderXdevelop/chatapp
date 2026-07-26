@@ -14,7 +14,11 @@ import {
   searchMessages,
   clearChat,
   toggleFavoriteChat,
-  deleteChats
+  deleteChats,
+  toggleStarMessage,
+  togglePinMessage,
+  getStarredMessages,
+  globalSearch
 } from '../controllers/chat.controller.js';
 import { authenticateJWT } from '../middleware/auth.middleware.js';
 
@@ -26,6 +30,12 @@ router.get('/', getChats);
 router.post('/', createChat);
 router.post('/forward', forwardMessages);
 router.post('/delete-multiple', deleteChats);
+
+// New Feature Routes
+router.post('/star-message', toggleStarMessage);
+router.post('/pin-message', togglePinMessage);
+router.get('/starred-messages', getStarredMessages);
+router.get('/global-search', globalSearch);
 
 // Group management routes
 router.post('/group', createGroup);
