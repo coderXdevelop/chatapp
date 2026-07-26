@@ -6,18 +6,19 @@ import {
   TouchableOpacity,
   TextInput,
   FlatList,
+  ScrollView,
   ActivityIndicator,
   Dimensions,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../styles/theme';
-import { fetchTrendingGifs, searchGifs, GiphyGifItem } from '../services/giphyService';
-import { STICKER_PACKS, StickerItem } from '../services/stickerPacks';
+import { fetchTrendingGifs, searchGifs, GiphyGifItem, GIF_CATEGORIES } from '../services/giphyService';
+import { STICKER_PACKS } from '../services/stickerPacks';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-// Popular categorized emojis
+// Categorized Emojis
 const EMOJI_CATEGORIES = [
   {
     name: 'Smileys & Emotion',
@@ -87,6 +88,7 @@ export const EmojiGifStickerPicker: React.FC<EmojiGifStickerPickerProps> = ({
 
   // GIF state
   const [gifQuery, setGifQuery] = useState('');
+  const [selectedGifCategoryId, setSelectedGifCategoryId] = useState('trending');
   const [gifs, setGifs] = useState<GiphyGifItem[]>([]);
   const [loadingGifs, setLoadingGifs] = useState(false);
 
@@ -111,13 +113,18 @@ export const EmojiGifStickerPicker: React.FC<EmojiGifStickerPickerProps> = ({
     }
   };
 
+  const handleSelectGifCategory = (catId: string, query: string) => {
+    setSelectedGifCategoryId(catId);
+    setGifQuery(query);
+    loadGifs(query);
+  };
+
   const handleGifSearchSubmit = () => {
     loadGifs(gifQuery);
   };
 
   if (!visible) return null;
 
-  // Filter emojis based on search
   const filteredEmojiCategories = EMOJI_CATEGORIES.map((cat) => {
     if (!emojiSearch.trim()) return cat;
     return {
@@ -220,6 +227,31 @@ export const EmojiGifStickerPicker: React.FC<EmojiGifStickerPickerProps> = ({
             )}
           </View>
 
+          {/* GIF Category Pills */}
+          <View style={styles.gifCategoriesPillsBar}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.gifCategoryPillsContent}>
+              {GIF_CATEGORIES.map((cat) => (
+                <TouchableOpacity
+                  key={cat.id}
+                  onPress={() => handleSelectGifCategory(cat.id, cat.query)}
+                  style={[
+                    styles.gifCategoryPill,
+                    selectedGifCategoryId === cat.id && styles.gifCategoryPillActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.gifCategoryPillText,
+                      selectedGifCategoryId === cat.id && styles.gifCategoryPillTextActive,
+                    ]}
+                  >
+                    {cat.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
           {loadingGifs ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="small" color={COLORS.primary} />
@@ -251,29 +283,31 @@ export const EmojiGifStickerPicker: React.FC<EmojiGifStickerPickerProps> = ({
       {/* TAB 3: STICKER PICKER */}
       {activeTab === 'sticker' && (
         <View style={styles.tabContent}>
-          {/* Sticker Pack Tabs */}
+          {/* Scrollable Sticker Pack Tabs */}
           <View style={styles.stickerPackTabBar}>
-            {STICKER_PACKS.map((pack, idx) => (
-              <TouchableOpacity
-                key={pack.id}
-                onPress={() => setSelectedPackIndex(idx)}
-                style={[
-                  styles.stickerPackTabBtn,
-                  selectedPackIndex === idx && styles.stickerPackTabBtnActive,
-                ]}
-              >
-                <Text style={{ fontSize: 18 }}>{pack.icon}</Text>
-                <Text
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 12 }}>
+              {STICKER_PACKS.map((pack, idx) => (
+                <TouchableOpacity
+                  key={pack.id}
+                  onPress={() => setSelectedPackIndex(idx)}
                   style={[
-                    styles.stickerPackTabTitle,
-                    selectedPackIndex === idx && styles.stickerPackTabTitleActive,
+                    styles.stickerPackTabBtn,
+                    selectedPackIndex === idx && styles.stickerPackTabBtnActive,
                   ]}
-                  numberOfLines={1}
                 >
-                  {pack.name}
-                </Text>
-              </TouchableOpacity>
-            ))}
+                  <Text style={{ fontSize: 16 }}>{pack.icon}</Text>
+                  <Text
+                    style={[
+                      styles.stickerPackTabTitle,
+                      selectedPackIndex === idx && styles.stickerPackTabTitleActive,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {pack.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
           </View>
 
           {/* Stickers Grid */}
@@ -299,7 +333,7 @@ export const EmojiGifStickerPicker: React.FC<EmojiGifStickerPickerProps> = ({
 
 const styles = StyleSheet.create({
   sheetContainer: {
-    height: 270,
+    height: 295,
     backgroundColor: COLORS.cardBackground,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
@@ -372,15 +406,43 @@ const styles = StyleSheet.create({
     backgroundColor: '#03050a',
     borderRadius: 18,
     marginHorizontal: 12,
-    marginVertical: 8,
+    marginTop: 6,
+    marginBottom: 4,
     paddingHorizontal: 12,
-    height: 36,
+    height: 34,
   },
   searchInput: {
     flex: 1,
     color: COLORS.textPrimary,
     fontSize: 13,
     marginLeft: 8,
+  },
+  gifCategoriesPillsBar: {
+    height: 32,
+    marginBottom: 4,
+  },
+  gifCategoryPillsContent: {
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    gap: 6,
+  },
+  gifCategoryPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  gifCategoryPillActive: {
+    backgroundColor: COLORS.primary,
+  },
+  gifCategoryPillText: {
+    color: COLORS.textSecondary,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  gifCategoryPillTextActive: {
+    color: COLORS.primaryText,
+    fontWeight: '700',
   },
   loadingContainer: {
     flex: 1,
@@ -393,7 +455,7 @@ const styles = StyleSheet.create({
   },
   gifItem: {
     width: (SCREEN_WIDTH - 28) / 3,
-    height: 100,
+    height: 90,
     borderRadius: 8,
     overflow: 'hidden',
     marginBottom: 6,
@@ -405,12 +467,10 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   stickerPackTabBar: {
-    flexDirection: 'row',
-    paddingHorizontal: 12,
+    height: 40,
     paddingVertical: 6,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255,255,255,0.05)',
-    gap: 12,
   },
   stickerPackTabBtn: {
     flexDirection: 'row',
@@ -426,7 +486,7 @@ const styles = StyleSheet.create({
   },
   stickerPackTabTitle: {
     color: COLORS.textSecondary,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
   },
   stickerPackTabTitleActive: {

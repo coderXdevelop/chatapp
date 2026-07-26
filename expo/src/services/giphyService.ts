@@ -13,6 +13,18 @@ export interface GiphyGifItem {
   height: number;
 }
 
+export const GIF_CATEGORIES = [
+  { id: 'trending', name: '🔥 Trending', query: '' },
+  { id: 'funny', name: '😂 Funny', query: 'funny' },
+  { id: 'love', name: '❤️ Love', query: 'love' },
+  { id: 'yes', name: '👍 Yes', query: 'yes thumbs up' },
+  { id: 'facepalm', name: '🤦 Facepalm', query: 'facepalm' },
+  { id: 'party', name: '🎉 Party', query: 'party celebration' },
+  { id: 'cats', name: '🐱 Cats', query: 'cat meme' },
+  { id: 'sad', name: '🥺 Moods', query: 'sad cry' },
+  { id: 'hype', name: '🚀 Hype', query: 'hype dance' },
+];
+
 export const fetchTrendingGifs = async (limit = 24): Promise<GiphyGifItem[]> => {
   try {
     const response = await axios.get(`${GIPHY_BASE_URL}/trending`, {
@@ -23,7 +35,8 @@ export const fetchTrendingGifs = async (limit = 24): Promise<GiphyGifItem[]> => 
       },
     });
 
-    return formatGiphyResponse(response.data?.data);
+    const items = formatGiphyResponse(response.data?.data);
+    return items.length > 0 ? items : getFallbackGifs();
   } catch (error: any) {
     console.warn('Giphy trending fetch note: returning curated GIFs fallback.');
     return getFallbackGifs();

@@ -153,7 +153,31 @@ export default function ChatScreen() {
   };
 
   const handleTextChange = (val: string) => {
+    // Detect native software keyboard (Gboard/SwiftKey) rich GIF or Sticker URI insertion
+    const trimmed = val.trim();
+    if (
+      trimmed.startsWith('content://') ||
+      trimmed.startsWith('file://') ||
+      ((trimmed.startsWith('http://') || trimmed.startsWith('https://')) &&
+        (trimmed.endsWith('.gif') ||
+          trimmed.endsWith('.webp') ||
+          trimmed.endsWith('.png') ||
+          trimmed.includes('giphy.com/media') ||
+          trimmed.includes('tenor.com/view')))
+    ) {
+      setText('');
+      if (chatId) {
+        const isGif = trimmed.endsWith('.gif') || trimmed.includes('giphy.com') || trimmed.includes('tenor.com');
+        sendMessage(chatId, '', undefined, {
+          url: trimmed,
+          type: isGif ? 'gif' : 'sticker',
+        });
+      }
+      return;
+    }
+
     setText(val);
+
     if (!chatId) return;
 
     if (!isTypingRef.current) {
