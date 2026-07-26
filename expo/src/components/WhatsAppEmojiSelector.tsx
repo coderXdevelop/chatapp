@@ -11,101 +11,10 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../styles/theme';
+import { ALL_EMOJI_CATEGORIES, EmojiItem, EmojiCategory } from '../services/emojiDataset';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const EMOJI_HISTORY_KEY = '@chatconnect_emoji_history';
-
-interface EmojiCategory {
-  id: string;
-  name: string;
-  icon: string;
-  emojis: string[];
-}
-
-const EMOJI_DATA: EmojiCategory[] = [
-  {
-    id: 'smileys',
-    name: 'Smileys & People',
-    icon: '😀',
-    emojis: [
-      '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '🥹', '😊',
-      '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😙',
-      '😚', '😋', '😛', '😝', '😜', '🤪', '🤨', '🧐', '🤓', '😎',
-      '🥸', '🤩', '🥳', '😏', '😒', '😞', '😔', '😟', '😕', '🙁',
-      '😣', '😖', '😫', '😩', '🥺', '😢', '😭', '😮‍💨', '😤', '😠',
-      '😡', '🤬', '🤯', '😳', '🥵', '🥶', '😱', '😨', '😰', '😥',
-      '😓', '🫣', '🤗', '🫡', '🤔', '🫣', '🤭', '🫢', '🫡', '🤫',
-    ],
-  },
-  {
-    id: 'gestures',
-    name: 'Gestures & Hearts',
-    icon: '❤️',
-    emojis: [
-      '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔',
-      '❤️‍🔥', '❤️‍🩹', '💖', '💗', '💓', '💞', '💕', '❣', '💘', '💝',
-      '👍', '👎', '👏', '🙌', '🫶', '👐', '🤲', '🤝', '🙏', '✌️',
-      '🫰', '🤙', '👈', '👉', '👆', '👇', '☝️', '🖐️', '✋', '🖖',
-      '👋', '💪', '🧠', '🫀', '🫁', '👀', '👁️', '👄', '🫦', '👅',
-    ],
-  },
-  {
-    id: 'animals',
-    name: 'Animals & Nature',
-    icon: '🐶',
-    emojis: [
-      '🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐻‍❄️', '🐨',
-      '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🙈', '🙉', '🙊', '🐒',
-      '🐔', '🐧', '🐦', '🐤', '🐣', '🐥', '🦆', '🦅', '🦉', '🦇',
-      '🐺', '🐗', '🐴', '🦄', '🐝', '🪱', '🐛', '🦋', '🐌', '🐞',
-      '🔥', '✨', '🌟', '💫', '⚡️', '🌈', '☀️', '🌤️', '⛅️', '☁️',
-    ],
-  },
-  {
-    id: 'food',
-    name: 'Food & Drink',
-    icon: '🍕',
-    emojis: [
-      '🍕', '🍔', '🍟', '🌭', '🍿', '🥓', '🍳', '🧇', '🥞', '🧈',
-      '🍞', '🥐', '🥖', '🫓', '🥨', '🥯', '🍩', '🍪', '🎂', '🍰',
-      '🧁', '🥧', '🍫', '🍬', '🍭', '🍺', '🍻', '🥂', '🍷', '🥃',
-      '🍸', '🍹', '🧉', '🍾', '🥤', '🧋', '🧃', '☕️', '🍵', '🍶',
-    ],
-  },
-  {
-    id: 'activities',
-    name: 'Activities & Sports',
-    icon: '⚽️',
-    emojis: [
-      '⚽️', '🏀', '🏈', '⚾️', '🥎', '🎾', '🏐', '🏉', '🥏', '🎱',
-      '🪀', '🏓', '🏸', '🏒', '🏑', '🥍', '🏏', '🪃', '🥅', '⛳️',
-      '🪁', '🏹', '🎣', '🤿', '🥊', '🥋', '🎽', '🛹', '🛼', '🛷',
-      '🎯', '🎮', '🕹️', '🎰', '🎲', '🧩', '🎨', '🎬', '🎤', '🎧',
-    ],
-  },
-  {
-    id: 'objects',
-    name: 'Objects & Tech',
-    icon: '💡',
-    emojis: [
-      '💡', '🔦', '🏮', '🪔', '📱', '📲', '💻', '⌨️', '🖥️', '🖨️',
-      '🖱️', '🕹️', '💽', '💾', '💿', '📀', '📷', '📸', '📹', '🎥',
-      '📽️', '🎞️', '📞', '☎️', '📟', '📠', '📺', '📻', '🎙️', '🎚️',
-      '💣', '📜', '📄', '📅', '📊', '📈', '📉', '📌', '📍', '💵',
-    ],
-  },
-  {
-    id: 'symbols',
-    name: 'Symbols & Flags',
-    icon: '🚩',
-    emojis: [
-      '💯', '♨️', '💬', '👁️‍🗨️', '🗯️', '💭', '💤', '🌐', '♠️', '♥️',
-      '♦️', '♣️', '🃏', '🀄️', '🎴', '🔔', '🔕', '📢', '📣', '🔍',
-      '🔎', '🔒', '🔓', '🔏', '🔐', '🔑', '🗝️', '🔨', '🪓', '⛏️',
-      '🚩', '🏳️', '🏴', '🏴‍☠️', '🏁', '🇮🇳', '🇺🇸', '🇬🇧', '🇯🇵', '🇫🇷',
-    ],
-  },
-];
+const EMOJI_HISTORY_KEY = '@chatconnect_emoji_history_v2';
 
 interface WhatsAppEmojiSelectorProps {
   onEmojiSelected: (emoji: string) => void;
@@ -114,9 +23,9 @@ interface WhatsAppEmojiSelectorProps {
 export const WhatsAppEmojiSelector: React.FC<WhatsAppEmojiSelectorProps> = ({
   onEmojiSelected,
 }) => {
-  const [activeCategoryId, setActiveCategoryId] = useState<string>('smileys');
+  const [activeCategoryId, setActiveCategoryId] = useState<string>('smileys_emotion');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [recentEmojis, setRecentEmojis] = useState<string[]>([]);
+  const [recentEmojis, setRecentEmojis] = useState<EmojiItem[]>([]);
 
   useEffect(() => {
     loadRecentEmojis();
@@ -133,11 +42,11 @@ export const WhatsAppEmojiSelector: React.FC<WhatsAppEmojiSelectorProps> = ({
     }
   };
 
-  const handleEmojiPress = async (emoji: string) => {
-    onEmojiSelected(emoji);
+  const handleEmojiPress = async (item: EmojiItem) => {
+    onEmojiSelected(item.emoji);
 
     try {
-      const updated = [emoji, ...recentEmojis.filter((e) => e !== emoji)].slice(0, 32);
+      const updated = [item, ...recentEmojis.filter((e) => e.emoji !== item.emoji)].slice(0, 32);
       setRecentEmojis(updated);
       await AsyncStorage.setItem(EMOJI_HISTORY_KEY, JSON.stringify(updated));
     } catch (e) {
@@ -146,10 +55,10 @@ export const WhatsAppEmojiSelector: React.FC<WhatsAppEmojiSelectorProps> = ({
   };
 
   const displayCategories = useMemo(() => {
-    const categoriesList: { id: string; name: string; icon: string; emojis: string[] }[] = [];
+    const list: EmojiCategory[] = [];
 
     if (recentEmojis.length > 0 && !searchQuery.trim()) {
-      categoriesList.push({
+      list.push({
         id: 'recent',
         name: 'Recently Used',
         icon: '🕒',
@@ -157,13 +66,15 @@ export const WhatsAppEmojiSelector: React.FC<WhatsAppEmojiSelectorProps> = ({
       });
     }
 
-    EMOJI_DATA.forEach((cat) => {
-      if (!searchQuery.trim()) {
-        categoriesList.push(cat);
+    const query = searchQuery.trim().toLowerCase();
+
+    ALL_EMOJI_CATEGORIES.forEach((cat) => {
+      if (!query) {
+        list.push(cat);
       } else {
-        const filtered = cat.emojis.filter((e) => e.includes(searchQuery.trim()));
+        const filtered = cat.emojis.filter((e) => e.keywords.includes(query) || e.name.toLowerCase().includes(query));
         if (filtered.length > 0) {
-          categoriesList.push({
+          list.push({
             ...cat,
             emojis: filtered,
           });
@@ -171,7 +82,7 @@ export const WhatsAppEmojiSelector: React.FC<WhatsAppEmojiSelectorProps> = ({
       }
     });
 
-    return categoriesList;
+    return list;
   }, [recentEmojis, searchQuery]);
 
   const activeCategoryIndex = displayCategories.findIndex((c) => c.id === activeCategoryId);
@@ -183,7 +94,7 @@ export const WhatsAppEmojiSelector: React.FC<WhatsAppEmojiSelectorProps> = ({
       <View style={styles.searchBarContainer}>
         <Ionicons name="search" size={16} color={COLORS.textSecondary} />
         <TextInput
-          placeholder="Search emoji..."
+          placeholder="Search all 1,800+ emojis..."
           placeholderTextColor={COLORS.textSecondary}
           value={searchQuery}
           onChangeText={setSearchQuery}
@@ -204,7 +115,7 @@ export const WhatsAppEmojiSelector: React.FC<WhatsAppEmojiSelectorProps> = ({
             onPress={() => setActiveCategoryId(cat.id)}
             style={[
               styles.categoryIconBtn,
-              (activeCategoryId === cat.id || (activeCategoryId === 'smileys' && cat.id === 'smileys')) &&
+              (activeCategoryId === cat.id || (activeCategoryId === 'smileys_emotion' && cat.id === 'smileys_emotion')) &&
                 styles.categoryIconBtnActive,
             ]}
           >
@@ -213,12 +124,20 @@ export const WhatsAppEmojiSelector: React.FC<WhatsAppEmojiSelectorProps> = ({
         ))}
       </View>
 
-      {/* Emoji Grid List */}
+      {/* Category Title Banner */}
+      <View style={styles.categoryTitleContainer}>
+        <Text style={styles.categoryTitleText}>{currentCategory?.name || 'Emojis'}</Text>
+      </View>
+
+      {/* Complete 1,800+ Emoji Grid List */}
       <FlatList
         data={currentCategory?.emojis || []}
-        keyExtractor={(item, index) => `emoji_${item}_${index}`}
+        keyExtractor={(item, index) => `emoji_${item.emoji}_${index}`}
         numColumns={8}
         showsVerticalScrollIndicator={false}
+        initialNumToRender={40}
+        maxToRenderPerBatch={40}
+        windowSize={11}
         contentContainerStyle={styles.emojiGridContent}
         renderItem={({ item }) => (
           <TouchableOpacity
@@ -226,7 +145,7 @@ export const WhatsAppEmojiSelector: React.FC<WhatsAppEmojiSelectorProps> = ({
             style={styles.emojiItem}
             activeOpacity={0.6}
           >
-            <Text style={styles.emojiText}>{item}</Text>
+            <Text style={styles.emojiText}>{item.emoji}</Text>
           </TouchableOpacity>
         )}
       />
@@ -265,7 +184,7 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(255, 255, 255, 0.05)',
   },
   categoryIconBtn: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
     paddingVertical: 4,
     borderRadius: 12,
   },
@@ -275,9 +194,20 @@ const styles = StyleSheet.create({
   categoryIconText: {
     fontSize: 18,
   },
+  categoryTitleContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+  },
+  categoryTitleText: {
+    color: COLORS.textSecondary,
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
   emojiGridContent: {
     paddingHorizontal: 8,
-    paddingVertical: 6,
+    paddingVertical: 4,
   },
   emojiItem: {
     width: (SCREEN_WIDTH - 16) / 8,
