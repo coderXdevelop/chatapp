@@ -8,7 +8,21 @@ export async function createStatus(req: AuthenticatedRequest, res: Response) {
     const userId = req.user?.userId;
     if (!userId) return res.status(401).json({ message: 'Unauthorized' });
 
-    const { text, mediaUrl, mediaType, caption, backgroundColor } = req.body;
+    const { items, text, mediaUrl, mediaType, caption, backgroundColor } = req.body;
+
+    if (Array.isArray(items) && items.length > 0) {
+      const statusDocs = items.map((item: any) => ({
+        user: userId,
+        text: item.text || '',
+        mediaUrl: item.mediaUrl || null,
+        mediaType: item.mediaType || null,
+        caption: item.caption || '',
+        backgroundColor: item.backgroundColor || '#0F172A',
+      }));
+
+      const created = await Status.insertMany(statusDocs);
+      return res.status(201).json({ message: 'Statuses posted successfully', statuses: created });
+    }
 
     if (!text && !mediaUrl) {
       return res.status(400).json({ message: 'Status must contain text or media' });

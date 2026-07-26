@@ -152,7 +152,14 @@ interface ChatState {
   togglePinMessage: (chatId: string, messageId: string) => Promise<any>;
   fetchStarredMessages: () => Promise<void>;
   fetchStatusFeed: () => Promise<void>;
-  postStatus: (payload: { text?: string; mediaUrl?: string; mediaType?: 'image' | 'video'; caption?: string; backgroundColor?: string }) => Promise<boolean>;
+  postStatus: (payload: {
+    text?: string;
+    mediaUrl?: string;
+    mediaType?: 'image' | 'video';
+    caption?: string;
+    backgroundColor?: string;
+    items?: Array<{ text?: string; mediaUrl?: string; mediaType?: 'image' | 'video'; caption?: string; backgroundColor?: string }>;
+  }) => Promise<boolean>;
   deleteStatus: (statusId: string) => Promise<boolean>;
   globalSearchAll: (query: string) => Promise<{ chats: Chat[]; messages: Message[] }>;
 }

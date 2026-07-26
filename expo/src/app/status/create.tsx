@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -17,73 +18,160 @@ import { uploadToCloudinary, getCloudinarySignature } from '../../services/media
 
 const BG_COLORS = ['#0F172A', '#4C1D95', '#831843', '#065F46', '#1E3A8A', '#78350F'];
 
+export interface StatusMediaItem {
+  uri: string;
+  type: 'image' | 'video';
+  duration?: number;
+  caption: string;
+}
+
 export default function CreateStatusScreen() {
   const router = useRouter();
   const { postStatus } = useChatStore();
 
-  const [text, setText] = useState('');
-  const [mediaUri, setMediaUri] = useState<string | null>(null);
-  const [mediaType, setMediaType] = useState<'image' | 'video' | null>(null);
+  const [textStatus, setTextStatus] = useState('');
+  const [selectedItems, setSelectedItems] = useState<StatusMediaItem[]>([]);
+  const [activeIdx, setActiveIdx] = useState<number>(-1);
   const [bgColor, setBgColor] = useState(BG_COLORS[0]);
   const [isPosting, setIsPosting] = useState(false);
+  const [uploadProgressText, setUploadProgressText] = useState('');
 
   const handlePickMedia = async () => {
     try {
       const res = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images', 'videos'],
+        allowsMultipleSelection: true,
         quality: 0.8,
+        videoMaxDuration: 40,
       });
 
-      if (!res.canceled && res.assets[0]) {
-        setMediaUri(res.assets[0].uri);
-        setMediaType(res.assets[0].type === 'video' ? 'video' : 'image');
+      if (!res.canceled && res.assets && res.assets.length > 0) {
+        const validAssets: StatusMediaItem[] = [];
+        let skippedCount = 0;
+
+        for (const asset of res.assets) {
+          const isVideo = asset.type === 'video';
+          let durationSec = 0;
+
+          if (asset.duration) {
+            durationSec = asset.duration > 1000 ? Math.round(asset.duration / 1000) : Math.round(asset.duration);
+          }
+
+          if (isVideo && durationSec > 40) {
+            skippedCount++;
+            continue;
+          }
+
+          validAssets.push({
+            uri: asset.uri,
+            type: isVideo ? 'video' : 'image',
+            duration: durationSec,
+            caption: '',
+          });
+        }
+
+        if (skippedCount > 0) {
+          Alert.alert(
+            'Video Length Limit (30-40s)',
+            `${skippedCount} video(s) exceeded the 40-second limit and were excluded. Status videos must be 40s or less.`
+          );
+        }
+
+        if (validAssets.length > 0) {
+          setSelectedItems((prev) => {
+            const updated = [...prev, ...validAssets];
+            if (activeIdx === -1) setActiveIdx(0);
+            return updated;
+          });
+        }
       }
     } catch (e) {
-      Alert.alert('Error', 'Could not select media.');
+      Alert.alert('Error', 'Could not select photos or videos.');
     }
   };
 
+  const handleRemoveItem = (index: number) => {
+    const updated = selectedItems.filter((_, i) => i !== index);
+    setSelectedItems(updated);
+
+    if (updated.length === 0) {
+      setActiveIdx(-1);
+    } else if (activeIdx >= updated.length) {
+      setActiveIdx(updated.length - 1);
+    }
+  };
+
+  const handleUpdateCaption = (val: string) => {
+    if (activeIdx < 0 || activeIdx >= selectedItems.length) return;
+    const updated = [...selectedItems];
+    updated[activeIdx].caption = val;
+    setSelectedItems(updated);
+  };
+
   const handlePost = async () => {
-    if (!text.trim() && !mediaUri) {
-      Alert.alert('Empty Status', 'Please enter text or select a photo.');
+    if (selectedItems.length === 0 && !textStatus.trim()) {
+      Alert.alert('Empty Status', 'Please enter text or select photos/videos.');
       return;
     }
 
     setIsPosting(true);
     try {
-      let uploadedUrl: string | undefined = undefined;
-
-      if (mediaUri && mediaType) {
+      if (selectedItems.length > 0) {
         const signatureData = await getCloudinarySignature();
-        uploadedUrl = await uploadToCloudinary(
-          mediaUri,
-          mediaType === 'video' ? 'video/mp4' : 'image/jpeg',
-          signatureData,
-          () => {}
-        );
-      }
+        const itemsToPost: Array<{ mediaUrl: string; mediaType: 'image' | 'video'; caption?: string; backgroundColor?: string }> = [];
 
-      const success = await postStatus({
-        text: text.trim(),
-        mediaUrl: uploadedUrl,
-        mediaType: uploadedUrl ? (mediaType || 'image') : undefined,
-        backgroundColor: bgColor,
-      });
+        for (let i = 0; i < selectedItems.length; i++) {
+          const item = selectedItems[i];
+          setUploadProgressText(`Uploading ${i + 1} of ${selectedItems.length}...`);
 
-      if (success) {
-        router.back();
+          const mediaUrl = await uploadToCloudinary(
+            item.uri,
+            item.type === 'video' ? 'video/mp4' : 'image/jpeg',
+            signatureData,
+            () => {}
+          );
+
+          itemsToPost.push({
+            mediaUrl,
+            mediaType: item.type,
+            caption: item.caption.trim() || undefined,
+            backgroundColor: '#0F172A',
+          });
+        }
+
+        setUploadProgressText('Sharing updates...');
+        const success = await postStatus({ items: itemsToPost });
+
+        if (success) {
+          router.back();
+        } else {
+          Alert.alert('Error', 'Failed to post status updates.');
+        }
       } else {
-        Alert.alert('Error', 'Failed to post status update.');
+        // Text status
+        const success = await postStatus({
+          text: textStatus.trim(),
+          backgroundColor: bgColor,
+        });
+
+        if (success) {
+          router.back();
+        } else {
+          Alert.alert('Error', 'Failed to post text status.');
+        }
       }
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to post status.');
+      Alert.alert('Error', e.message || 'Failed to post status update.');
     } finally {
       setIsPosting(false);
+      setUploadProgressText('');
     }
   };
 
+  const currentItem = activeIdx >= 0 && activeIdx < selectedItems.length ? selectedItems[activeIdx] : null;
+
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: mediaUri ? '#030712' : bgColor }]}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: currentItem ? '#030712' : bgColor }]}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.closeBtn} onPress={() => router.back()}>
@@ -92,29 +180,48 @@ export default function CreateStatusScreen() {
 
         <View style={styles.headerActions}>
           <TouchableOpacity style={styles.mediaBtn} onPress={handlePickMedia}>
-            <Text style={styles.mediaBtnText}>📷 Photo</Text>
+            <Text style={styles.mediaBtnText}>
+              {selectedItems.length > 0 ? `+ Add (${selectedItems.length})` : '🖼️ Add Media'}
+            </Text>
           </TouchableOpacity>
+
           <TouchableOpacity style={styles.postBtn} onPress={handlePost} disabled={isPosting}>
             {isPosting ? (
-              <ActivityIndicator size="small" color="#0F172A" />
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <ActivityIndicator size="small" color="#0F172A" />
+                {uploadProgressText ? (
+                  <Text style={[styles.postBtnText, { fontSize: 11 }]}>{uploadProgressText}</Text>
+                ) : null}
+              </View>
             ) : (
-              <Text style={styles.postBtnText}>Share Status</Text>
+              <Text style={styles.postBtnText}>
+                {selectedItems.length > 1 ? `Share All (${selectedItems.length})` : 'Share Status'}
+              </Text>
             )}
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* Content Area */}
+      {/* Main Preview Area */}
       <View style={styles.content}>
-        {mediaUri ? (
+        {currentItem ? (
           <View style={styles.mediaWrapper}>
-            <Image source={{ uri: mediaUri }} style={styles.previewImage} resizeMode="contain" />
+            <Image source={{ uri: currentItem.uri }} style={styles.previewImage} resizeMode="contain" />
+
+            {currentItem.type === 'video' ? (
+              <View style={styles.videoBadge}>
+                <Text style={styles.videoBadgeText}>
+                  🎥 Video {currentItem.duration ? `(${currentItem.duration}s / max 40s)` : '(max 40s)'}
+                </Text>
+              </View>
+            ) : null}
+
             <TextInput
               style={styles.captionInput}
-              placeholder="Add a caption..."
+              placeholder={`Add caption for item ${activeIdx + 1} of ${selectedItems.length}...`}
               placeholderTextColor="#94A3B8"
-              value={text}
-              onChangeText={setText}
+              value={currentItem.caption}
+              onChangeText={handleUpdateCaption}
               multiline
             />
           </View>
@@ -123,16 +230,44 @@ export default function CreateStatusScreen() {
             style={styles.textInput}
             placeholder="Type a status update..."
             placeholderTextColor="rgba(248, 250, 252, 0.5)"
-            value={text}
-            onChangeText={setText}
+            value={textStatus}
+            onChangeText={setTextStatus}
             multiline
             autoFocus
           />
         )}
       </View>
 
-      {/* Background Color Picker (Text Status only) */}
-      {!mediaUri ? (
+      {/* Multi-Media Selection Thumbnails Row */}
+      {selectedItems.length > 0 ? (
+        <View style={styles.thumbnailsContainer}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
+            {selectedItems.map((item, idx) => (
+              <TouchableOpacity
+                key={idx}
+                style={[styles.thumbItem, activeIdx === idx && styles.thumbItemActive]}
+                onPress={() => setActiveIdx(idx)}
+                activeOpacity={0.8}
+              >
+                <Image source={{ uri: item.uri }} style={styles.thumbImage} />
+                {item.type === 'video' ? (
+                  <View style={styles.thumbVideoTag}>
+                    <Text style={styles.thumbVideoTagText}>🎥</Text>
+                  </View>
+                ) : null}
+                <TouchableOpacity style={styles.removeBadge} onPress={() => handleRemoveItem(idx)}>
+                  <Text style={styles.removeBadgeText}>✕</Text>
+                </TouchableOpacity>
+              </TouchableOpacity>
+            ))}
+
+            <TouchableOpacity style={styles.addMoreThumb} onPress={handlePickMedia}>
+              <Text style={styles.addMoreThumbText}>+</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      ) : (
+        /* Background Color Picker for Text status */
         <View style={styles.colorPalette}>
           {BG_COLORS.map((c) => (
             <TouchableOpacity
@@ -142,7 +277,7 @@ export default function CreateStatusScreen() {
             />
           ))}
         </View>
-      ) : null}
+      )}
     </SafeAreaView>
   );
 }
@@ -178,7 +313,7 @@ const styles = StyleSheet.create({
   },
   mediaBtn: {
     backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
   },
@@ -216,14 +351,31 @@ const styles = StyleSheet.create({
     height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
   },
   previewImage: {
     width: '100%',
-    height: '75%',
+    height: '70%',
     borderRadius: 16,
   },
+  videoBadge: {
+    position: 'absolute',
+    top: 10,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+  },
+  videoBadgeText: {
+    color: '#F59E0B',
+    fontSize: 12,
+    fontWeight: '700',
+  },
   captionInput: {
-    backgroundColor: 'rgba(15, 23, 42, 0.8)',
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 10,
@@ -231,6 +383,72 @@ const styles = StyleSheet.create({
     fontSize: 15,
     width: '100%',
     marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#1E293B',
+  },
+  thumbnailsContainer: {
+    paddingHorizontal: 16,
+    paddingBottom: 20,
+  },
+  thumbItem: {
+    width: 60,
+    height: 60,
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: 'transparent',
+    position: 'relative',
+  },
+  thumbItemActive: {
+    borderColor: '#F59E0B',
+    transform: [{ scale: 1.05 }],
+  },
+  thumbImage: {
+    width: '100%',
+    height: '100%',
+  },
+  thumbVideoTag: {
+    position: 'absolute',
+    bottom: 2,
+    left: 2,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 6,
+    padding: 2,
+  },
+  thumbVideoTagText: {
+    fontSize: 10,
+  },
+  removeBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: 'rgba(239, 68, 68, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  removeBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  addMoreThumb: {
+    width: 60,
+    height: 60,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderWidth: 1.5,
+    borderColor: '#F59E0B',
+    borderStyle: 'dashed',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addMoreThumbText: {
+    color: '#F59E0B',
+    fontSize: 24,
+    fontWeight: 'bold',
   },
   colorPalette: {
     flexDirection: 'row',
