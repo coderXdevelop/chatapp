@@ -245,12 +245,19 @@ const MemoizedMessageItemComponent: React.FC<MemoizedMessageItemProps> = ({
               {/* Rich Link Preview Card */}
               {item.linkPreview && item.linkPreview.url && !item.isDeleted && (
                 <TouchableOpacity
-                  activeOpacity={0.8}
+                  activeOpacity={0.85}
                   onPress={() => item.linkPreview?.url && Linking.openURL(item.linkPreview.url)}
                   style={styles.linkPreviewContainer}
                 >
                   {item.linkPreview.image ? (
-                    <Image source={{ uri: item.linkPreview.image }} style={styles.linkPreviewImage} resizeMode="cover" />
+                    <View style={styles.linkPreviewImageWrapper}>
+                      <Image source={{ uri: item.linkPreview.image }} style={styles.linkPreviewImage} resizeMode="cover" />
+                      {(item.linkPreview.domain?.includes('youtube') || item.linkPreview.domain?.includes('youtu.be')) && (
+                        <View style={styles.playButtonOverlay}>
+                          <Text style={styles.playButtonIcon}>▶</Text>
+                        </View>
+                      )}
+                    </View>
                   ) : null}
                   <View style={styles.linkPreviewContent}>
                     <Text style={styles.linkPreviewDomain} numberOfLines={1}>
@@ -546,36 +553,63 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   linkPreviewContainer: {
-    marginTop: 6,
-    borderRadius: 8,
+    marginTop: 8,
+    borderRadius: 12,
     overflow: 'hidden',
-    backgroundColor: '#070b13',
+    backgroundColor: '#0F172A',
     borderWidth: 1,
-    borderColor: '#1f293d',
+    borderColor: '#334155',
+    width: '100%',
+  },
+  linkPreviewImageWrapper: {
+    position: 'relative',
+    width: '100%',
+    height: 140,
+    backgroundColor: '#1E293B',
   },
   linkPreviewImage: {
     width: '100%',
-    height: 120,
+    height: 140,
+  },
+  playButtonOverlay: {
+    position: 'absolute',
+    top: '35%',
+    left: '42%',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#F59E0B',
+  },
+  playButtonIcon: {
+    color: '#F59E0B',
+    fontSize: 18,
+    marginLeft: 2,
   },
   linkPreviewContent: {
-    padding: 8,
+    padding: 10,
+    backgroundColor: '#0F172A',
   },
   linkPreviewDomain: {
-    color: COLORS.primary,
-    fontSize: 10,
+    color: '#F59E0B',
+    fontSize: 11,
     fontWeight: '700',
-    marginBottom: 2,
+    marginBottom: 3,
   },
   linkPreviewTitle: {
     color: '#FFFFFF',
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
-    marginBottom: 2,
+    lineHeight: 17,
+    marginBottom: 4,
   },
   linkPreviewDesc: {
     color: '#94A3B8',
     fontSize: 11,
-    lineHeight: 14,
+    lineHeight: 15,
   },
   floatingReactionToolbar: {
     flexDirection: 'row',
