@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   Switch,
   ActivityIndicator,
-  Alert,
   Platform,
   RefreshControl,
   Modal,
