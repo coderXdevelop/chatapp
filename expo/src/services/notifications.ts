@@ -1,21 +1,45 @@
-import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { api } from './api';
 
-// Configure notification displaying behavior when app is in the foreground
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+const isExpoGo =
+  Constants.appOwnership === 'expo' ||
+  (Constants.executionEnvironment as string) === 'store-client';
+
+let notificationHandlerSet = false;
+
+async function getNotificationsModule() {
+  if (isExpoGo) {
+    return null;
+  }
+  try {
+    const Notifications = await import('expo-notifications');
+    if (!notificationHandlerSet) {
+      notificationHandlerSet = true;
+      Notifications.setNotificationHandler({
+        handleNotification: async () => ({
+          shouldShowAlert: true,
+          shouldPlaySound: true,
+          shouldSetBadge: false,
+          shouldShowBanner: true,
+          shouldShowList: true,
+        }),
+      });
+    }
+    return Notifications;
+  } catch (err) {
+    console.warn('expo-notifications module could not be loaded:', err);
+    return null;
+  }
+}
 
 export async function registerForPushNotificationsAsync() {
+  const Notifications = await getNotificationsModule();
+  if (!Notifications) {
+    return null;
+  }
+
   let token = '';
 
   if (Platform.OS === 'android') {
@@ -69,6 +93,11 @@ export async function registerPushTokenOnBackend(pushToken: string) {
 }
 
 export async function presentLocalNotification(title: string, body: string, data?: Record<string, any>) {
+  const Notifications = await getNotificationsModule();
+  if (!Notifications) {
+    return;
+  }
+
   try {
     await Notifications.scheduleNotificationAsync({
       content: {
