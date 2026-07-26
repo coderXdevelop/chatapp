@@ -66,6 +66,18 @@ const MemoizedMessageItemComponent: React.FC<MemoizedMessageItemProps> = ({
   const hasVibrated = useSharedValue(false);
 
   const onlyMedia = Boolean(item.mediaUrl && !item.text && !item.isDeleted);
+  const hasReactions = Array.isArray(item.reactions) && item.reactions.length > 0 && !item.isDeleted;
+  const groupedReactions = React.useMemo(() => {
+    if (!hasReactions || !item.reactions) return {};
+    const map: Record<string, number> = {};
+    for (const r of item.reactions) {
+      const emojiStr = typeof r === 'string' ? r : r?.emoji;
+      if (emojiStr) {
+        map[emojiStr] = (map[emojiStr] || 0) + 1;
+      }
+    }
+    return map;
+  }, [item.reactions, hasReactions]);
 
   const panGesture = Gesture.Pan()
     .activeOffsetX([-15, 15])
@@ -185,151 +197,154 @@ const MemoizedMessageItemComponent: React.FC<MemoizedMessageItemProps> = ({
               styles.messageRow,
               isMe ? styles.myMessageRow : styles.otherMessageRow,
               isSelectionMode && { flex: 1 },
+              hasReactions && { marginBottom: 12 },
             ]}
           >
-            <View
-              style={[
-                styles.bubble,
-                isMe ? styles.myBubble : styles.otherBubble,
-                onlyMedia && styles.onlyMediaBubble,
-                isHighlighted && styles.highlightedBubble,
-              ]}
-            >
-              {/* Group Sender Name */}
-              {isGroup && !isMe && (
-                <Text style={styles.groupSenderName}>
-                  {item.sender?.displayName || 'Someone'}
-                </Text>
-              )}
-
-              {/* Replied-To Message Header inside bubble */}
-              {item.replyTo && !item.isDeleted && (
-                <View
-                  style={[
-                    styles.bubbleReplyPreview,
-                    isMe ? styles.myBubbleReplyPreview : styles.otherBubbleReplyPreview,
-                  ]}
-                >
-                  <Text style={styles.bubbleReplySender} numberOfLines={1}>
-                    {item.replyTo.sender._id === userId ? 'You' : item.replyTo.sender.displayName}
+            <View style={{ position: 'relative' }}>
+              <View
+                style={[
+                  styles.bubble,
+                  isMe ? styles.myBubble : styles.otherBubble,
+                  onlyMedia && styles.onlyMediaBubble,
+                  isHighlighted && styles.highlightedBubble,
+                ]}
+              >
+                {/* Group Sender Name */}
+                {isGroup && !isMe && (
+                  <Text style={styles.groupSenderName}>
+                    {item.sender?.displayName || 'Someone'}
                   </Text>
-                  <Text style={styles.bubbleReplyText} numberOfLines={1}>
-                    {item.replyTo.text}
-                  </Text>
-                </View>
-              )}
+                )}
 
-              {/* Forwarded Tag */}
-              {item.isForwarded && !item.isDeleted && (
-                <Text style={[styles.forwardedText, isMe ? styles.myForwardedText : styles.otherForwardedText]}>
-                  ↪ Forwarded
-                </Text>
-              )}
-
-              {/* Media Content */}
-              {item.mediaUrl && item.mediaType && !item.isDeleted && (
-                <TouchableOpacity
-                  activeOpacity={0.9}
-                  onPress={handleMediaTap}
-                  style={{ marginBottom: item.text ? 8 : 0 }}
-                >
-                  <MediaMessage
-                    messageId={item._id}
-                    mediaUrl={item.mediaUrl}
-                    mediaType={item.mediaType}
-                    mediaWidth={item.mediaWidth}
-                    mediaHeight={item.mediaHeight}
-                    mediaDuration={item.mediaDuration}
-                    isSending={item.status === 'sending'}
-                    progress={uploadProgress}
-                    onCancel={() => onCancelUpload(item.tempId || '')}
-                  />
-                </TouchableOpacity>
-              )}
-
-              {/* Message Text */}
-              {(item.text ? true : false || item.isDeleted) && (
-                <Text
-                  style={[
-                    styles.bubbleText,
-                    isMe ? styles.myBubbleText : styles.otherBubbleText,
-                    item.isDeleted && styles.deletedBubbleText,
-                  ]}
-                >
-                  {item.text}
-                </Text>
-              )}
-
-              {/* Rich Link Preview Card */}
-              {item.linkPreview && item.linkPreview.url && !item.isDeleted && (
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  onPress={() => item.linkPreview?.url && Linking.openURL(item.linkPreview.url)}
-                  style={styles.linkPreviewContainer}
-                >
-                  {item.linkPreview.image ? (
-                    <View style={styles.linkPreviewImageWrapper}>
-                      <Image source={{ uri: item.linkPreview.image }} style={styles.linkPreviewImage} resizeMode="cover" />
-                      {(item.linkPreview.domain?.includes('youtube') || item.linkPreview.domain?.includes('youtu.be')) && (
-                        <View style={styles.playButtonOverlay}>
-                          <Text style={styles.playButtonIcon}>▶</Text>
-                        </View>
-                      )}
-                    </View>
-                  ) : null}
-                  <View style={styles.linkPreviewContent}>
-                    <Text style={styles.linkPreviewDomain} numberOfLines={1}>
-                      🌐 {item.linkPreview.domain || 'Link'}
+                {/* Replied-To Message Header inside bubble */}
+                {item.replyTo && !item.isDeleted && (
+                  <View
+                    style={[
+                      styles.bubbleReplyPreview,
+                      isMe ? styles.myBubbleReplyPreview : styles.otherBubbleReplyPreview,
+                    ]}
+                  >
+                    <Text style={styles.bubbleReplySender} numberOfLines={1}>
+                      {item.replyTo.sender._id === userId ? 'You' : item.replyTo.sender.displayName}
                     </Text>
-                    <Text style={styles.linkPreviewTitle} numberOfLines={2}>
-                      {item.linkPreview.title}
+                    <Text style={styles.bubbleReplyText} numberOfLines={1}>
+                      {item.replyTo.text}
                     </Text>
-                    {item.linkPreview.description ? (
-                      <Text style={styles.linkPreviewDesc} numberOfLines={2}>
-                        {item.linkPreview.description}
-                      </Text>
-                    ) : null}
                   </View>
-                </TouchableOpacity>
-              )}
+                )}
 
-              {/* Time & Status Row */}
-              {!item.isDeleted && (
-                <View style={onlyMedia ? styles.metaRowOnlyMedia : styles.metaRow}>
-                  {item.isEdited && <Text style={styles.editedText}>(edited)</Text>}
-                  <Text style={onlyMedia ? styles.timeTextOnlyMedia : styles.timeText}>
-                    {new Date(item.createdAt).toLocaleTimeString([], {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
+                {/* Forwarded Tag */}
+                {item.isForwarded && !item.isDeleted && (
+                  <Text style={[styles.forwardedText, isMe ? styles.myForwardedText : styles.otherForwardedText]}>
+                    ↪ Forwarded
                   </Text>
-                  {isMe && (
-                    <Text
-                      style={[
-                        onlyMedia ? styles.statusTextOnlyMedia : styles.statusText,
-                        item.status === 'read' && styles.statusRead,
-                        item.status === 'delivered' && styles.statusDelivered,
-                      ]}
-                    >
-                      {item.status === 'sending' ? '⏳' : item.status === 'read' ? '✓✓' : item.status === 'delivered' ? '✓✓' : '✓'}
-                    </Text>
-                  )}
-                </View>
-              )}
+                )}
 
-              {/* Active Reactions Badge */}
-              {item.reactions && item.reactions.length > 0 && !item.isDeleted && (
+                {/* Media Content */}
+                {item.mediaUrl && item.mediaType && !item.isDeleted && (
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    onPress={handleMediaTap}
+                    style={{ marginBottom: item.text ? 8 : 0 }}
+                  >
+                    <MediaMessage
+                      messageId={item._id}
+                      mediaUrl={item.mediaUrl}
+                      mediaType={item.mediaType}
+                      mediaWidth={item.mediaWidth}
+                      mediaHeight={item.mediaHeight}
+                      mediaDuration={item.mediaDuration}
+                      isSending={item.status === 'sending'}
+                      progress={uploadProgress}
+                      onCancel={() => onCancelUpload(item.tempId || '')}
+                    />
+                  </TouchableOpacity>
+                )}
+
+                {/* Message Text */}
+                {(item.text ? true : false || item.isDeleted) && (
+                  <Text
+                    style={[
+                      styles.bubbleText,
+                      isMe ? styles.myBubbleText : styles.otherBubbleText,
+                      item.isDeleted && styles.deletedBubbleText,
+                    ]}
+                  >
+                    {item.text}
+                  </Text>
+                )}
+
+                {/* Rich Link Preview Card */}
+                {item.linkPreview && item.linkPreview.url && !item.isDeleted && (
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    onPress={() => item.linkPreview?.url && Linking.openURL(item.linkPreview.url)}
+                    style={styles.linkPreviewContainer}
+                  >
+                    {item.linkPreview.image ? (
+                      <View style={styles.linkPreviewImageWrapper}>
+                        <Image source={{ uri: item.linkPreview.image }} style={styles.linkPreviewImage} resizeMode="cover" />
+                        {(item.linkPreview.domain?.includes('youtube') || item.linkPreview.domain?.includes('youtu.be')) && (
+                          <View style={styles.playButtonOverlay}>
+                            <Text style={styles.playButtonIcon}>▶</Text>
+                          </View>
+                        )}
+                      </View>
+                    ) : null}
+                    <View style={styles.linkPreviewContent}>
+                      <Text style={styles.linkPreviewDomain} numberOfLines={1}>
+                        🌐 {item.linkPreview.domain || 'Link'}
+                      </Text>
+                      <Text style={styles.linkPreviewTitle} numberOfLines={2}>
+                        {item.linkPreview.title}
+                      </Text>
+                      {item.linkPreview.description ? (
+                        <Text style={styles.linkPreviewDesc} numberOfLines={2}>
+                          {item.linkPreview.description}
+                        </Text>
+                      ) : null}
+                    </View>
+                  </TouchableOpacity>
+                )}
+
+                {/* Time & Status Row */}
+                {!item.isDeleted && (
+                  <View style={onlyMedia ? styles.metaRowOnlyMedia : styles.metaRow}>
+                    {item.isEdited && <Text style={styles.editedText}>(edited)</Text>}
+                    <Text style={onlyMedia ? styles.timeTextOnlyMedia : styles.timeText}>
+                      {new Date(item.createdAt).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </Text>
+                    {isMe && (
+                      <Text
+                        style={[
+                          onlyMedia ? styles.statusTextOnlyMedia : styles.statusText,
+                          item.status === 'read' && styles.statusRead,
+                          item.status === 'delivered' && styles.statusDelivered,
+                        ]}
+                      >
+                        {item.status === 'sending' ? '⏳' : item.status === 'read' ? '✓✓' : item.status === 'delivered' ? '✓✓' : '✓'}
+                      </Text>
+                    )}
+                  </View>
+                )}
+              </View>
+
+              {/* Active Reactions Badge (WhatsApp-Style Floating Overlap Pill) */}
+              {hasReactions && (
                 <View style={[styles.reactionsBadge, isMe ? styles.myReactionsBadge : styles.otherReactionsBadge]}>
-                  {Object.entries(
-                    item.reactions.reduce((acc: Record<string, number>, r) => {
-                      acc[r.emoji] = (acc[r.emoji] || 0) + 1;
-                      return acc;
-                    }, {})
-                  ).map(([emoji, count]) => (
-                    <View key={emoji} style={styles.reactionPill}>
+                  {Object.entries(groupedReactions).map(([emoji, count]) => (
+                    <TouchableOpacity
+                      key={emoji}
+                      onPress={() => onReact && onReact(emoji)}
+                      activeOpacity={0.7}
+                      style={styles.reactionPill}
+                    >
                       <Text style={styles.reactionEmojiText}>{emoji}</Text>
                       {count > 1 && <Text style={styles.reactionCountText}>{count}</Text>}
-                    </View>
+                    </TouchableOpacity>
                   ))}
                 </View>
               )}
@@ -680,23 +695,29 @@ const styles = StyleSheet.create({
     marginTop: -2,
   },
   reactionsBadge: {
+    position: 'absolute',
+    bottom: -10,
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 4,
-    gap: 4,
     backgroundColor: '#1E293B',
-    borderRadius: 12,
-    paddingHorizontal: 6,
+    borderRadius: 14,
+    paddingHorizontal: 7,
     paddingVertical: 2,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#334155',
-    alignSelf: 'flex-start',
+    gap: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 6,
+    zIndex: 10,
   },
   myReactionsBadge: {
-    alignSelf: 'flex-end',
+    right: 12,
   },
   otherReactionsBadge: {
-    alignSelf: 'flex-start',
+    left: 12,
   },
   reactionPill: {
     flexDirection: 'row',
@@ -707,7 +728,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   reactionCountText: {
-    color: '#F8FAFC',
+    color: '#F59E0B',
     fontSize: 11,
     fontWeight: '800',
   },
