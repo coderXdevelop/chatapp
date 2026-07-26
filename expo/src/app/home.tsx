@@ -173,7 +173,14 @@ export default function HomeScreen() {
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <Image
                     source={require('../../assets/images/Linkup.png')}
-                    style={{ width: 34, height: 34, borderRadius: 8, marginRight: 10 }}
+                    style={{
+                      width: 52,
+                      height: 52,
+                      borderRadius: 14,
+                      marginRight: 12,
+                      borderWidth: 1,
+                      borderColor: 'rgba(204, 255, 0, 0.25)',
+                    }}
                     resizeMode="contain"
                   />
                   <View>
