@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// Giphy Public Beta Key for mobile apps
-const GIPHY_API_KEY = 'vXp33S22sX13v8J0J0Y326v3Z387j';
+// Loaded from environment variable (.env file)
+const GIPHY_API_KEY = process.env.EXPO_PUBLIC_GIPHY_API_KEY || '';
 const GIPHY_BASE_URL = 'https://api.giphy.com/v1/gifs';
 
 export interface GiphyGifItem {
