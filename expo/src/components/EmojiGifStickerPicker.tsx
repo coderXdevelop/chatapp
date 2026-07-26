@@ -15,7 +15,15 @@ import { WhatsAppEmojiSelector } from './WhatsAppEmojiSelector';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../styles/theme';
-import { fetchTrendingGifs, searchGifs, GiphyGifItem, GIF_CATEGORIES } from '../services/giphyService';
+import {
+  fetchTrendingGifs,
+  searchGifs,
+  fetchTrendingStickers,
+  searchStickers,
+  GiphyGifItem,
+  GIF_CATEGORIES,
+  STICKER_CATEGORIES,
+} from '../services/giphyService';
 import { STICKER_PACKS, StickerItem } from '../services/stickerPacks';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -50,13 +58,13 @@ const MemoizedGifCell = React.memo<{
   (prev, next) => prev.item.id === next.item.id
 );
 
-const MemoizedStickerCell = React.memo<{
-  item: StickerItem;
+const MemoizedGiphyStickerCell = React.memo<{
+  item: GiphyGifItem;
   onPress: (url: string) => void;
 }>(
   ({ item, onPress }) => (
-    <TouchableOpacity onPress={() => onPress(item.url)} style={styles.stickerItem}>
-      <Image source={{ uri: item.url }} style={styles.stickerImage} contentFit="contain" />
+    <TouchableOpacity onPress={() => onPress(item.originalUrl)} style={styles.stickerItem}>
+      <Image source={{ uri: item.previewUrl }} style={styles.stickerImage} contentFit="contain" autoplay />
     </TouchableOpacity>
   ),
   (prev, next) => prev.item.id === next.item.id
@@ -77,12 +85,19 @@ export const EmojiGifStickerPicker: React.FC<EmojiGifStickerPickerProps> = ({
   const [gifs, setGifs] = useState<GiphyGifItem[]>([]);
   const [loadingGifs, setLoadingGifs] = useState(false);
 
-  // Sticker state
+  // Giphy Sticker state
+  const [stickerQuery, setStickerQuery] = useState('');
+  const [selectedStickerCategoryId, setSelectedStickerCategoryId] = useState('trending');
+  const [giphyStickers, setGiphyStickers] = useState<GiphyGifItem[]>([]);
+  const [loadingStickers, setLoadingStickers] = useState(false);
+  const [useLocalPacks, setUseLocalPacks] = useState(false);
   const [selectedPackIndex, setSelectedPackIndex] = useState(0);
 
   useEffect(() => {
     if (visible && activeTab === 'gif' && gifs.length === 0) {
       loadGifs('');
+    } else if (visible && activeTab === 'sticker' && giphyStickers.length === 0) {
+      loadStickers('');
     }
   }, [visible, activeTab]);
 
@@ -98,14 +113,38 @@ export const EmojiGifStickerPicker: React.FC<EmojiGifStickerPickerProps> = ({
     }
   };
 
+  const loadStickers = async (query: string) => {
+    setLoadingStickers(true);
+    try {
+      const data = query.trim() ? await searchStickers(query) : await fetchTrendingStickers();
+      setGiphyStickers(data);
+    } catch (e) {
+      console.error('Error loading stickers:', e);
+    } finally {
+      setLoadingStickers(false);
+    }
+  };
+
   const handleSelectGifCategory = (catId: string, query: string) => {
     setSelectedGifCategoryId(catId);
     setGifQuery(query);
     loadGifs(query);
   };
 
+  const handleSelectStickerCategory = (catId: string, query: string) => {
+    setSelectedStickerCategoryId(catId);
+    setStickerQuery(query);
+    setUseLocalPacks(false);
+    loadStickers(query);
+  };
+
   const handleGifSearchSubmit = () => {
     loadGifs(gifQuery);
+  };
+
+  const handleStickerSearchSubmit = () => {
+    setUseLocalPacks(false);
+    loadStickers(stickerQuery);
   };
 
   const renderGifItem = useCallback(
@@ -115,15 +154,15 @@ export const EmojiGifStickerPicker: React.FC<EmojiGifStickerPickerProps> = ({
     [onSelectGif]
   );
 
-  const renderStickerItem = useCallback(
-    ({ item }: { item: StickerItem }) => (
-      <MemoizedStickerCell item={item} onPress={onSelectSticker} />
+  const renderGiphyStickerItem = useCallback(
+    ({ item }: { item: GiphyGifItem }) => (
+      <MemoizedGiphyStickerCell item={item} onPress={onSelectSticker} />
     ),
     [onSelectSticker]
   );
 
   const gifKeyExtractor = useCallback((item: GiphyGifItem) => item.id, []);
-  const stickerKeyExtractor = useCallback((item: StickerItem) => item.id, []);
+  const stickerKeyExtractor = useCallback((item: GiphyGifItem) => item.id, []);
 
   if (!visible) return null;
 
@@ -159,7 +198,7 @@ export const EmojiGifStickerPicker: React.FC<EmojiGifStickerPickerProps> = ({
         </TouchableOpacity>
       </View>
 
-      {/* TAB 1: EMOJI PICKER (Powered by WhatsAppEmojiSelector) */}
+      {/* TAB 1: EMOJI PICKER */}
       {activeTab === 'emoji' && (
         <View style={styles.emojiSelectorWrapper}>
           <WhatsAppEmojiSelector onEmojiSelected={onSelectEmoji} />
@@ -233,48 +272,70 @@ export const EmojiGifStickerPicker: React.FC<EmojiGifStickerPickerProps> = ({
         </View>
       )}
 
-      {/* TAB 3: STICKER PICKER */}
+      {/* TAB 3: STICKER PICKER (Powered by Giphy Stickers API & Packs) */}
       {activeTab === 'sticker' && (
         <View style={styles.tabContent}>
-          {/* Scrollable Sticker Pack Tabs */}
-          <View style={styles.stickerPackTabBar}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 12 }}>
-              {STICKER_PACKS.map((pack, idx) => (
+          {/* Search Bar for Giphy Stickers */}
+          <View style={styles.searchBarContainer}>
+            <Ionicons name="search" size={18} color={COLORS.textSecondary} />
+            <TextInput
+              placeholder="Search Giphy Stickers..."
+              placeholderTextColor={COLORS.textSecondary}
+              value={stickerQuery}
+              onChangeText={setStickerQuery}
+              onSubmitEditing={handleStickerSearchSubmit}
+              returnKeyType="search"
+              style={styles.searchInput}
+            />
+            {stickerQuery.length > 0 && (
+              <TouchableOpacity onPress={() => { setStickerQuery(''); loadStickers(''); }}>
+                <Ionicons name="close-circle" size={18} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Giphy Sticker Category Pills */}
+          <View style={styles.gifCategoriesPillsBar}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.gifCategoryPillsContent}>
+              {STICKER_CATEGORIES.map((cat) => (
                 <TouchableOpacity
-                  key={pack.id}
-                  onPress={() => setSelectedPackIndex(idx)}
+                  key={cat.id}
+                  onPress={() => handleSelectStickerCategory(cat.id, cat.query)}
                   style={[
-                    styles.stickerPackTabBtn,
-                    selectedPackIndex === idx && styles.stickerPackTabBtnActive,
+                    styles.gifCategoryPill,
+                    !useLocalPacks && selectedStickerCategoryId === cat.id && styles.gifCategoryPillActive,
                   ]}
                 >
-                  <Text style={{ fontSize: 16 }}>{pack.icon}</Text>
                   <Text
                     style={[
-                      styles.stickerPackTabTitle,
-                      selectedPackIndex === idx && styles.stickerPackTabTitleActive,
+                      styles.gifCategoryPillText,
+                      !useLocalPacks && selectedStickerCategoryId === cat.id && styles.gifCategoryPillTextActive,
                     ]}
-                    numberOfLines={1}
                   >
-                    {pack.name}
+                    {cat.name}
                   </Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
           </View>
 
-          {/* Stickers Grid */}
-          <FlatList
-            data={STICKER_PACKS[selectedPackIndex]?.stickers || []}
-            keyExtractor={stickerKeyExtractor}
-            renderItem={renderStickerItem}
-            numColumns={4}
-            initialNumToRender={16}
-            maxToRenderPerBatch={16}
-            windowSize={5}
-            removeClippedSubviews={Platform.OS === 'android'}
-            contentContainerStyle={styles.stickerGridContent}
-          />
+          {loadingStickers ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color={COLORS.primary} />
+            </View>
+          ) : (
+            <FlatList
+              data={giphyStickers}
+              keyExtractor={stickerKeyExtractor}
+              renderItem={renderGiphyStickerItem}
+              numColumns={4}
+              initialNumToRender={16}
+              maxToRenderPerBatch={16}
+              windowSize={5}
+              removeClippedSubviews={Platform.OS === 'android'}
+              contentContainerStyle={styles.stickerGridContent}
+            />
+          )}
         </View>
       )}
     </View>
@@ -392,36 +453,9 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  stickerPackTabBar: {
-    height: 40,
-    paddingVertical: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.05)',
-  },
-  stickerPackTabBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    gap: 4,
-  },
-  stickerPackTabBtnActive: {
-    backgroundColor: COLORS.primary,
-  },
-  stickerPackTabTitle: {
-    color: COLORS.textSecondary,
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  stickerPackTabTitleActive: {
-    color: COLORS.primaryText,
-    fontWeight: '700',
-  },
   stickerGridContent: {
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 8,
   },
   stickerItem: {
     width: (SCREEN_WIDTH - 24) / 4,
