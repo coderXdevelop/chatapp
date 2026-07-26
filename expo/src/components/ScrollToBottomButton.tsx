@@ -38,7 +38,7 @@ export const ScrollToBottomButton: React.FC<ScrollToBottomButtonProps> = ({
     opacity: opacity.value,
   }));
 
-  if (!visible && scale.value === 0) {
+  if (!visible) {
     return null;
   }
 
