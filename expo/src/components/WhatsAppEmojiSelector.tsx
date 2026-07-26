@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   StyleSheet,
   View,
@@ -7,6 +7,7 @@ import {
   TextInput,
   FlatList,
   Dimensions,
+  Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,6 +20,19 @@ const EMOJI_HISTORY_KEY = '@chatconnect_emoji_history_v2';
 interface WhatsAppEmojiSelectorProps {
   onEmojiSelected: (emoji: string) => void;
 }
+
+const MemoizedEmojiCell = React.memo<{ item: EmojiItem; onPress: (item: EmojiItem) => void }>(
+  ({ item, onPress }) => (
+    <TouchableOpacity
+      onPress={() => onPress(item)}
+      style={styles.emojiItem}
+      activeOpacity={0.6}
+    >
+      <Text style={styles.emojiText}>{item.emoji}</Text>
+    </TouchableOpacity>
+  ),
+  (prev, next) => prev.item.emoji === next.item.emoji
+);
 
 export const WhatsAppEmojiSelector: React.FC<WhatsAppEmojiSelectorProps> = ({
   onEmojiSelected,
@@ -42,17 +56,19 @@ export const WhatsAppEmojiSelector: React.FC<WhatsAppEmojiSelectorProps> = ({
     }
   };
 
-  const handleEmojiPress = async (item: EmojiItem) => {
+  const handleEmojiPress = useCallback(async (item: EmojiItem) => {
     onEmojiSelected(item.emoji);
 
     try {
-      const updated = [item, ...recentEmojis.filter((e) => e.emoji !== item.emoji)].slice(0, 32);
-      setRecentEmojis(updated);
-      await AsyncStorage.setItem(EMOJI_HISTORY_KEY, JSON.stringify(updated));
+      setRecentEmojis((prev) => {
+        const updated = [item, ...prev.filter((e) => e.emoji !== item.emoji)].slice(0, 32);
+        AsyncStorage.setItem(EMOJI_HISTORY_KEY, JSON.stringify(updated)).catch(() => {});
+        return updated;
+      });
     } catch (e) {
       console.warn('Failed to save emoji history:', e);
     }
-  };
+  }, [onEmojiSelected]);
 
   const displayCategories = useMemo(() => {
     const list: EmojiCategory[] = [];
@@ -87,6 +103,22 @@ export const WhatsAppEmojiSelector: React.FC<WhatsAppEmojiSelectorProps> = ({
 
   const activeCategoryIndex = displayCategories.findIndex((c) => c.id === activeCategoryId);
   const currentCategory = displayCategories[activeCategoryIndex >= 0 ? activeCategoryIndex : 0] || displayCategories[0];
+
+  const renderEmojiItem = useCallback(
+    ({ item }: { item: EmojiItem }) => <MemoizedEmojiCell item={item} onPress={handleEmojiPress} />,
+    [handleEmojiPress]
+  );
+
+  const keyExtractor = useCallback((item: EmojiItem, index: number) => `emoji_${item.emoji}_${index}`, []);
+
+  const getItemLayout = useCallback(
+    (_: any, index: number) => ({
+      length: 38,
+      offset: 38 * Math.floor(index / 8),
+      index,
+    }),
+    []
+  );
 
   return (
     <View style={styles.container}>
@@ -132,22 +164,16 @@ export const WhatsAppEmojiSelector: React.FC<WhatsAppEmojiSelectorProps> = ({
       {/* Complete 1,800+ Emoji Grid List */}
       <FlatList
         data={currentCategory?.emojis || []}
-        keyExtractor={(item, index) => `emoji_${item.emoji}_${index}`}
+        keyExtractor={keyExtractor}
+        renderItem={renderEmojiItem}
         numColumns={8}
         showsVerticalScrollIndicator={false}
-        initialNumToRender={40}
-        maxToRenderPerBatch={40}
-        windowSize={11}
+        initialNumToRender={32}
+        maxToRenderPerBatch={24}
+        windowSize={5}
+        removeClippedSubviews={Platform.OS === 'android'}
+        getItemLayout={getItemLayout}
         contentContainerStyle={styles.emojiGridContent}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            onPress={() => handleEmojiPress(item)}
-            style={styles.emojiItem}
-            activeOpacity={0.6}
-          >
-            <Text style={styles.emojiText}>{item.emoji}</Text>
-          </TouchableOpacity>
-        )}
       />
     </View>
   );

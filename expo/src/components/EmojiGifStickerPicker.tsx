@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   StyleSheet,
   View,
@@ -9,13 +9,14 @@ import {
   ScrollView,
   ActivityIndicator,
   Dimensions,
+  Platform,
 } from 'react-native';
 import { WhatsAppEmojiSelector } from './WhatsAppEmojiSelector';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../styles/theme';
 import { fetchTrendingGifs, searchGifs, GiphyGifItem, GIF_CATEGORIES } from '../services/giphyService';
-import { STICKER_PACKS } from '../services/stickerPacks';
+import { STICKER_PACKS, StickerItem } from '../services/stickerPacks';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -28,6 +29,38 @@ interface EmojiGifStickerPickerProps {
 }
 
 type PickerTab = 'emoji' | 'gif' | 'sticker';
+
+const MemoizedGifCell = React.memo<{
+  item: GiphyGifItem;
+  onPress: (url: string, w: number, h: number) => void;
+}>(
+  ({ item, onPress }) => (
+    <TouchableOpacity
+      onPress={() => onPress(item.originalUrl, item.width, item.height)}
+      style={styles.gifItem}
+    >
+      <Image
+        source={{ uri: item.previewUrl }}
+        style={styles.gifImage}
+        contentFit="cover"
+        autoplay
+      />
+    </TouchableOpacity>
+  ),
+  (prev, next) => prev.item.id === next.item.id
+);
+
+const MemoizedStickerCell = React.memo<{
+  item: StickerItem;
+  onPress: (url: string) => void;
+}>(
+  ({ item, onPress }) => (
+    <TouchableOpacity onPress={() => onPress(item.url)} style={styles.stickerItem}>
+      <Image source={{ uri: item.url }} style={styles.stickerImage} contentFit="contain" />
+    </TouchableOpacity>
+  ),
+  (prev, next) => prev.item.id === next.item.id
+);
 
 export const EmojiGifStickerPicker: React.FC<EmojiGifStickerPickerProps> = ({
   visible,
@@ -74,6 +107,23 @@ export const EmojiGifStickerPicker: React.FC<EmojiGifStickerPickerProps> = ({
   const handleGifSearchSubmit = () => {
     loadGifs(gifQuery);
   };
+
+  const renderGifItem = useCallback(
+    ({ item }: { item: GiphyGifItem }) => (
+      <MemoizedGifCell item={item} onPress={onSelectGif} />
+    ),
+    [onSelectGif]
+  );
+
+  const renderStickerItem = useCallback(
+    ({ item }: { item: StickerItem }) => (
+      <MemoizedStickerCell item={item} onPress={onSelectSticker} />
+    ),
+    [onSelectSticker]
+  );
+
+  const gifKeyExtractor = useCallback((item: GiphyGifItem) => item.id, []);
+  const stickerKeyExtractor = useCallback((item: StickerItem) => item.id, []);
 
   if (!visible) return null;
 
@@ -170,22 +220,14 @@ export const EmojiGifStickerPicker: React.FC<EmojiGifStickerPickerProps> = ({
           ) : (
             <FlatList
               data={gifs}
-              keyExtractor={(item) => item.id}
+              keyExtractor={gifKeyExtractor}
+              renderItem={renderGifItem}
               numColumns={3}
+              initialNumToRender={12}
+              maxToRenderPerBatch={12}
+              windowSize={5}
+              removeClippedSubviews={Platform.OS === 'android'}
               contentContainerStyle={styles.gifGridContent}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  onPress={() => onSelectGif(item.originalUrl, item.width, item.height)}
-                  style={styles.gifItem}
-                >
-                  <Image
-                    source={{ uri: item.previewUrl }}
-                    style={styles.gifImage}
-                    contentFit="cover"
-                    autoplay
-                  />
-                </TouchableOpacity>
-              )}
             />
           )}
         </View>
@@ -224,17 +266,14 @@ export const EmojiGifStickerPicker: React.FC<EmojiGifStickerPickerProps> = ({
           {/* Stickers Grid */}
           <FlatList
             data={STICKER_PACKS[selectedPackIndex]?.stickers || []}
-            keyExtractor={(item) => item.id}
+            keyExtractor={stickerKeyExtractor}
+            renderItem={renderStickerItem}
             numColumns={4}
+            initialNumToRender={16}
+            maxToRenderPerBatch={16}
+            windowSize={5}
+            removeClippedSubviews={Platform.OS === 'android'}
             contentContainerStyle={styles.stickerGridContent}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                onPress={() => onSelectSticker(item.url)}
-                style={styles.stickerItem}
-              >
-                <Image source={{ uri: item.url }} style={styles.stickerImage} contentFit="contain" />
-              </TouchableOpacity>
-            )}
           />
         </View>
       )}
