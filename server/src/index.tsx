@@ -8,8 +8,10 @@ import authRoutes from './routes/auth.routes.js';
 import chatRoutes from './routes/chat.routes.js';
 import mediaRoutes from './routes/media.routes.js';
 import userRoutes from './routes/user.routes.js';
+import adminRoutes from './routes/admin.routes.js';
 import User from './models/User.js';
 import { setupSockets } from './sockets/socket.js';
+import { initBackgroundCronServices } from './services/cron.service.js';
 
 dotenv.config();
 
@@ -33,6 +35,10 @@ app.use('/api/auth', authRoutes);
 app.use('/api/chats', chatRoutes);
 app.use('/api/media', mediaRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/admin', adminRoutes);
+
+// Start background Cloudinary maintenance cron jobs
+initBackgroundCronServices();
 
 
 app.get('/health', (_, res) => res.send({ status: 'ok', timestamp: new Date() }));
