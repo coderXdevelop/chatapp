@@ -1,15 +1,15 @@
 {
   "expo": {
-    "name": "chatapp",
-    "slug": "chatapp-root",
+    "name": "LinkUP",
+    "slug": "linkup",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
-    "scheme": "chatapp",
+    "icon": "./assets/images/Linkup.png",
+    "scheme": "linkup",
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon",
-      "bundleIdentifier": "com.nandan.chatapp"
+      "bundleIdentifier": "com.nandan.linkup"
     },
     "android": {
       "adaptiveIcon": {
@@ -19,7 +19,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.nandan.chatapp"
+      "package": "com.nandan.linkup"
     },
     "web": {
       "output": "static",
@@ -39,14 +39,14 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow ChatConnect to access your photos.",
-          "cameraPermission": "Allow ChatConnect to capture photos or videos."
+          "photosPermission": "Allow LinkUP to access your photos.",
+          "cameraPermission": "Allow LinkUP to capture photos or videos."
         }
       ],
       [
         "expo-audio",
         {
-          "microphonePermission": "Allow ChatConnect to access your microphone for recording voice notes.",
+          "microphonePermission": "Allow LinkUP to access your microphone for recording voice notes.",
           "recordAudioAndroid": true
         }
       ],
@@ -59,7 +59,14 @@
       ],
       "expo-sharing",
       "expo-web-browser",
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/Linkup.png",
+          "color": "#F59E0B"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

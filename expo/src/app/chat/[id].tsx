@@ -56,6 +56,8 @@ export default function ChatScreen() {
     deleteMessage,
     markAsRead,
     connectSocket,
+    enterChatRoom,
+    leaveChatRoom,
     typingStates,
     sendTypingStart,
     sendTypingStop,
@@ -208,11 +210,13 @@ export default function ChatScreen() {
     if (!chatId) return;
 
     connectSocket();
+    enterChatRoom(chatId);
     fetchMessages(chatId);
     markAsRead(chatId);
     fetchBlockedUsers();
 
     return () => {
+      leaveChatRoom(chatId);
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
       }
@@ -292,7 +296,7 @@ export default function ChatScreen() {
 
       if (!isLocal) {
         const fileExtension = type === 'video' ? 'mp4' : type === 'audio' ? 'm4a' : 'jpg';
-        const filename = `ChatConnect_${Date.now()}.${fileExtension}`;
+        const filename = `LinkUP_${Date.now()}.${fileExtension}`;
         const localUri = `${FileSystem.documentDirectory}${filename}`;
         const downloadResult = await FileSystem.downloadAsync(url, localUri);
         targetUri = downloadResult.uri;
@@ -1638,7 +1642,7 @@ export default function ChatScreen() {
               {/* Display Name */}
               <View style={styles.profileInfoItem}>
                 <Text style={styles.profileLabel}>USER NAME</Text>
-                <Text style={styles.profileValue}>{recipient?.displayName || 'ChatConnect User'}</Text>
+                <Text style={styles.profileValue}>{recipient?.displayName || 'LinkUP User'}</Text>
               </View>
 
               <View style={styles.profileDivider} />

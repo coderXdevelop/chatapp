@@ -67,3 +67,20 @@ export async function registerPushTokenOnBackend(pushToken: string) {
     return false;
   }
 }
+
+export async function presentLocalNotification(title: string, body: string, data?: Record<string, any>) {
+  try {
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title,
+        body,
+        data: data || {},
+        sound: 'default',
+      },
+      trigger: null, // trigger immediately
+    });
+  } catch (error) {
+    console.error('Error presenting local notification:', error);
+  }
+}
+

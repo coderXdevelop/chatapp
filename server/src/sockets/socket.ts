@@ -33,15 +33,11 @@ export function setupSockets(io: Server) {
     console.log(`Socket client connected: ${userId}`);
     await socket.join(`user:${userId}`);
 
-    // Programmatically join socket to room for each of its active chats
     let userChats: any[] = [];
     try {
       userChats = await Chat.find({ participants: userId });
-      userChats.forEach((chat) => {
-        socket.join(`chat:${chat._id}`);
-      });
     } catch (e) {
-      console.error('Error joining chat rooms for connecting socket:', e);
+      console.error('Error finding user chats for connecting socket:', e);
     }
 
     // Presence: Track Redis connections
@@ -80,6 +76,19 @@ export function setupSockets(io: Server) {
         console.error('Redis presence connect error:', err);
       }
     }
+
+    // Active chat room tracking
+    socket.on('join_chat_room', (data: { chatId: string }) => {
+      if (data?.chatId) {
+        socket.join(`active_chat:${data.chatId}`);
+      }
+    });
+
+    socket.on('leave_chat_room', (data: { chatId: string }) => {
+      if (data?.chatId) {
+        socket.leave(`active_chat:${data.chatId}`);
+      }
+    });
 
     // Handle sending a message
     socket.on('send_message', async (data: {
@@ -152,20 +161,26 @@ export function setupSockets(io: Server) {
         });
         await chat.save();
 
-        // Broadcast message to everyone in the chat room
-        io.to(`chat:${chatId}`).emit('new_message', populated);
+        // Broadcast message to active chat room & user channels
+        io.to(`active_chat:${chatId}`).emit('new_message', populated);
+        chat.participants.forEach((pId) => {
+          const recipientId = pId.toString();
+          if (recipientId !== userId) {
+            io.to(`user:${recipientId}`).emit('new_message', populated);
+          }
+        });
 
         // Send push notifications to other participants who are not actively in this chat room
         try {
-          const chatRoom = `chat:${chatId}`;
-          const socketsInChat = await io.in(chatRoom).fetchSockets();
-          const activeUserIds = new Set(socketsInChat.map((s: any) => s.user?.userId));
+          const activeRoom = `active_chat:${chatId}`;
+          const socketsInActiveRoom = await io.in(activeRoom).fetchSockets();
+          const activeUserIds = new Set(socketsInActiveRoom.map((s: any) => s.user?.userId));
 
           const senderName = (populated.sender as any).displayName || 'Someone';
 
           let bodyText = text || '';
           if (!bodyText && mediaType) {
-            const typeIcons = { image: '📷 Photo', video: '🎥 Video', audio: '🎵 Voice note', document: '📄 Document' };
+            const typeIcons: Record<string, string> = { image: '📷 Photo', video: '🎥 Video', audio: '🎵 Voice note', document: '📄 Document' };
             bodyText = typeIcons[mediaType] || 'Sent a file';
           }
 

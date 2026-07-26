@@ -44,7 +44,7 @@ export default function LoginScreen() {
   const [otpCode, setOtpCode] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [age, setAge] = useState('');
-  const [status, setStatus] = useState('Hey there! I am using ChatConnect.');
+  const [status, setStatus] = useState('Hey there! I am using LinkUP.');
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
 
   // Forgot password form states
@@ -302,15 +302,15 @@ export default function LoginScreen() {
               <View style={styles.backPlaceholder} />
             )}
             <View style={styles.badgeContainer}>
-              <Text style={styles.badgeText}>ChatConnect</Text>
+              <Text style={styles.badgeText}>LinkUP</Text>
             </View>
           </View>
 
           <View style={globalStyles.content}>
-            {/* Mockup Central Green Glowing Orb Logo */}
+            {/* LinkUP Logo */}
             <View style={styles.orbContainer}>
               <Image
-                source={require('../../assets/images/logo-glow.png')}
+                source={require('../../assets/images/Linkup.png')}
                 style={styles.orbImage}
                 resizeMode="contain"
               />
@@ -631,7 +631,7 @@ export default function LoginScreen() {
                         <View style={[globalStyles.inputWrapper, focusedField === 'reg-status' && globalStyles.inputFocused]}>
                           <TextInput
                             style={globalStyles.input}
-                            placeholder="Hey there! I am using ChatConnect."
+                            placeholder="Hey there! I am using LinkUP."
                             placeholderTextColor={COLORS.textSecondary}
                             value={status}
                             onChangeText={setStatus}

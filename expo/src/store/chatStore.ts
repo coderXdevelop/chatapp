@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { io, Socket } from 'socket.io-client';
 import { api } from '../services/api';
 import { useAuthStore } from './authStore';
+import { presentLocalNotification } from '../services/notifications';
 
 export interface Message {
   _id: string;
@@ -76,9 +77,12 @@ interface ChatState {
   hasMoreMessages: Record<string, boolean>;
   socket: Socket | null;
   socketConnected: boolean;
+  activeChatId: string | null;
   typingStates: Record<string, string[]>;
   blockedUsers: any[];
 
+  enterChatRoom: (chatId: string) => void;
+  leaveChatRoom: (chatId: string) => void;
   fetchChats: () => Promise<void>;
   createChat: (participantId: string) => Promise<Chat | null>;
   fetchMessages: (chatId: string, loadMore?: boolean) => Promise<void>;
@@ -155,8 +159,27 @@ export const useChatStore = create<ChatState>()(
   hasMoreMessages: {},
   socket: null,
   socketConnected: false,
+  activeChatId: null,
   typingStates: {},
   blockedUsers: [],
+
+  enterChatRoom: (chatId: string) => {
+    set({ activeChatId: chatId });
+    const socket = get().socket;
+    if (socket && socket.connected) {
+      socket.emit('join_chat_room', { chatId });
+    }
+  },
+
+  leaveChatRoom: (chatId: string) => {
+    if (get().activeChatId === chatId) {
+      set({ activeChatId: null });
+    }
+    const socket = get().socket;
+    if (socket && socket.connected) {
+      socket.emit('leave_chat_room', { chatId });
+    }
+  },
 
 
   fetchChats: async () => {
@@ -519,6 +542,10 @@ export const useChatStore = create<ChatState>()(
 
     newSocket.on('connect', () => {
       set({ socketConnected: true });
+      const currentActiveId = get().activeChatId;
+      if (currentActiveId) {
+        newSocket.emit('join_chat_room', { chatId: currentActiveId });
+      }
     });
 
     newSocket.on('disconnect', () => {
@@ -526,6 +553,21 @@ export const useChatStore = create<ChatState>()(
     });
 
     newSocket.on('new_message', (msg: Message) => {
+      const currentUser = useAuthStore.getState().user;
+      const currentUserId = currentUser?.id;
+      const activeChatId = get().activeChatId;
+
+      // Present local notification if user is not currently in this chat room and sender is not current user
+      if (msg.sender?._id !== currentUserId && msg.chat !== activeChatId) {
+        const title = msg.sender?.displayName || 'New Message';
+        let body = msg.text || '';
+        if (!body && msg.mediaType) {
+          const typeIcons: Record<string, string> = { image: '📷 Photo', video: '🎥 Video', audio: '🎵 Voice note', document: '📄 Document', gif: '👾 GIF', sticker: '🎨 Sticker' };
+          body = typeIcons[msg.mediaType] || 'Sent a file';
+        }
+        presentLocalNotification(title, body, { chatId: msg.chat, messageId: msg._id });
+      }
+
       // Append message only if messages have been loaded for this room
       const activeChatLoaded = get().messages[msg.chat] !== undefined;
 

@@ -222,7 +222,7 @@ export default function ForwardScreen() {
 
                     <View style={styles.chatInfo}>
                       <Text style={styles.chatName} numberOfLines={1}>
-                        {partner?.displayName || 'ChatConnect User'}
+                        {partner?.displayName || 'LinkUP User'}
                       </Text>
                       <Text style={styles.chatSubtext} numberOfLines={1}>
                         {partner?.connectId ? `@${partner.connectId}` : partner?.email}

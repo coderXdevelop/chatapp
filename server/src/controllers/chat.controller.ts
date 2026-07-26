@@ -238,13 +238,19 @@ export async function sendMessageHttp(req: AuthenticatedRequest, res: Response) 
     // Broadcast to other sockets
     const io = req.app.get('io') as Server;
     if (io) {
-      io.to(`chat:${chatId}`).emit('new_message', populatedMessage);
+      io.to(`active_chat:${chatId}`).emit('new_message', populatedMessage);
+      chat.participants.forEach((pId) => {
+        const recipientId = pId.toString();
+        if (recipientId !== userId) {
+          io.to(`user:${recipientId}`).emit('new_message', populatedMessage);
+        }
+      });
 
       // Send push notifications to other participants who are not actively in this chat room
       try {
-        const chatRoom = `chat:${chatId}`;
-        const socketsInChat = await io.in(chatRoom).fetchSockets();
-        const activeUserIds = new Set(socketsInChat.map((s: any) => s.user?.userId));
+        const activeRoom = `active_chat:${chatId}`;
+        const socketsInActiveRoom = await io.in(activeRoom).fetchSockets();
+        const activeUserIds = new Set(socketsInActiveRoom.map((s: any) => s.user?.userId));
 
         const senderName = (populatedMessage.sender as any).displayName || 'Someone';
 
@@ -380,13 +386,19 @@ export async function forwardMessages(req: AuthenticatedRequest, res: Response) 
         sentMessagesByChat[chatId].push(populated);
 
         if (io) {
-          io.to(`chat:${chatId}`).emit('new_message', populated);
+          io.to(`active_chat:${chatId}`).emit('new_message', populated);
+          chat.participants.forEach((pId) => {
+            const recipientId = pId.toString();
+            if (recipientId !== userId) {
+              io.to(`user:${recipientId}`).emit('new_message', populated);
+            }
+          });
 
           // Send push notifications to other participants who are not actively in this chat room
           try {
-            const chatRoom = `chat:${chatId}`;
-            const socketsInChat = await io.in(chatRoom).fetchSockets();
-            const activeUserIds = new Set(socketsInChat.map((s: any) => s.user?.userId));
+            const activeRoom = `active_chat:${chatId}`;
+            const socketsInActiveRoom = await io.in(activeRoom).fetchSockets();
+            const activeUserIds = new Set(socketsInActiveRoom.map((s: any) => s.user?.userId));
 
             const senderName = (populated.sender as any).displayName || 'Someone';
 

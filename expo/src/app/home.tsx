@@ -170,11 +170,18 @@ export default function HomeScreen() {
               </View>
             ) : (
               <View style={styles.header}>
-                <View>
-                  <Text style={styles.headerTitle}>Chats</Text>
-                  <Text style={styles.connectionStatus}>
-                    {socketConnected ? '🟢 Connected' : '🔴 Connecting...'}
-                  </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Image
+                    source={require('../../assets/images/Linkup.png')}
+                    style={{ width: 34, height: 34, borderRadius: 8, marginRight: 10 }}
+                    resizeMode="contain"
+                  />
+                  <View>
+                    <Text style={styles.headerTitle}>LinkUP</Text>
+                    <Text style={styles.connectionStatus}>
+                      {socketConnected ? '🟢 Connected' : '🔴 Connecting...'}
+                    </Text>
+                  </View>
                 </View>
               </View>
             )}
@@ -251,7 +258,7 @@ export default function HomeScreen() {
                 }
                 renderItem={({ item }) => {
                   const partner = item.participants.find((p) => p._id !== user?.id);
-                  const displayName = item.isGroup ? item.name : (partner?.displayName || 'ChatConnect User');
+                  const displayName = item.isGroup ? item.name : (partner?.displayName || 'LinkUP User');
                   const avatarUrl = item.isGroup ? item.avatarUrl : partner?.avatarUrl;
                   const initial = (displayName || 'C').charAt(0).toUpperCase();
                   const unreadCount = item.unreadCounts?.[user?.id || ''] || 0;
@@ -335,7 +342,7 @@ export default function HomeScreen() {
         {activeTab === 'HELP' && (
           <ScrollView contentContainerStyle={styles.helpContainer}>
             <Text style={styles.helpTitle}>Help & FAQ</Text>
-            <Text style={styles.helpSubtitle}>Get help with ChatConnect core messaging.</Text>
+            <Text style={styles.helpSubtitle}>Get help with LinkUP core messaging.</Text>
 
             <View style={styles.helpCard}>
               <Text style={styles.helpCardTitle}>💬 Direct Messaging & Groups</Text>

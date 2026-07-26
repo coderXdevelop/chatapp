@@ -213,7 +213,7 @@ export default function CreateGroupScreen() {
                 <View style={styles.contactInfo}>
                   <Text style={styles.contactName}>{item.displayName}</Text>
                   <Text style={styles.contactStatus} numberOfLines={1}>
-                    {item.status || 'Hey there! I am using ChatConnect.'}
+                    {item.status || 'Hey there! I am using LinkUP.'}
                   </Text>
                 </View>
                 <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
