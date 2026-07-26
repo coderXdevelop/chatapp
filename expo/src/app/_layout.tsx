@@ -102,21 +102,6 @@ export default function RootLayout() {
     }).catch((err) => console.error("Failed to load storageManager:", err));
   }, []);
 
-  if (!isInitialized) {
-    return (
-      <View style={styles.splashContainer}>
-        <Image
-          source={require("../../assets/images/Linkup.png")}
-          style={styles.splashLogo}
-          resizeMode="contain"
-        />
-        <Text style={styles.splashTitle}>LinkUP</Text>
-        <Text style={styles.splashSubtitle}>Connecting People Real-Time</Text>
-        <ActivityIndicator size="large" color="#F59E0B" style={{ marginTop: 24 }} />
-      </View>
-    );
-  }
-
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <Stack screenOptions={{ headerShown: false }}>
@@ -129,6 +114,21 @@ export default function RootLayout() {
         <Stack.Screen name="chat/group/create" />
         <Stack.Screen name="chat/group/settings" />
       </Stack>
+
+      {!isInitialized && (
+        <View style={StyleSheet.absoluteFillObject}>
+          <View style={styles.splashContainer}>
+            <Image
+              source={require("../../assets/images/Linkup.png")}
+              style={styles.splashLogo}
+              resizeMode="contain"
+            />
+            <Text style={styles.splashTitle}>LinkUP</Text>
+            <Text style={styles.splashSubtitle}>Connecting People Real-Time</Text>
+            <ActivityIndicator size="large" color="#F59E0B" style={{ marginTop: 24 }} />
+          </View>
+        </View>
+      )}
     </GestureHandlerRootView>
   );
 }
