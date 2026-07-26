@@ -98,7 +98,6 @@ export default function ForwardScreen() {
           {
             text: 'OK',
             onPress: () => {
-              router.dismissAll();
               router.replace('/home');
             },
           },

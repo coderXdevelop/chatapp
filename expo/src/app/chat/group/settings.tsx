@@ -20,6 +20,8 @@ import { useChatStore } from '../../../store/chatStore';
 import { COLORS, globalStyles } from '../../../styles/theme';
 import { pickMedia, getCloudinarySignature, compressImage, uploadToCloudinary } from '../../../services/mediaUpload';
 import * as Clipboard from 'expo-clipboard';
+import { CustomActionSheetModal, ActionOption } from '../../../components/CustomActionSheetModal';
+import { CustomConfirmModal } from '../../../components/CustomConfirmModal';
 
 export default function GroupSettingsScreen() {
   const router = useRouter();
@@ -54,10 +56,36 @@ export default function GroupSettingsScreen() {
 
   const [groupName, setGroupName] = useState(chat.name || '');
   const [editingName, setEditingName] = useState(false);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [newGroupName, setNewGroupName] = useState(chat?.name || '');
   const [updating, setUpdating] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [isAddMemberModalOpen, setIsAddMemberModalOpen] = useState(false);
   const [selectedNewUserIds, setSelectedNewUserIds] = useState<string[]>([]);
+  const [updatingAvatar, setUpdatingAvatar] = useState(false);
+
+  // Dark Custom Modals State
+  const [actionSheetConfig, setActionSheetConfig] = useState<{
+    visible: boolean;
+    title: string;
+    subtitle?: string;
+    options: ActionOption[];
+  }>({
+    visible: false,
+    title: '',
+    options: [],
+  });
+
+  const [confirmModalConfig, setConfirmModalConfig] = useState<{
+    visible: boolean;
+    title: string;
+    message?: string;
+    buttons: any[];
+  }>({
+    visible: false,
+    title: '',
+    buttons: [],
+  });
 
   // Find contacts not in this group
   const existingParticipantIds = chat.participants.map((p) => p._id);
@@ -120,22 +148,26 @@ export default function GroupSettingsScreen() {
     }
   };
 
-  const handleMemberOptions = (memberId: string, memberName: string) => {
-    if (memberId === user?.id) return;
+  const handleMemberPress = (memberId: string, memberName: string) => {
+    if (memberId === user?.id) return; // Cannot act on self
 
     const targetParticipant = chat.participants.find((p) => p._id === memberId);
-    const memberIsAdmin = chat.admins?.includes(memberId);
+    const memberIsAdmin = (chat.admins || []).includes(memberId);
     const memberIsCreator = chat.creator === memberId;
-
-    const options: any[] = [];
+    const options: ActionOption[] = [];
 
     if (targetParticipant?.connectId || targetParticipant?.email) {
       const copyVal = targetParticipant.connectId || targetParticipant.email;
       options.push({
-        text: `Copy User ID (${copyVal}) 📋`,
+        text: `📋 Copy User ID (${copyVal})`,
         onPress: async () => {
           await Clipboard.setStringAsync(copyVal);
-          Alert.alert('Copied to Clipboard 📋', `User ID: ${copyVal}`);
+          setConfirmModalConfig({
+            visible: true,
+            title: 'Copied 📋',
+            message: `User ID: ${copyVal}`,
+            buttons: [{ text: 'OK', style: 'primary', onPress: () => {} }],
+          });
         },
       });
     }
@@ -143,25 +175,30 @@ export default function GroupSettingsScreen() {
     if (isAdmin) {
       if (!memberIsCreator) {
         options.push({
-          text: memberIsAdmin ? 'Dismiss as Admin' : 'Make Group Admin',
+          text: memberIsAdmin ? '🛡️ Demote Admin' : '⭐ Make Group Admin',
           onPress: async () => {
             try {
               await promoteGroupAdmin(chat._id, memberId, memberIsAdmin ? 'demote' : 'promote');
             } catch (e: any) {
-              Alert.alert('Action Failed', e.message);
+              setConfirmModalConfig({
+                visible: true,
+                title: 'Action Failed',
+                message: e.message,
+                buttons: [{ text: 'OK', style: 'primary', onPress: () => {} }],
+              });
             }
           },
         });
 
         options.push({
-          text: 'Remove from Group',
-          style: 'destructive' as const,
+          text: '🚫 Remove from Group',
+          style: 'destructive',
           onPress: () => {
-            Alert.alert(
-              'Remove Member',
-              `Are you sure you want to remove ${memberName} from the group?`,
-              [
-                { text: 'Cancel', style: 'cancel' },
+            setConfirmModalConfig({
+              visible: true,
+              title: 'Remove Member',
+              message: `Are you sure you want to remove ${memberName} from the group?`,
+              buttons: [
                 {
                   text: 'Remove',
                   style: 'destructive',
@@ -169,20 +206,29 @@ export default function GroupSettingsScreen() {
                     try {
                       await removeGroupMember(chat._id, memberId);
                     } catch (e: any) {
-                      Alert.alert('Action Failed', e.message);
+                      setConfirmModalConfig({
+                        visible: true,
+                        title: 'Action Failed',
+                        message: e.message,
+                        buttons: [{ text: 'OK', style: 'primary', onPress: () => {} }],
+                      });
                     }
                   },
                 },
-              ]
-            );
+                { text: 'Cancel', style: 'cancel', onPress: () => {} },
+              ],
+            });
           },
         });
       }
     }
 
-    options.push({ text: 'Cancel', style: 'cancel' as const });
-
-    Alert.alert('Member Options', `Choose action for ${memberName}:`, options, { cancelable: true });
+    setActionSheetConfig({
+      visible: true,
+      title: 'Member Options',
+      subtitle: memberName,
+      options,
+    });
   };
 
   const handleAddMembersSubmit = async () => {
@@ -192,30 +238,34 @@ export default function GroupSettingsScreen() {
       setIsAddMemberModalOpen(false);
       setSelectedNewUserIds([]);
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to add members.');
+      setConfirmModalConfig({
+        visible: true,
+        title: 'Error',
+        message: e.message || 'Failed to add members.',
+        buttons: [{ text: 'OK', style: 'primary', onPress: () => {} }],
+      });
     }
   };
 
   const handleLeaveGroup = () => {
-    Alert.alert(
-      'Leave Group',
-      'Are you sure you want to leave this group chat?',
-      [
-        { text: 'Cancel', style: 'cancel' },
+    setConfirmModalConfig({
+      visible: true,
+      title: 'Leave Group',
+      message: 'Are you sure you want to leave this group chat?',
+      buttons: [
         {
-          text: 'Leave',
+          text: 'Leave Group',
           style: 'destructive',
           onPress: async () => {
             const success = await leaveGroup(chat._id);
             if (success) {
-              // Redirect to home chat listings list
-              router.dismissAll();
               router.replace('/home' as any);
             }
           },
         },
-      ]
-    );
+        { text: 'Cancel', style: 'cancel', onPress: () => {} },
+      ],
+    });
   };
 
   const toggleSelectNewMember = (userId: string) => {
@@ -352,7 +402,7 @@ export default function GroupSettingsScreen() {
           return (
             <TouchableOpacity
               style={styles.memberRow}
-              onPress={() => handleMemberOptions(item._id, item.displayName)}
+              onPress={() => handleMemberPress(item._id, item.displayName)}
               disabled={!isAdmin || item._id === user?.id}
               activeOpacity={0.7}
             >
@@ -475,6 +525,24 @@ export default function GroupSettingsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Dark Action Sheet Modal */}
+      <CustomActionSheetModal
+        visible={actionSheetConfig.visible}
+        title={actionSheetConfig.title}
+        subtitle={actionSheetConfig.subtitle}
+        options={actionSheetConfig.options}
+        onClose={() => setActionSheetConfig((prev) => ({ ...prev, visible: false }))}
+      />
+
+      {/* Dark Confirm Dialog Modal */}
+      <CustomConfirmModal
+        visible={confirmModalConfig.visible}
+        title={confirmModalConfig.title}
+        message={confirmModalConfig.message}
+        buttons={confirmModalConfig.buttons}
+        onClose={() => setConfirmModalConfig((prev) => ({ ...prev, visible: false }))}
+      />
     </SafeAreaView>
   );
 }
