@@ -10,7 +10,7 @@ import {
   ActivityIndicator,
   Dimensions,
 } from 'react-native';
-import EmojiSelector from 'react-native-emoji-selector';
+import { WhatsAppEmojiSelector } from './WhatsAppEmojiSelector';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../styles/theme';
@@ -109,19 +109,10 @@ export const EmojiGifStickerPicker: React.FC<EmojiGifStickerPickerProps> = ({
         </TouchableOpacity>
       </View>
 
-      {/* TAB 1: EMOJI PICKER (Powered by react-native-emoji-selector) */}
+      {/* TAB 1: EMOJI PICKER (Powered by WhatsAppEmojiSelector) */}
       {activeTab === 'emoji' && (
         <View style={styles.emojiSelectorWrapper}>
-          <EmojiSelector
-            onEmojiSelected={(emoji) => onSelectEmoji(emoji)}
-            showTabs={true}
-            showSearchBar={true}
-            showHistory={true}
-            showSectionTitles={false}
-            columns={8}
-            placeholder="Search emoji..."
-            theme={COLORS.primary}
-          />
+          <WhatsAppEmojiSelector onEmojiSelected={onSelectEmoji} />
         </View>
       )}
 
