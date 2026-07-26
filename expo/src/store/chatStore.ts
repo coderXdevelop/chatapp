@@ -15,7 +15,7 @@ export interface Message {
   text?: string;
   status: 'sending' | 'sent' | 'delivered' | 'read';
   mediaUrl?: string;
-  mediaType?: 'image' | 'video' | 'audio' | 'document';
+  mediaType?: 'image' | 'video' | 'audio' | 'document' | 'gif' | 'sticker';
   mediaDuration?: number;
   mediaSize?: number;
   mediaWidth?: number;
@@ -77,7 +77,7 @@ interface ChatState {
     replyTo?: string,
     media?: {
       url: string;
-      type: 'image' | 'video' | 'audio';
+      type: 'image' | 'video' | 'audio' | 'document' | 'gif' | 'sticker';
       duration?: number;
       size?: number;
       width?: number;

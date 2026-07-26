@@ -11,7 +11,7 @@ import { openDocumentFile } from '../services/documentViewer';
 interface MediaMessageProps {
   messageId: string;
   mediaUrl: string;
-  mediaType: 'image' | 'video' | 'audio' | 'document';
+  mediaType: 'image' | 'video' | 'audio' | 'document' | 'gif' | 'sticker';
   mediaWidth?: number;
   mediaHeight?: number;
   mediaDuration?: number;
@@ -134,6 +134,27 @@ export const MediaMessage: React.FC<MediaMessageProps> = ({
           contentFit="cover"
           transition={250}
           cachePolicy="disk"
+        />
+      );
+    }
+
+    if (mediaType === 'gif') {
+      return (
+        <Image
+          source={{ uri: activeUrl }}
+          style={{ width: maxWidth, height: height || 180, borderRadius: 12 }}
+          contentFit="cover"
+          autoplay
+        />
+      );
+    }
+
+    if (mediaType === 'sticker') {
+      return (
+        <Image
+          source={{ uri: activeUrl }}
+          style={{ width: 140, height: 140 }}
+          contentFit="contain"
         />
       );
     }

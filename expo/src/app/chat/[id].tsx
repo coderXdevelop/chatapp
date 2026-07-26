@@ -34,6 +34,7 @@ import { ScrollToBottomButton } from '../../components/ScrollToBottomButton';
 import { ZoomableImageViewer } from '../../components/ZoomableImageViewer';
 import { FullscreenVideoViewer } from '../../components/FullscreenVideoViewer';
 import { MultiMediaPreviewModal } from '../../components/MultiMediaPreviewModal';
+import { EmojiGifStickerPicker } from '../../components/EmojiGifStickerPicker';
 
 export default function ChatScreen() {
   const { id: chatId } = useLocalSearchParams<{ id: string }>();
@@ -102,6 +103,7 @@ export default function ChatScreen() {
   // States for Camera & Multi-Media preview batch sending
   const [batchAssets, setBatchAssets] = useState<ImagePicker.ImagePickerAsset[]>([]);
   const [isBatchPreviewOpen, setIsBatchPreviewOpen] = useState(false);
+  const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
 
   useEffect(() => {
     const showSub = Keyboard.addListener(
@@ -705,6 +707,38 @@ export default function ChatScreen() {
     } catch (e: any) {
       console.error('Batch send error:', e);
       Alert.alert('Error', 'Failed to initialize media upload.');
+    }
+  };
+
+  const handleSelectEmoji = (emojiChar: string) => {
+    setText((prev) => prev + emojiChar);
+  };
+
+  const handleSelectGif = async (gifUrl: string, width?: number, height?: number) => {
+    setIsEmojiPickerOpen(false);
+    if (!chatId) return;
+    try {
+      await sendMessage(chatId, '', undefined, {
+        url: gifUrl,
+        type: 'gif',
+        width,
+        height,
+      });
+    } catch (e) {
+      console.error('Failed to send GIF:', e);
+    }
+  };
+
+  const handleSelectSticker = async (stickerUrl: string) => {
+    setIsEmojiPickerOpen(false);
+    if (!chatId) return;
+    try {
+      await sendMessage(chatId, '', undefined, {
+        url: stickerUrl,
+        type: 'sticker',
+      });
+    } catch (e) {
+      console.error('Failed to send sticker:', e);
     }
   };
 
@@ -1364,11 +1398,27 @@ export default function ChatScreen() {
                 <TouchableOpacity onPress={handleCameraPress} style={styles.cameraInputButton}>
                   <Ionicons name="camera-outline" size={22} color={COLORS.accent} />
                 </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => {
+                    if (!isEmojiPickerOpen) {
+                      Keyboard.dismiss();
+                    }
+                    setIsEmojiPickerOpen((prev) => !prev);
+                  }}
+                  style={styles.cameraInputButton}
+                >
+                  <Ionicons
+                    name={isEmojiPickerOpen ? 'keypad-outline' : 'happy-outline'}
+                    size={22}
+                    color={COLORS.accent}
+                  />
+                </TouchableOpacity>
                 <TextInput
                   placeholder={editingMessage ? "Edit message..." : "Type a message..."}
                   placeholderTextColor={COLORS.textSecondary}
                   value={text}
                   onChangeText={handleTextChange}
+                  onFocus={() => setIsEmojiPickerOpen(false)}
                   style={styles.textInput}
                   multiline
                 />
@@ -1389,6 +1439,15 @@ export default function ChatScreen() {
             )}
           </View>
         )}
+
+        {/* Emoji, GIF, and Sticker Tabbed Picker Sheet */}
+        <EmojiGifStickerPicker
+          visible={isEmojiPickerOpen}
+          onClose={() => setIsEmojiPickerOpen(false)}
+          onSelectEmoji={handleSelectEmoji}
+          onSelectGif={handleSelectGif}
+          onSelectSticker={handleSelectSticker}
+        />
       </KeyboardAvoidingView>
 
       {/* Media Options Action Sheet Modal */}
