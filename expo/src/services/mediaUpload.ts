@@ -33,6 +33,40 @@ export const pickMedia = async (
   return result.canceled ? null : result.assets;
 };
 
+export const pickAnyMediaFromGallery = async (): Promise<ImagePicker.ImagePickerAsset[] | null> => {
+  const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (!permission.granted) {
+    alert('Permission to access media library is required!');
+    return null;
+  }
+
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ['images', 'videos'],
+    allowsMultipleSelection: true,
+    quality: 0.8,
+    videoExportPreset: ImagePicker.VideoExportPreset.H264_960x540,
+  });
+
+  return result.canceled ? null : result.assets;
+};
+
+export const captureMediaWithCamera = async (): Promise<ImagePicker.ImagePickerAsset[] | null> => {
+  const permission = await ImagePicker.requestCameraPermissionsAsync();
+  if (!permission.granted) {
+    alert('Permission to access camera is required!');
+    return null;
+  }
+
+  const result = await ImagePicker.launchCameraAsync({
+    mediaTypes: ['images', 'videos'],
+    quality: 0.8,
+    allowsEditing: false,
+    videoExportPreset: ImagePicker.VideoExportPreset.H264_960x540,
+  });
+
+  return result.canceled ? null : result.assets;
+};
+
 export const compressImage = async (uri: string): Promise<string> => {
   try {
     const result = await ImageManipulator.manipulateAsync(

@@ -14,6 +14,7 @@ import {
   Alert,
   Image,
   Switch,
+  Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -23,14 +24,16 @@ import { COLORS, globalStyles } from '../../styles/theme';
 import axios from 'axios';
 import { Ionicons } from '@expo/vector-icons';
 import { MediaMessage } from '../../components/MediaMessage';
-import { pickMedia, compressImage, uploadToCloudinary, getCloudinarySignature } from '../../services/mediaUpload';
+import { pickMedia, compressImage, uploadToCloudinary, getCloudinarySignature, captureMediaWithCamera, pickAnyMediaFromGallery } from '../../services/mediaUpload';
 import { useVoiceRecorder } from '../../hooks/useVoiceRecorder';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 import { MemoizedMessageItem } from '../../components/MemoizedMessageItem';
 import { ScrollToBottomButton } from '../../components/ScrollToBottomButton';
 import { ZoomableImageViewer } from '../../components/ZoomableImageViewer';
 import { FullscreenVideoViewer } from '../../components/FullscreenVideoViewer';
+import { MultiMediaPreviewModal } from '../../components/MultiMediaPreviewModal';
 
 export default function ChatScreen() {
   const { id: chatId } = useLocalSearchParams<{ id: string }>();
@@ -95,6 +98,20 @@ export default function ChatScreen() {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isAvatarViewerOpen, setIsAvatarViewerOpen] = useState(false);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+
+  // States for Camera & Multi-Media preview batch sending
+  const [batchAssets, setBatchAssets] = useState<ImagePicker.ImagePickerAsset[]>([]);
+  const [isBatchPreviewOpen, setIsBatchPreviewOpen] = useState(false);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      () => {
+        flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+      }
+    );
+    return () => showSub.remove();
+  }, []);
 
   const chatMessages = messages[chatId || ''] || [];
   const isLoading = loadingMessages[chatId || ''] || false;
@@ -529,6 +546,122 @@ export default function ChatScreen() {
         delete updated[tempId];
         return updated;
       });
+    }
+  };
+
+  const handleCameraPress = async () => {
+    try {
+      const assets = await captureMediaWithCamera();
+      if (assets && assets.length > 0) {
+        setBatchAssets(assets);
+        setIsBatchPreviewOpen(true);
+      }
+    } catch (e) {
+      console.error('Camera launch error:', e);
+    }
+  };
+
+  const handleAddMoreFromCamera = async () => {
+    try {
+      const assets = await captureMediaWithCamera();
+      if (assets && assets.length > 0) {
+        setBatchAssets((prev) => [...prev, ...assets]);
+      }
+    } catch (e) {
+      console.error('Add camera error:', e);
+    }
+  };
+
+  const handleAddMoreFromGallery = async () => {
+    try {
+      const assets = await pickAnyMediaFromGallery();
+      if (assets && assets.length > 0) {
+        setBatchAssets((prev) => [...prev, ...assets]);
+      }
+    } catch (e) {
+      console.error('Add gallery error:', e);
+    }
+  };
+
+  const handleSendMediaBatch = async (assetsToSend: ImagePicker.ImagePickerAsset[], captionText: string) => {
+    setIsBatchPreviewOpen(false);
+    setBatchAssets([]);
+
+    if (!chatId || assetsToSend.length === 0) return;
+
+    try {
+      const signatureData = await getCloudinarySignature();
+
+      assetsToSend.forEach(async (asset, index) => {
+        const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const controller = new AbortController();
+        activeUploadsRef.current[tempId] = controller;
+
+        const isVideo = asset.type === 'video';
+        const mediaType = isVideo ? 'video' : 'image';
+        const textCaption = index === 0 && captionText.trim() ? captionText.trim() : undefined;
+
+        const optimisticMsg: Message = {
+          _id: tempId,
+          tempId,
+          chat: chatId,
+          sender: { _id: user!.id, displayName: user!.displayName, avatarUrl: user!.avatarUrl },
+          status: 'sending',
+          mediaUrl: asset.uri,
+          mediaType,
+          mediaWidth: asset.width,
+          mediaHeight: asset.height,
+          mediaSize: asset.fileSize,
+          text: textCaption,
+          createdAt: new Date().toISOString(),
+        };
+        addOptimisticMessage(chatId, optimisticMsg);
+
+        try {
+          let uploadUri = asset.uri;
+          if (!isVideo) {
+            uploadUri = await compressImage(asset.uri);
+          }
+
+          const mediaUrl = await uploadToCloudinary(
+            uploadUri,
+            asset.mimeType || (isVideo ? 'video/mp4' : 'image/jpeg'),
+            signatureData,
+            (progress) => {
+              setUploadProgressMap((prev) => ({ ...prev, [tempId]: progress }));
+            },
+            controller.signal
+          );
+
+          await sendFinalizedMessage(chatId, tempId, {
+            url: mediaUrl,
+            type: mediaType,
+            width: asset.width,
+            height: asset.height,
+            size: asset.fileSize,
+            duration: asset.duration ? asset.duration / 1000 : undefined,
+            text: textCaption,
+          });
+        } catch (error: any) {
+          if (axios.isCancel(error) || error.name === 'AbortError') {
+            console.log(`Upload ${tempId} was canceled.`);
+          } else {
+            console.error(`Upload ${tempId} failed:`, error);
+            removeMessage(chatId, tempId);
+            Alert.alert('Upload Failed', 'Could not upload media item.');
+          }
+        } finally {
+          delete activeUploadsRef.current[tempId];
+          setUploadProgressMap((prev) => {
+            const updated = { ...prev };
+            delete updated[tempId];
+            return updated;
+          });
+        }
+      });
+    } catch (e: any) {
+      console.error('Batch send error:', e);
+      Alert.alert('Error', 'Failed to initialize media upload.');
     }
   };
 
@@ -1055,113 +1188,118 @@ export default function ChatScreen() {
       </View>
 
 
-      {/* Message List */}
-      <View style={{ flex: 1, position: 'relative' }}>
-        <FlatList
-          ref={flatListRef}
-          data={chatMessages}
-          keyExtractor={keyExtractor}
-          inverted // Renders list from bottom to top
-          onEndReached={handleLoadMore}
-          onEndReachedThreshold={0.3}
-          initialNumToRender={15}
-          maxToRenderPerBatch={10}
-          windowSize={11}
-          removeClippedSubviews={Platform.OS === 'android'}
-          maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
-          scrollEventThrottle={16}
-          onScroll={(e) => {
-            const offset = e.nativeEvent.contentOffset.y;
-            if (offset > 300 && !showScrollToBottom) {
-              setShowScrollToBottom(true);
-            } else if (offset <= 300 && showScrollToBottom) {
-              setShowScrollToBottom(false);
-            }
-          }}
-          ListFooterComponent={
-            isLoading ? (
-              <ActivityIndicator size="small" color={COLORS.primary} style={{ marginVertical: 12 }} />
-            ) : null
-          }
-          contentContainerStyle={styles.listContent}
-          renderItem={renderMessageItem}
-        />
-
-        <ScrollToBottomButton
-          visible={showScrollToBottom}
-          onPress={scrollToBottom}
-        />
-      </View>
-
-      {/* Reply Preview Banner */}
-      {replyingTo && (
-        <View style={styles.replyBanner}>
-          <View style={styles.replyBannerBorder} />
-          <View style={styles.replyBannerContent}>
-            <Text style={styles.replyBannerSender}>
-              Replying to {replyingTo.sender._id === user?.id ? 'yourself' : replyingTo.sender.displayName}
-            </Text>
-            <Text style={styles.replyBannerText} numberOfLines={1}>
-              {replyingTo.text}
-            </Text>
-          </View>
-          <TouchableOpacity onPress={() => setReplyingTo(null)} style={styles.replyCloseButton}>
-            <Text style={styles.replyCloseText}>✕</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* Editing Banner */}
-      {editingMessage && (
-        <View style={styles.replyBanner}>
-          <View style={[styles.replyBannerBorder, { backgroundColor: COLORS.primary }]} />
-          <View style={styles.replyBannerContent}>
-            <Text style={[styles.replyBannerSender, { color: COLORS.primary }]}>
-              Editing Message
-            </Text>
-            <Text style={styles.replyBannerText} numberOfLines={1}>
-              {editingMessage.text}
-            </Text>
-          </View>
-          <TouchableOpacity
-            onPress={() => {
-              setEditingMessage(null);
-              setText('');
+      {/* Main Keyboard Avoiding Content Viewport */}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      >
+        {/* Message List */}
+        <View style={{ flex: 1, position: 'relative' }}>
+          <FlatList
+            ref={flatListRef}
+            data={chatMessages}
+            keyExtractor={keyExtractor}
+            inverted // Renders list from bottom to top
+            onEndReached={handleLoadMore}
+            onEndReachedThreshold={0.3}
+            initialNumToRender={15}
+            maxToRenderPerBatch={10}
+            windowSize={11}
+            removeClippedSubviews={Platform.OS === 'android'}
+            maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+            scrollEventThrottle={16}
+            onScroll={(e) => {
+              const offset = e.nativeEvent.contentOffset.y;
+              if (offset > 300 && !showScrollToBottom) {
+                setShowScrollToBottom(true);
+              } else if (offset <= 300 && showScrollToBottom) {
+                setShowScrollToBottom(false);
+              }
             }}
-            style={styles.replyCloseButton}
-          >
-            <Text style={styles.replyCloseText}>✕</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+            ListFooterComponent={
+              isLoading ? (
+                <ActivityIndicator size="small" color={COLORS.primary} style={{ marginVertical: 12 }} />
+              ) : null
+            }
+            contentContainerStyle={styles.listContent}
+            renderItem={renderMessageItem}
+          />
 
-      {/* Input container */}
-      {isSelectionMode ? (
-        <View style={styles.selectionActionBar}>
-          <TouchableOpacity
-            style={[styles.selectionActionButton, styles.selectionActionDelete, selectedMessageIds.length === 0 && styles.disabledButton]}
-            onPress={handleDeleteSelected}
-            disabled={selectedMessageIds.length === 0}
-          >
-            <Ionicons name="trash-outline" size={20} color="#FCA5A5" />
-            <Text style={styles.selectionActionTextDelete}>
-              Delete ({selectedMessageIds.length})
-            </Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={[styles.selectionActionButton, styles.selectionActionForward, selectedMessageIds.length === 0 && styles.disabledButton]}
-            onPress={handleForwardSelected}
-            disabled={selectedMessageIds.length === 0}
-          >
-            <Ionicons name="arrow-redo-outline" size={20} color={COLORS.primary} />
-            <Text style={styles.selectionActionTextForward}>
-              Forward ({selectedMessageIds.length})
-            </Text>
-          </TouchableOpacity>
+          <ScrollToBottomButton
+            visible={showScrollToBottom}
+            onPress={scrollToBottom}
+          />
         </View>
-      ) : (
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+
+        {/* Reply Preview Banner */}
+        {replyingTo && (
+          <View style={styles.replyBanner}>
+            <View style={styles.replyBannerBorder} />
+            <View style={styles.replyBannerContent}>
+              <Text style={styles.replyBannerSender}>
+                Replying to {replyingTo.sender._id === user?.id ? 'yourself' : replyingTo.sender.displayName}
+              </Text>
+              <Text style={styles.replyBannerText} numberOfLines={1}>
+                {replyingTo.text}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={() => setReplyingTo(null)} style={styles.replyCloseButton}>
+              <Text style={styles.replyCloseText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Editing Banner */}
+        {editingMessage && (
+          <View style={styles.replyBanner}>
+            <View style={[styles.replyBannerBorder, { backgroundColor: COLORS.primary }]} />
+            <View style={styles.replyBannerContent}>
+              <Text style={[styles.replyBannerSender, { color: COLORS.primary }]}>
+                Editing Message
+              </Text>
+              <Text style={styles.replyBannerText} numberOfLines={1}>
+                {editingMessage.text}
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => {
+                setEditingMessage(null);
+                setText('');
+              }}
+              style={styles.replyCloseButton}
+            >
+              <Text style={styles.replyCloseText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Input container */}
+        {isSelectionMode ? (
+          <View style={styles.selectionActionBar}>
+            <TouchableOpacity
+              style={[styles.selectionActionButton, styles.selectionActionDelete, selectedMessageIds.length === 0 && styles.disabledButton]}
+              onPress={handleDeleteSelected}
+              disabled={selectedMessageIds.length === 0}
+            >
+              <Ionicons name="trash-outline" size={20} color="#FCA5A5" />
+              <Text style={styles.selectionActionTextDelete}>
+                Delete ({selectedMessageIds.length})
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[styles.selectionActionButton, styles.selectionActionForward, selectedMessageIds.length === 0 && styles.disabledButton]}
+              onPress={handleForwardSelected}
+              disabled={selectedMessageIds.length === 0}
+            >
+              <Ionicons name="arrow-redo-outline" size={20} color={COLORS.primary} />
+              <Text style={styles.selectionActionTextForward}>
+                Forward ({selectedMessageIds.length})
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
           <View style={styles.inputContainer}>
             {isRecording ? (
               <View style={styles.recordingRow}>
@@ -1179,6 +1317,9 @@ export default function ChatScreen() {
               <>
                 <TouchableOpacity onPress={handleAttachPress} style={styles.attachButton}>
                   <Ionicons name="add" size={24} color={COLORS.textSecondary} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleCameraPress} style={styles.cameraInputButton}>
+                  <Ionicons name="camera-outline" size={22} color={COLORS.accent} />
                 </TouchableOpacity>
                 <TextInput
                   placeholder={editingMessage ? "Edit message..." : "Type a message..."}
@@ -1204,8 +1345,8 @@ export default function ChatScreen() {
               </>
             )}
           </View>
-        </KeyboardAvoidingView>
-      )}
+        )}
+      </KeyboardAvoidingView>
 
       {/* Media Options Action Sheet Modal */}
       <Modal
@@ -1424,6 +1565,19 @@ export default function ChatScreen() {
             downloadMediaFile(fullscreenMedia.url, 'video');
           }
         }}
+      />
+
+      {/* Multi-Media Batch Preview Sheet Modal */}
+      <MultiMediaPreviewModal
+        visible={isBatchPreviewOpen}
+        assets={batchAssets}
+        onClose={() => {
+          setIsBatchPreviewOpen(false);
+          setBatchAssets([]);
+        }}
+        onSendBatch={handleSendMediaBatch}
+        onAddMoreCamera={handleAddMoreFromCamera}
+        onAddMoreGallery={handleAddMoreFromGallery}
       />
 
       {/* Search Messages Modal */}
@@ -1718,6 +1872,13 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
     backgroundColor: COLORS.cardBackground,
+  },
+  attachButton: {
+    padding: 6,
+  },
+  cameraInputButton: {
+    padding: 6,
+    marginRight: 6,
   },
   textInput: {
     flex: 1,
@@ -2112,11 +2273,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  attachButton: {
-    paddingHorizontal: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   micButton: {
     width: 44,
