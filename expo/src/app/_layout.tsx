@@ -116,7 +116,7 @@ export default function RootLayout() {
       </Stack>
 
       {!isInitialized && (
-        <View style={StyleSheet.absoluteFillObject}>
+        <View style={StyleSheet.absoluteFill}>
           <View style={styles.splashContainer}>
             <Image
               source={require("../../assets/images/Linkup.png")}
