@@ -445,3 +445,134 @@ export function formatBytes(bytes: number): string {
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
 }
+
+export interface MediaFileDetail {
+  id: string;
+  name: string;
+  uri: string;
+  size: number;
+  formattedSize: string;
+  modificationTime: number;
+  formattedDate: string;
+  category: MediaCategory;
+}
+
+/**
+ * Retrieves list of individual files for a category (including legacy root files).
+ */
+export async function getCategoryFiles(category: MediaCategory): Promise<MediaFileDetail[]> {
+  await initStorageDirectories();
+  const fileList: MediaFileDetail[] = [];
+
+  try {
+    const folder = CATEGORY_FOLDERS[category];
+    const info = await FileSystem.getInfoAsync(folder);
+    if (info.exists && info.isDirectory) {
+      const files = await FileSystem.readDirectoryAsync(folder);
+      for (const file of files) {
+        const uri = `${folder}${file}`;
+        const fInfo = await FileSystem.getInfoAsync(uri);
+        if (fInfo.exists && !fInfo.isDirectory) {
+          const modTime = fInfo.modificationTime ? fInfo.modificationTime * 1000 : Date.now();
+          fileList.push({
+            id: uri,
+            name: file,
+            uri,
+            size: fInfo.size || 0,
+            formattedSize: formatBytes(fInfo.size || 0),
+            modificationTime: modTime,
+            formattedDate: new Date(modTime).toLocaleDateString(undefined, {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric',
+            }),
+            category,
+          });
+        }
+      }
+    }
+
+    // Also check root legacy files matching category
+    const rootPath = FileSystem.documentDirectory;
+    if (rootPath) {
+      const rootFiles = await FileSystem.readDirectoryAsync(rootPath);
+      for (const file of rootFiles) {
+        if (file === 'ChatAppMedia' || file === 'RCTAsyncLocalStorage') continue;
+
+        const uri = `${rootPath}${file}`;
+        const fInfo = await FileSystem.getInfoAsync(uri);
+        if (fInfo.exists && !fInfo.isDirectory) {
+          const ext = file.split('.').pop()?.toLowerCase() || '';
+          let matches = false;
+          if (category === 'images' && (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext) || file.startsWith('media_'))) {
+            if (ext !== 'mp4' && ext !== 'mov' && ext !== 'm4a' && ext !== 'mp3' && ext !== 'wav') matches = true;
+          } else if (category === 'videos' && ['mp4', 'mov'].includes(ext)) {
+            matches = true;
+          } else if (category === 'audio' && ['m4a', 'mp3', 'wav', 'aac'].includes(ext)) {
+            matches = true;
+          } else if (category === 'documents' && (['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'zip'].includes(ext) || file.startsWith('doc_'))) {
+            matches = true;
+          }
+
+          if (matches) {
+            const modTime = fInfo.modificationTime ? fInfo.modificationTime * 1000 : Date.now();
+            fileList.push({
+              id: uri,
+              name: file,
+              uri,
+              size: fInfo.size || 0,
+              formattedSize: formatBytes(fInfo.size || 0),
+              modificationTime: modTime,
+              formattedDate: new Date(modTime).toLocaleDateString(undefined, {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+              }),
+              category,
+            });
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error(`Error reading files for category ${category}:`, error);
+  }
+
+  // Sort newest first
+  return fileList.sort((a, b) => b.modificationTime - a.modificationTime);
+}
+
+/**
+ * Deletes a single individual file by its URI.
+ */
+export async function deleteIndividualFile(uri: string): Promise<boolean> {
+  try {
+    await FileSystem.deleteAsync(uri, { idempotent: true });
+    return true;
+  } catch (error) {
+    console.error(`Failed to delete individual file ${uri}:`, error);
+    return false;
+  }
+}
+
+/**
+ * Deletes multiple files by their URIs.
+ */
+export async function deleteMultipleFiles(uris: string[]): Promise<{ deletedCount: number; deletedBytes: number }> {
+  let deletedCount = 0;
+  let deletedBytes = 0;
+
+  for (const uri of uris) {
+    try {
+      const info = await FileSystem.getInfoAsync(uri);
+      const size = info.exists ? info.size || 0 : 0;
+      await FileSystem.deleteAsync(uri, { idempotent: true });
+      deletedCount += 1;
+      deletedBytes += size;
+    } catch (e) {
+      console.warn(`Failed to delete file ${uri}:`, e);
+    }
+  }
+
+  return { deletedCount, deletedBytes };
+}

@@ -10,10 +10,14 @@ import {
   Alert,
   Platform,
   RefreshControl,
+  Modal,
+  FlatList,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import {
   getStorageUsage,
   clearAppCache,
@@ -21,12 +25,18 @@ import {
   getAutoCleanupSettings,
   saveAutoCleanupSettings,
   runAutoCleanup,
+  getCategoryFiles,
+  deleteIndividualFile,
+  deleteMultipleFiles,
   formatBytes,
   StorageUsageResult,
   AutoCleanupSettings,
   MediaCategory,
+  MediaFileDetail,
 } from '../services/storageManager';
 import { COLORS, globalStyles } from '../styles/theme';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const CATEGORY_COLORS: Record<string, string> = {
   images: '#F59E0B',   // Amber
@@ -34,6 +44,14 @@ const CATEGORY_COLORS: Record<string, string> = {
   audio: '#10B981',    // Emerald
   documents: '#EC4899',// Pink
   cache: '#8B5CF6',    // Purple
+};
+
+const CATEGORY_TITLES: Record<MediaCategory, string> = {
+  images: 'Photos & Stickers',
+  videos: 'Videos',
+  audio: 'Voice Messages',
+  documents: 'Documents',
+  cache: 'System Cache',
 };
 
 export default function StorageSettingsScreen() {
@@ -47,6 +65,16 @@ export default function StorageSettingsScreen() {
     retentionDays: 30,
     maxStorageMB: 1024,
   });
+
+  // Category Explorer Modal State
+  const [activeCategory, setActiveCategory] = useState<MediaCategory | null>(null);
+  const [categoryFiles, setCategoryFiles] = useState<MediaFileDetail[]>([]);
+  const [filesLoading, setFilesLoading] = useState(false);
+  const [selectedUris, setSelectedUris] = useState<Set<string>>(new Set());
+  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
+
+  // Full Screen Image Preview State
+  const [previewImage, setPreviewImage] = useState<MediaFileDetail | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -70,6 +98,29 @@ export default function StorageSettingsScreen() {
 
   const onRefresh = () => {
     setRefreshing(true);
+    loadData();
+  };
+
+  const openCategoryExplorer = async (category: MediaCategory) => {
+    setActiveCategory(category);
+    setFilesLoading(true);
+    setSelectedUris(new Set());
+    setIsMultiSelectMode(false);
+    try {
+      const files = await getCategoryFiles(category);
+      setCategoryFiles(files);
+    } catch (e) {
+      console.error('Failed to get category files:', e);
+    } finally {
+      setFilesLoading(false);
+    }
+  };
+
+  const closeCategoryExplorer = () => {
+    setActiveCategory(null);
+    setCategoryFiles([]);
+    setSelectedUris(new Set());
+    setIsMultiSelectMode(false);
     loadData();
   };
 
@@ -100,20 +151,23 @@ export default function StorageSettingsScreen() {
 
   const handleDeleteCategory = async (category: MediaCategory | 'all', label: string) => {
     Alert.alert(
-      `Delete ${label}`,
+      `Delete All ${label}`,
       `Are you sure you want to delete all ${label.toLowerCase()} files from disk? They will need to be downloaded again from the server.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Delete',
+          text: 'Delete All',
           style: 'destructive',
           onPress: async () => {
             setActionLoading(true);
             const success = await deleteMediaCategory(category);
             setActionLoading(false);
             if (success) {
-              Alert.alert('Success', `${label} files deleted.`);
+              Alert.alert('Success', `All ${label.toLowerCase()} files deleted.`);
               loadData();
+              if (activeCategory === category || category === 'all') {
+                closeCategoryExplorer();
+              }
             } else {
               Alert.alert('Error', `Failed to delete ${label.toLowerCase()} files.`);
             }
@@ -121,6 +175,92 @@ export default function StorageSettingsScreen() {
         },
       ]
     );
+  };
+
+  const handleDeleteSingleFile = (file: MediaFileDetail) => {
+    Alert.alert(
+      'Delete File',
+      `Delete "${file.name}" (${file.formattedSize}) permanently from your device?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            const ok = await deleteIndividualFile(file.uri);
+            if (ok) {
+              setCategoryFiles((prev) => prev.filter((f) => f.uri !== file.uri));
+              setSelectedUris((prev) => {
+                const next = new Set(prev);
+                next.delete(file.uri);
+                return next;
+              });
+              if (previewImage?.uri === file.uri) {
+                setPreviewImage(null);
+              }
+              loadData();
+            } else {
+              Alert.alert('Error', 'Failed to delete file.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDeleteSelectedBatch = () => {
+    if (selectedUris.size === 0) return;
+
+    const count = selectedUris.size;
+    const urisToDelete = Array.from(selectedUris);
+    const totalSelectedBytes = categoryFiles
+      .filter((f) => selectedUris.has(f.uri))
+      .reduce((acc, curr) => acc + curr.size, 0);
+
+    Alert.alert(
+      'Delete Selected Items',
+      `Permanently delete ${count} selected item(s) freeing ${formatBytes(totalSelectedBytes)}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: `Delete (${count})`,
+          style: 'destructive',
+          onPress: async () => {
+            setActionLoading(true);
+            const { deletedCount } = await deleteMultipleFiles(urisToDelete);
+            setActionLoading(false);
+            if (deletedCount > 0) {
+              setCategoryFiles((prev) => prev.filter((f) => !selectedUris.has(f.uri)));
+              setSelectedUris(new Set());
+              setIsMultiSelectMode(false);
+              loadData();
+            } else {
+              Alert.alert('Error', 'Failed to delete selected files.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const toggleSelectFile = (uri: string) => {
+    setSelectedUris((prev) => {
+      const next = new Set(prev);
+      if (next.has(uri)) {
+        next.delete(uri);
+      } else {
+        next.add(uri);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectedUris.size === categoryFiles.length) {
+      setSelectedUris(new Set());
+    } else {
+      setSelectedUris(new Set(categoryFiles.map((f) => f.uri)));
+    }
   };
 
   const handleToggleAutoCleanup = async (newValue: boolean) => {
@@ -158,6 +298,147 @@ export default function StorageSettingsScreen() {
   const getCategoryPercent = (catBytes: number): number => {
     if (!totalBytes || totalBytes === 0) return 0;
     return Math.max((catBytes / totalBytes) * 100, 1);
+  };
+
+  const renderGridItem = ({ item }: { item: MediaFileDetail }) => {
+    const isSelected = selectedUris.has(item.uri);
+
+    if (activeCategory === 'images') {
+      const gridWidth = (SCREEN_WIDTH - 48) / 3;
+      return (
+        <TouchableOpacity
+          style={[styles.gridCard, { width: gridWidth, height: gridWidth }]}
+          onPress={() => {
+            if (isMultiSelectMode) {
+              toggleSelectFile(item.uri);
+            } else {
+              setPreviewImage(item);
+            }
+          }}
+          onLongPress={() => {
+            if (!isMultiSelectMode) {
+              setIsMultiSelectMode(true);
+              toggleSelectFile(item.uri);
+            }
+          }}
+          activeOpacity={0.8}
+        >
+          <Image source={{ uri: item.uri }} style={styles.gridImage} contentFit="cover" />
+          <View style={styles.gridOverlayBadge}>
+            <Text style={styles.gridBadgeText}>{item.formattedSize}</Text>
+          </View>
+          {isMultiSelectMode ? (
+            <View style={[styles.selectCheckbox, isSelected && styles.selectCheckboxActive]}>
+              {isSelected && <Ionicons name="checkmark" size={14} color="#0B111E" />}
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.singleDeleteBtn}
+              onPress={() => handleDeleteSingleFile(item)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="trash-outline" size={14} color="#FFFFFF" />
+            </TouchableOpacity>
+          )}
+        </TouchableOpacity>
+      );
+    }
+
+    if (activeCategory === 'videos') {
+      const videoWidth = (SCREEN_WIDTH - 40) / 2;
+      return (
+        <TouchableOpacity
+          style={[styles.videoCard, { width: videoWidth }]}
+          onPress={() => {
+            if (isMultiSelectMode) {
+              toggleSelectFile(item.uri);
+            } else {
+              handleDeleteSingleFile(item);
+            }
+          }}
+          onLongPress={() => {
+            if (!isMultiSelectMode) {
+              setIsMultiSelectMode(true);
+              toggleSelectFile(item.uri);
+            }
+          }}
+          activeOpacity={0.8}
+        >
+          <View style={styles.videoPlaceholder}>
+            <Ionicons name="videocam" size={32} color="#3B82F6" />
+            <View style={styles.playCircle}>
+              <Ionicons name="play" size={14} color="#FFFFFF" />
+            </View>
+          </View>
+          <View style={styles.itemDetailBody}>
+            <Text style={styles.fileNameText} numberOfLines={1}>{item.name}</Text>
+            <View style={styles.fileMetaRow}>
+              <Text style={styles.fileSizeText}>{item.formattedSize}</Text>
+              <Text style={styles.fileDateText}>{item.formattedDate}</Text>
+            </View>
+          </View>
+          {isMultiSelectMode ? (
+            <View style={[styles.selectCheckbox, isSelected && styles.selectCheckboxActive, { top: 8, right: 8 }]}>
+              {isSelected && <Ionicons name="checkmark" size={14} color="#0B111E" />}
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.cardTrashBtn}
+              onPress={() => handleDeleteSingleFile(item)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="trash-outline" size={16} color="#EF4444" />
+            </TouchableOpacity>
+          )}
+        </TouchableOpacity>
+      );
+    }
+
+    // Audio & Documents List View
+    const iconName = activeCategory === 'audio' ? 'mic' : 'document-text';
+    const iconColor = activeCategory === 'audio' ? CATEGORY_COLORS.audio : CATEGORY_COLORS.documents;
+
+    return (
+      <TouchableOpacity
+        style={[styles.listItemCard, isSelected && styles.listItemCardSelected]}
+        onPress={() => {
+          if (isMultiSelectMode) {
+            toggleSelectFile(item.uri);
+          } else {
+            handleDeleteSingleFile(item);
+          }
+        }}
+        onLongPress={() => {
+          if (!isMultiSelectMode) {
+            setIsMultiSelectMode(true);
+            toggleSelectFile(item.uri);
+          }
+        }}
+        activeOpacity={0.7}
+      >
+        {isMultiSelectMode && (
+          <View style={[styles.selectCheckboxList, isSelected && styles.selectCheckboxActive]}>
+            {isSelected && <Ionicons name="checkmark" size={14} color="#0B111E" />}
+          </View>
+        )}
+        <View style={[styles.listIconCircle, { backgroundColor: `${iconColor}20` }]}>
+          <Ionicons name={iconName} size={20} color={iconColor} />
+        </View>
+        <View style={styles.listTextContainer}>
+          <Text style={styles.fileNameText} numberOfLines={1}>{item.name}</Text>
+          <Text style={styles.fileMetaText}>{item.formattedSize} • {item.formattedDate}</Text>
+        </View>
+        {!isMultiSelectMode && (
+          <TouchableOpacity
+            style={styles.listDeleteBtn}
+            onPress={() => handleDeleteSingleFile(item)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="trash-outline" size={18} color="#EF4444" />
+          </TouchableOpacity>
+        )}
+      </TouchableOpacity>
+    );
   };
 
   return (
@@ -264,7 +545,7 @@ export default function StorageSettingsScreen() {
             <View style={styles.divider} />
 
             {/* Purge All Media */}
-            <TouchableOpacity style={styles.actionRow} onPress={() => handleDeleteCategory('all', 'All Media')} disabled={actionLoading} activeOpacity={0.7}>
+            <TouchableOpacity style={styles.actionRow} onPress={() => handleDeleteCategory('all', 'Media')} disabled={actionLoading} activeOpacity={0.7}>
               <View style={styles.actionLeft}>
                 <View style={[styles.actionIconCircle, { backgroundColor: 'rgba(239, 68, 68, 0.15)' }]}>
                   <Ionicons name="flame-outline" size={20} color="#EF4444" />
@@ -278,98 +559,93 @@ export default function StorageSettingsScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Breakdown & Selective Delete */}
-          <Text style={styles.sectionHeader}>Category Breakdown</Text>
+          {/* Breakdown & Selective Delete - Tap to view individual items! */}
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionHeader}>Category Breakdown</Text>
+            <Text style={styles.sectionHint}>Tap category to view & delete individual items</Text>
+          </View>
           <View style={styles.card}>
             {/* Images */}
-            <View style={styles.breakdownRow}>
+            <TouchableOpacity
+              style={styles.breakdownRow}
+              onPress={() => openCategoryExplorer('images')}
+              activeOpacity={0.7}
+            >
               <View style={styles.breakdownLeft}>
                 <Ionicons name="image-outline" size={20} color={CATEGORY_COLORS.images} style={styles.catIcon} />
                 <View>
                   <Text style={styles.catTitle}>Photos & Stickers</Text>
-                  <Text style={styles.catSub}>{usage?.categories.images.count || 0} files</Text>
+                  <Text style={styles.catSub}>{usage?.categories.images.count || 0} files • Tap to inspect</Text>
                 </View>
               </View>
               <View style={styles.breakdownRight}>
                 <Text style={styles.catSize}>{formatBytes(usage?.categories.images.bytes || 0)}</Text>
-                <TouchableOpacity
-                  onPress={() => handleDeleteCategory('images', 'Photo')}
-                  style={styles.deleteMiniBtn}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="trash-outline" size={16} color="#94A3B8" />
-                </TouchableOpacity>
+                <Ionicons name="chevron-forward" size={18} color="#64748B" />
               </View>
-            </View>
+            </TouchableOpacity>
 
             <View style={styles.divider} />
 
             {/* Videos */}
-            <View style={styles.breakdownRow}>
+            <TouchableOpacity
+              style={styles.breakdownRow}
+              onPress={() => openCategoryExplorer('videos')}
+              activeOpacity={0.7}
+            >
               <View style={styles.breakdownLeft}>
                 <Ionicons name="videocam-outline" size={20} color={CATEGORY_COLORS.videos} style={styles.catIcon} />
                 <View>
                   <Text style={styles.catTitle}>Videos</Text>
-                  <Text style={styles.catSub}>{usage?.categories.videos.count || 0} files</Text>
+                  <Text style={styles.catSub}>{usage?.categories.videos.count || 0} files • Tap to inspect</Text>
                 </View>
               </View>
               <View style={styles.breakdownRight}>
                 <Text style={styles.catSize}>{formatBytes(usage?.categories.videos.bytes || 0)}</Text>
-                <TouchableOpacity
-                  onPress={() => handleDeleteCategory('videos', 'Video')}
-                  style={styles.deleteMiniBtn}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="trash-outline" size={16} color="#94A3B8" />
-                </TouchableOpacity>
+                <Ionicons name="chevron-forward" size={18} color="#64748B" />
               </View>
-            </View>
+            </TouchableOpacity>
 
             <View style={styles.divider} />
 
             {/* Voice / Audio */}
-            <View style={styles.breakdownRow}>
+            <TouchableOpacity
+              style={styles.breakdownRow}
+              onPress={() => openCategoryExplorer('audio')}
+              activeOpacity={0.7}
+            >
               <View style={styles.breakdownLeft}>
                 <Ionicons name="mic-outline" size={20} color={CATEGORY_COLORS.audio} style={styles.catIcon} />
                 <View>
                   <Text style={styles.catTitle}>Voice Messages</Text>
-                  <Text style={styles.catSub}>{usage?.categories.audio.count || 0} files</Text>
+                  <Text style={styles.catSub}>{usage?.categories.audio.count || 0} files • Tap to inspect</Text>
                 </View>
               </View>
               <View style={styles.breakdownRight}>
                 <Text style={styles.catSize}>{formatBytes(usage?.categories.audio.bytes || 0)}</Text>
-                <TouchableOpacity
-                  onPress={() => handleDeleteCategory('audio', 'Voice')}
-                  style={styles.deleteMiniBtn}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="trash-outline" size={16} color="#94A3B8" />
-                </TouchableOpacity>
+                <Ionicons name="chevron-forward" size={18} color="#64748B" />
               </View>
-            </View>
+            </TouchableOpacity>
 
             <View style={styles.divider} />
 
             {/* Documents */}
-            <View style={styles.breakdownRow}>
+            <TouchableOpacity
+              style={styles.breakdownRow}
+              onPress={() => openCategoryExplorer('documents')}
+              activeOpacity={0.7}
+            >
               <View style={styles.breakdownLeft}>
                 <Ionicons name="document-text-outline" size={20} color={CATEGORY_COLORS.documents} style={styles.catIcon} />
                 <View>
                   <Text style={styles.catTitle}>Documents</Text>
-                  <Text style={styles.catSub}>{usage?.categories.documents.count || 0} files</Text>
+                  <Text style={styles.catSub}>{usage?.categories.documents.count || 0} files • Tap to inspect</Text>
                 </View>
               </View>
               <View style={styles.breakdownRight}>
                 <Text style={styles.catSize}>{formatBytes(usage?.categories.documents.bytes || 0)}</Text>
-                <TouchableOpacity
-                  onPress={() => handleDeleteCategory('documents', 'Document')}
-                  style={styles.deleteMiniBtn}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="trash-outline" size={16} color="#94A3B8" />
-                </TouchableOpacity>
+                <Ionicons name="chevron-forward" size={18} color="#64748B" />
               </View>
-            </View>
+            </TouchableOpacity>
           </View>
 
           {/* Auto-Cleanup Settings */}
@@ -461,6 +737,135 @@ export default function StorageSettingsScreen() {
           </View>
         </ScrollView>
       )}
+
+      {/* Category Media Items Explorer Modal */}
+      <Modal
+        visible={activeCategory !== null}
+        animationType="slide"
+        onRequestClose={closeCategoryExplorer}
+      >
+        <SafeAreaView style={[globalStyles.safeArea, { backgroundColor: '#0B111E' }]}>
+          {/* Modal Header */}
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={closeCategoryExplorer} style={styles.backButton} activeOpacity={0.7}>
+              <Ionicons name="close" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+            <View style={styles.headerTextContainer}>
+              <Text style={styles.headerTitle}>
+                {activeCategory ? CATEGORY_TITLES[activeCategory] : 'Media Items'}
+              </Text>
+              <Text style={styles.headerSubtitle}>
+                {categoryFiles.length} file(s) • {formatBytes(categoryFiles.reduce((sum, f) => sum + f.size, 0))} total
+              </Text>
+            </View>
+
+            {categoryFiles.length > 0 && (
+              <TouchableOpacity
+                onPress={() => {
+                  if (isMultiSelectMode) {
+                    setIsMultiSelectMode(false);
+                    setSelectedUris(new Set());
+                  } else {
+                    setIsMultiSelectMode(true);
+                  }
+                }}
+                style={styles.selectToggleBtn}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.selectToggleText}>
+                  {isMultiSelectMode ? 'Cancel' : 'Select'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Multi-Select Action Bar */}
+          {isMultiSelectMode && (
+            <View style={styles.batchBar}>
+              <TouchableOpacity onPress={handleSelectAll} activeOpacity={0.7}>
+                <Text style={styles.batchActionText}>
+                  {selectedUris.size === categoryFiles.length ? 'Deselect All' : 'Select All'}
+                </Text>
+              </TouchableOpacity>
+              <Text style={styles.batchCountText}>
+                {selectedUris.size} selected ({formatBytes(categoryFiles.filter(f => selectedUris.has(f.uri)).reduce((acc, c) => acc + c.size, 0))})
+              </Text>
+              <TouchableOpacity
+                onPress={handleDeleteSelectedBatch}
+                disabled={selectedUris.size === 0}
+                style={[styles.batchDeleteBtn, selectedUris.size === 0 && { opacity: 0.4 }]}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="trash-outline" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
+                <Text style={styles.batchDeleteBtnText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Files List / Grid */}
+          {filesLoading ? (
+            <View style={styles.centerLoading}>
+              <ActivityIndicator size="large" color={COLORS.accent} />
+              <Text style={styles.loadingText}>Loading file items...</Text>
+            </View>
+          ) : categoryFiles.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="folder-open-outline" size={56} color="#334155" />
+              <Text style={styles.emptyTitle}>No Media Files Found</Text>
+              <Text style={styles.emptySub}>Downloaded files in this category will appear here for individual management.</Text>
+            </View>
+          ) : (
+            <FlatList
+              data={categoryFiles}
+              keyExtractor={(item) => item.uri}
+              renderItem={renderGridItem}
+              numColumns={activeCategory === 'images' ? 3 : activeCategory === 'videos' ? 2 : 1}
+              key={activeCategory === 'images' ? 'grid3' : activeCategory === 'videos' ? 'grid2' : 'list1'}
+              contentContainerStyle={styles.gridContainer}
+              columnWrapperStyle={activeCategory === 'images' || activeCategory === 'videos' ? styles.columnWrapper : undefined}
+            />
+          )}
+        </SafeAreaView>
+      </Modal>
+
+      {/* Full Screen Image Preview & Delete Modal */}
+      <Modal
+        visible={previewImage !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPreviewImage(null)}
+      >
+        <View style={styles.previewContainer}>
+          <TouchableOpacity
+            style={styles.previewCloseBtn}
+            onPress={() => setPreviewImage(null)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="close" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+
+          {previewImage && (
+            <>
+              <Image source={{ uri: previewImage.uri }} style={styles.previewImageFull} contentFit="contain" />
+              
+              <View style={styles.previewFooter}>
+                <View>
+                  <Text style={styles.previewFileName} numberOfLines={1}>{previewImage.name}</Text>
+                  <Text style={styles.previewFileMeta}>{previewImage.formattedSize} • {previewImage.formattedDate}</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.previewDeleteBtn}
+                  onPress={() => handleDeleteSingleFile(previewImage)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="trash-outline" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                  <Text style={styles.previewDeleteText}>Delete Photo</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -591,6 +996,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
   },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   sectionHeader: {
     color: '#94A3B8',
     fontSize: 12,
@@ -599,6 +1010,12 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginBottom: 8,
     marginLeft: 4,
+  },
+  sectionHint: {
+    color: '#F59E0B',
+    fontSize: 11,
+    fontWeight: '600',
+    marginBottom: 8,
   },
   actionRow: {
     flexDirection: 'row',
@@ -646,7 +1063,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 4,
+    paddingVertical: 6,
   },
   breakdownLeft: {
     flexDirection: 'row',
@@ -675,12 +1092,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '700',
-    marginRight: 12,
-  },
-  deleteMiniBtn: {
-    padding: 6,
-    backgroundColor: '#162235',
-    borderRadius: 8,
+    marginRight: 8,
   },
   switchRow: {
     flexDirection: 'row',
@@ -747,6 +1159,298 @@ const styles = StyleSheet.create({
   },
   runCleanupText: {
     color: '#0B111E',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
+  // Modal Explorer Styles
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#162235',
+    backgroundColor: '#0B111E',
+  },
+  selectToggleBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#162235',
+  },
+  selectToggleText: {
+    color: '#F59E0B',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  batchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#101622',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1F293D',
+  },
+  batchActionText: {
+    color: '#3B82F6',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  batchCountText: {
+    color: '#94A3B8',
+    fontSize: 12,
+  },
+  batchDeleteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EF4444',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  batchDeleteBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  gridContainer: {
+    padding: 12,
+    paddingBottom: 40,
+  },
+  columnWrapper: {
+    gap: 8,
+    marginBottom: 8,
+  },
+  gridCard: {
+    borderRadius: 10,
+    overflow: 'hidden',
+    backgroundColor: '#101622',
+    position: 'relative',
+  },
+  gridImage: {
+    width: '100%',
+    height: '100%',
+  },
+  gridOverlayBadge: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    backgroundColor: 'rgba(7, 11, 19, 0.75)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  gridBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '700',
+  },
+  singleDeleteBtn: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: 'rgba(239, 68, 68, 0.85)',
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  selectCheckbox: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  selectCheckboxActive: {
+    backgroundColor: '#F59E0B',
+    borderColor: '#F59E0B',
+  },
+  videoCard: {
+    backgroundColor: '#101622',
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#1F293D',
+    position: 'relative',
+  },
+  videoPlaceholder: {
+    height: 90,
+    backgroundColor: '#070B13',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  playCircle: {
+    position: 'absolute',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  itemDetailBody: {
+    padding: 10,
+  },
+  fileNameText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  fileMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  fileSizeText: {
+    color: '#F59E0B',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  fileDateText: {
+    color: '#64748B',
+    fontSize: 10,
+  },
+  cardTrashBtn: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: '#162235',
+    padding: 6,
+    borderRadius: 8,
+  },
+  listItemCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#101622',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#1F293D',
+  },
+  listItemCardSelected: {
+    borderColor: '#F59E0B',
+    backgroundColor: '#162235',
+  },
+  selectCheckboxList: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#64748B',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  listIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  listTextContainer: {
+    flex: 1,
+  },
+  fileMetaText: {
+    color: '#64748B',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  listDeleteBtn: {
+    padding: 8,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  emptyTitle: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+    marginTop: 16,
+  },
+  emptySub: {
+    color: '#64748B',
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 6,
+    lineHeight: 18,
+  },
+
+  // Preview Modal Styles
+  previewContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(7, 11, 19, 0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  previewCloseBtn: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    zIndex: 10,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  previewImageFull: {
+    width: '90%',
+    height: '70%',
+  },
+  previewFooter: {
+    position: 'absolute',
+    bottom: 40,
+    left: 20,
+    right: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#101622',
+    padding: 16,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#1F293D',
+  },
+  previewFileName: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+    maxWidth: 180,
+  },
+  previewFileMeta: {
+    color: '#64748B',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  previewDeleteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EF4444',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  previewDeleteText: {
+    color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '700',
   },
