@@ -129,7 +129,13 @@ const MemoizedMessageItemComponent: React.FC<MemoizedMessageItemProps> = ({
 
   return (
     <GestureDetector gesture={panGesture}>
-      <Animated.View style={[styles.outerRowContainer, animatedRowStyle]}>
+      <Animated.View
+        style={[
+          styles.outerRowContainer,
+          isSelected && styles.selectedRowHighlight,
+          animatedRowStyle,
+        ]}
+      >
         {/* Reply Indicator Icon */}
         <Animated.View
           style={[
@@ -141,215 +147,212 @@ const MemoizedMessageItemComponent: React.FC<MemoizedMessageItemProps> = ({
           <Text style={styles.replyIconText}>↩</Text>
         </Animated.View>
 
-        <View style={[styles.messageRowWrapper, isSelected && styles.selectedRowHighlight]}>
-          {/* WhatsApp Style Floating Quick Reaction Bar */}
-          {showQuickReactions && !item.isDeleted && (
-            <View style={[styles.floatingReactionToolbar, isMe ? styles.myFloatingToolbar : styles.otherFloatingToolbar]}>
-              {['👍', '❤️', '😂', '😮', '😢', '🙏', '😴'].map((emoji) => (
+        <View
+          style={[
+            styles.messageRow,
+            isMe ? styles.myMessageRow : styles.otherMessageRow,
+            hasReactions && { marginBottom: 10 },
+          ]}
+        >
+          <View style={styles.bubbleWrapper}>
+            {/* WhatsApp Style Floating Quick Reaction Bar */}
+            {showQuickReactions && !item.isDeleted && (
+              <View style={[styles.floatingReactionToolbar, isMe ? styles.myFloatingToolbar : styles.otherFloatingToolbar]}>
+                {['👍', '❤️', '😂', '😮', '😢', '🙏', '😴'].map((emoji) => (
+                  <TouchableOpacity
+                    key={emoji}
+                    onPress={() => {
+                      if (onReact) onReact(emoji);
+                      setShowQuickReactions(false);
+                      triggerHaptic();
+                    }}
+                    style={styles.floatingEmojiItem}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.floatingEmojiText}>{emoji}</Text>
+                  </TouchableOpacity>
+                ))}
+
                 <TouchableOpacity
-                  key={emoji}
                   onPress={() => {
-                    if (onReact) onReact(emoji);
                     setShowQuickReactions(false);
                     triggerHaptic();
+                    if (onOpenEmojiPicker) onOpenEmojiPicker(item);
                   }}
-                  style={styles.floatingEmojiItem}
-                  activeOpacity={0.7}
+                  style={styles.floatingPlusItem}
+                  activeOpacity={0.75}
                 >
-                  <Text style={styles.floatingEmojiText}>{emoji}</Text>
+                  <View style={styles.plusCircle}>
+                    <Text style={styles.plusIconText}>+</Text>
+                  </View>
                 </TouchableOpacity>
-              ))}
-
-              <TouchableOpacity
-                onPress={() => {
-                  setShowQuickReactions(false);
-                  triggerHaptic();
-                  if (onOpenEmojiPicker) onOpenEmojiPicker(item);
-                }}
-                style={styles.floatingPlusItem}
-                activeOpacity={0.75}
-              >
-                <View style={styles.plusCircle}>
-                  <Text style={styles.plusIconText}>+</Text>
-                </View>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          <TouchableOpacity
-            onPress={() => {
-              if (showQuickReactions) {
-                setShowQuickReactions(false);
-              } else if (isSelectionMode) {
-                onSelect(item._id);
-              }
-            }}
-            onLongPress={() => {
-              if (isSelectionMode) {
-                onSelect(item._id);
-              } else {
-                setShowQuickReactions((prev) => !prev);
-                onLongPress(item);
-              }
-            }}
-            activeOpacity={0.85}
-            style={[
-              styles.messageRow,
-              isMe ? styles.myMessageRow : styles.otherMessageRow,
-              isSelectionMode && { flex: 1 },
-              hasReactions && { marginBottom: 12 },
-            ]}
-          >
-            <View style={{ position: 'relative' }}>
-              <View
-                style={[
-                  styles.bubble,
-                  isMe ? styles.myBubble : styles.otherBubble,
-                  onlyMedia && styles.onlyMediaBubble,
-                  isHighlighted && styles.highlightedBubble,
-                ]}
-              >
-                {/* Group Sender Name */}
-                {isGroup && !isMe && (
-                  <Text style={styles.groupSenderName}>
-                    {item.sender?.displayName || 'Someone'}
-                  </Text>
-                )}
-
-                {/* Replied-To Message Header inside bubble */}
-                {item.replyTo && !item.isDeleted && (
-                  <View
-                    style={[
-                      styles.bubbleReplyPreview,
-                      isMe ? styles.myBubbleReplyPreview : styles.otherBubbleReplyPreview,
-                    ]}
-                  >
-                    <Text style={styles.bubbleReplySender} numberOfLines={1}>
-                      {item.replyTo.sender._id === userId ? 'You' : item.replyTo.sender.displayName}
-                    </Text>
-                    <Text style={styles.bubbleReplyText} numberOfLines={1}>
-                      {item.replyTo.text}
-                    </Text>
-                  </View>
-                )}
-
-                {/* Forwarded Tag */}
-                {item.isForwarded && !item.isDeleted && (
-                  <Text style={[styles.forwardedText, isMe ? styles.myForwardedText : styles.otherForwardedText]}>
-                    ↪ Forwarded
-                  </Text>
-                )}
-
-                {/* Media Content */}
-                {item.mediaUrl && item.mediaType && !item.isDeleted && (
-                  <TouchableOpacity
-                    activeOpacity={0.9}
-                    onPress={handleMediaTap}
-                    style={{ marginBottom: item.text ? 8 : 0 }}
-                  >
-                    <MediaMessage
-                      messageId={item._id}
-                      mediaUrl={item.mediaUrl}
-                      mediaType={item.mediaType}
-                      mediaWidth={item.mediaWidth}
-                      mediaHeight={item.mediaHeight}
-                      mediaDuration={item.mediaDuration}
-                      isSending={item.status === 'sending'}
-                      progress={uploadProgress}
-                      onCancel={() => onCancelUpload(item.tempId || '')}
-                    />
-                  </TouchableOpacity>
-                )}
-
-                {/* Message Text */}
-                {(item.text ? true : false || item.isDeleted) && (
-                  <Text
-                    style={[
-                      styles.bubbleText,
-                      isMe ? styles.myBubbleText : styles.otherBubbleText,
-                      item.isDeleted && styles.deletedBubbleText,
-                    ]}
-                  >
-                    {item.text}
-                  </Text>
-                )}
-
-                {/* Rich Link Preview Card */}
-                {item.linkPreview && item.linkPreview.url && !item.isDeleted && (
-                  <TouchableOpacity
-                    activeOpacity={0.85}
-                    onPress={() => item.linkPreview?.url && Linking.openURL(item.linkPreview.url)}
-                    style={styles.linkPreviewContainer}
-                  >
-                    {item.linkPreview.image ? (
-                      <View style={styles.linkPreviewImageWrapper}>
-                        <Image source={{ uri: item.linkPreview.image }} style={styles.linkPreviewImage} resizeMode="cover" />
-                        {(item.linkPreview.domain?.includes('youtube') || item.linkPreview.domain?.includes('youtu.be')) && (
-                          <View style={styles.playButtonOverlay}>
-                            <Text style={styles.playButtonIcon}>▶</Text>
-                          </View>
-                        )}
-                      </View>
-                    ) : null}
-                    <View style={styles.linkPreviewContent}>
-                      <Text style={styles.linkPreviewDomain} numberOfLines={1}>
-                        🌐 {item.linkPreview.domain || 'Link'}
-                      </Text>
-                      <Text style={styles.linkPreviewTitle} numberOfLines={2}>
-                        {item.linkPreview.title}
-                      </Text>
-                      {item.linkPreview.description ? (
-                        <Text style={styles.linkPreviewDesc} numberOfLines={2}>
-                          {item.linkPreview.description}
-                        </Text>
-                      ) : null}
-                    </View>
-                  </TouchableOpacity>
-                )}
-
-                {/* Time & Status Row */}
-                {!item.isDeleted && (
-                  <View style={onlyMedia ? styles.metaRowOnlyMedia : styles.metaRow}>
-                    {item.isEdited && <Text style={styles.editedText}>(edited)</Text>}
-                    <Text style={onlyMedia ? styles.timeTextOnlyMedia : styles.timeText}>
-                      {new Date(item.createdAt).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </Text>
-                    {isMe && (
-                      <Text
-                        style={[
-                          onlyMedia ? styles.statusTextOnlyMedia : styles.statusText,
-                          item.status === 'read' && styles.statusRead,
-                          item.status === 'delivered' && styles.statusDelivered,
-                        ]}
-                      >
-                        {item.status === 'sending' ? '⏳' : item.status === 'read' ? '✓✓' : item.status === 'delivered' ? '✓✓' : '✓'}
-                      </Text>
-                    )}
-                  </View>
-                )}
               </View>
+            )}
 
-              {/* Active Reactions Badge (WhatsApp-Style Floating Overlap Pill) */}
-              {hasReactions && (
-                <View style={[styles.reactionsBadge, isMe ? styles.myReactionsBadge : styles.otherReactionsBadge]}>
-                  {Object.entries(groupedReactions).map(([emoji, count]) => (
-                    <TouchableOpacity
-                      key={emoji}
-                      onPress={() => onReact && onReact(emoji)}
-                      activeOpacity={0.7}
-                      style={styles.reactionPill}
-                    >
-                      <Text style={styles.reactionEmojiText}>{emoji}</Text>
-                      {count > 1 && <Text style={styles.reactionCountText}>{count}</Text>}
-                    </TouchableOpacity>
-                  ))}
+            <TouchableOpacity
+              onPress={() => {
+                if (showQuickReactions) {
+                  setShowQuickReactions(false);
+                } else if (isSelectionMode) {
+                  onSelect(item._id);
+                }
+              }}
+              onLongPress={() => {
+                if (isSelectionMode) {
+                  onSelect(item._id);
+                } else {
+                  setShowQuickReactions((prev) => !prev);
+                  onLongPress(item);
+                }
+              }}
+              activeOpacity={0.85}
+              style={[
+                styles.bubble,
+                isMe ? styles.myBubble : styles.otherBubble,
+                onlyMedia && styles.onlyMediaBubble,
+                isHighlighted && styles.highlightedBubble,
+              ]}
+            >
+              {/* Group Sender Name */}
+              {isGroup && !isMe && (
+                <Text style={styles.groupSenderName}>
+                  {item.sender?.displayName || 'Someone'}
+                </Text>
+              )}
+
+              {/* Replied-To Message Header inside bubble */}
+              {item.replyTo && !item.isDeleted && (
+                <View
+                  style={[
+                    styles.bubbleReplyPreview,
+                    isMe ? styles.myBubbleReplyPreview : styles.otherBubbleReplyPreview,
+                  ]}
+                >
+                  <Text style={styles.bubbleReplySender} numberOfLines={1}>
+                    {item.replyTo.sender._id === userId ? 'You' : item.replyTo.sender.displayName}
+                  </Text>
+                  <Text style={styles.bubbleReplyText} numberOfLines={1}>
+                    {item.replyTo.text}
+                  </Text>
                 </View>
               )}
-            </View>
-          </TouchableOpacity>
+
+              {/* Forwarded Tag */}
+              {item.isForwarded && !item.isDeleted && (
+                <Text style={[styles.forwardedText, isMe ? styles.myForwardedText : styles.otherForwardedText]}>
+                  ↪ Forwarded
+                </Text>
+              )}
+
+              {/* Media Content */}
+              {item.mediaUrl && item.mediaType && !item.isDeleted && (
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  onPress={handleMediaTap}
+                  style={{ marginBottom: item.text ? 8 : 0 }}
+                >
+                  <MediaMessage
+                    messageId={item._id}
+                    mediaUrl={item.mediaUrl}
+                    mediaType={item.mediaType}
+                    mediaWidth={item.mediaWidth}
+                    mediaHeight={item.mediaHeight}
+                    mediaDuration={item.mediaDuration}
+                    isSending={item.status === 'sending'}
+                    progress={uploadProgress}
+                    onCancel={() => onCancelUpload(item.tempId || '')}
+                  />
+                </TouchableOpacity>
+              )}
+
+              {/* Message Text */}
+              {(item.text ? true : false || item.isDeleted) && (
+                <Text
+                  style={[
+                    styles.bubbleText,
+                    isMe ? styles.myBubbleText : styles.otherBubbleText,
+                    item.isDeleted && styles.deletedBubbleText,
+                  ]}
+                >
+                  {item.text}
+                </Text>
+              )}
+
+              {/* Rich Link Preview Card */}
+              {item.linkPreview && item.linkPreview.url && !item.isDeleted && (
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={() => item.linkPreview?.url && Linking.openURL(item.linkPreview.url)}
+                  style={styles.linkPreviewContainer}
+                >
+                  {item.linkPreview.image ? (
+                    <View style={styles.linkPreviewImageWrapper}>
+                      <Image source={{ uri: item.linkPreview.image }} style={styles.linkPreviewImage} resizeMode="cover" />
+                      {(item.linkPreview.domain?.includes('youtube') || item.linkPreview.domain?.includes('youtu.be')) && (
+                        <View style={styles.playButtonOverlay}>
+                          <Text style={styles.playButtonIcon}>▶</Text>
+                        </View>
+                      )}
+                    </View>
+                  ) : null}
+                  <View style={styles.linkPreviewContent}>
+                    <Text style={styles.linkPreviewDomain} numberOfLines={1}>
+                      🌐 {item.linkPreview.domain || 'Link'}
+                    </Text>
+                    <Text style={styles.linkPreviewTitle} numberOfLines={2}>
+                      {item.linkPreview.title}
+                    </Text>
+                    {item.linkPreview.description ? (
+                      <Text style={styles.linkPreviewDesc} numberOfLines={2}>
+                        {item.linkPreview.description}
+                      </Text>
+                    ) : null}
+                  </View>
+                </TouchableOpacity>
+              )}
+
+              {/* Time & Status Row */}
+              {!item.isDeleted && (
+                <View style={onlyMedia ? styles.metaRowOnlyMedia : styles.metaRow}>
+                  {item.isEdited && <Text style={styles.editedText}>(edited)</Text>}
+                  <Text style={onlyMedia ? styles.timeTextOnlyMedia : styles.timeText}>
+                    {new Date(item.createdAt).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </Text>
+                  {isMe && (
+                    <Text
+                      style={[
+                        onlyMedia ? styles.statusTextOnlyMedia : styles.statusText,
+                        item.status === 'read' && styles.statusRead,
+                        item.status === 'delivered' && styles.statusDelivered,
+                      ]}
+                    >
+                      {item.status === 'sending' ? '⏳' : item.status === 'read' ? '✓✓' : item.status === 'delivered' ? '✓✓' : '✓'}
+                    </Text>
+                  )}
+                </View>
+              )}
+            </TouchableOpacity>
+
+            {/* Active Reactions Badge (WhatsApp-Style Floating Overlap Pill) */}
+            {hasReactions && (
+              <View style={[styles.reactionsBadge, isMe ? styles.myReactionsBadge : styles.otherReactionsBadge]}>
+                {Object.entries(groupedReactions).map(([emoji, count]) => (
+                  <TouchableOpacity
+                    key={emoji}
+                    onPress={() => onReact && onReact(emoji)}
+                    activeOpacity={0.7}
+                    style={styles.reactionPill}
+                  >
+                    <Text style={styles.reactionEmojiText}>{emoji}</Text>
+                    {count > 1 && <Text style={styles.reactionCountText}>{count}</Text>}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
         </View>
       </Animated.View>
     </GestureDetector>
@@ -409,36 +412,15 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   selectedRowHighlight: {
-    backgroundColor: 'rgba(204, 255, 0, 0.16)',
-    paddingVertical: 2,
-  },
-  selectionCheckboxWrapper: {
-    paddingRight: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  checkboxCircle: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
-    borderColor: COLORS.textSecondary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  checkboxCircleSelected: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-  },
-  checkboxCheckmark: {
-    color: COLORS.primaryText,
-    fontSize: 12,
-    fontWeight: 'bold',
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    borderRadius: 8,
   },
   messageRow: {
     flexDirection: 'row',
-    marginVertical: 4,
+    marginVertical: 3,
+    paddingHorizontal: 12,
     width: '100%',
+    alignItems: 'flex-end',
   },
   myMessageRow: {
     justifyContent: 'flex-end',
@@ -446,8 +428,11 @@ const styles = StyleSheet.create({
   otherMessageRow: {
     justifyContent: 'flex-start',
   },
+  bubbleWrapper: {
+    position: 'relative',
+    maxWidth: '80%',
+  },
   bubble: {
-    maxWidth: '75%',
     borderRadius: 16,
     paddingHorizontal: 14,
     paddingVertical: 10,
