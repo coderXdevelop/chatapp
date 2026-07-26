@@ -20,6 +20,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useChatStore, Message } from '../../store/chatStore';
 import { useAuthStore } from '../../store/authStore';
+import { api } from '../../services/api';
 import { COLORS, globalStyles } from '../../styles/theme';
 import axios from 'axios';
 import { Ionicons } from '@expo/vector-icons';
@@ -50,6 +51,7 @@ export default function ChatScreen() {
     fetchMessages,
     sendMessage,
     editMessage,
+    sendReaction,
     deleteMessage,
     markAsRead,
     connectSocket,
@@ -218,7 +220,8 @@ export default function ChatScreen() {
 
 
   const handleSend = async () => {
-    if (!text.trim() || !chatId) return;
+    const messageText = text.trim();
+    if (!messageText || !chatId) return;
 
     // Instantly stop typing indicators on send
     if (typingTimeoutRef.current) {
@@ -228,7 +231,7 @@ export default function ChatScreen() {
     isTypingRef.current = false;
 
     if (editingMessage) {
-      const success = await editMessage(chatId, editingMessage._id, text.trim());
+      const success = await editMessage(chatId, editingMessage._id, messageText);
       if (success) {
         setEditingMessage(null);
         setText('');
@@ -236,7 +239,20 @@ export default function ChatScreen() {
         Alert.alert('Error', 'Failed to edit message.');
       }
     } else {
-      sendMessage(chatId, text.trim(), replyingTo?._id);
+      let linkPreviewData: any = undefined;
+      const urlMatch = messageText.match(/(https?:\/\/[^\s]+)/gi);
+      if (urlMatch && urlMatch[0]) {
+        try {
+          const previewRes = await api.post('/api/media/link-preview', { url: urlMatch[0] });
+          if (previewRes.data && previewRes.data.url) {
+            linkPreviewData = previewRes.data;
+          }
+        } catch (err) {
+          console.warn('Link preview fetch failed:', err);
+        }
+      }
+
+      sendMessage(chatId, messageText, replyingTo?._id, undefined, linkPreviewData);
       setReplyingTo(null);
       setText('');
     }
@@ -1155,6 +1171,7 @@ export default function ChatScreen() {
           uploadProgress={uploadProgressMap[item.tempId || '']}
           onReply={() => handleReplyMessage(item)}
           onLongPress={handleLongPressMsg}
+          onReact={(emoji) => chatId && sendReaction(chatId, item._id, emoji)}
           onSelect={handleSelectMsg}
           onMediaPress={handleMediaPress}
           onCancelUpload={handleCancelUpload}

@@ -22,6 +22,14 @@ export interface Message {
   mediaSize?: number;
   mediaWidth?: number;
   mediaHeight?: number;
+  reactions?: Array<{ user: string; emoji: string }>;
+  linkPreview?: {
+    url: string;
+    title?: string;
+    description?: string;
+    image?: string;
+    domain?: string;
+  };
   isEdited?: boolean;
   isDeleted?: boolean;
   replyTo?: {
@@ -84,9 +92,17 @@ interface ChatState {
       size?: number;
       width?: number;
       height?: number;
+    },
+    linkPreview?: {
+      url: string;
+      title?: string;
+      description?: string;
+      image?: string;
+      domain?: string;
     }
   ) => Promise<void>;
   editMessage: (chatId: string, messageId: string, newText: string) => Promise<boolean>;
+  sendReaction: (chatId: string, messageId: string, emoji: string) => Promise<boolean>;
   deleteMessage: (chatId: string, messageId: string, type: 'me' | 'everyone') => Promise<boolean>;
   forwardMessages: (messageIds: string[], chatIds: string[], searchContacts?: string[]) => Promise<boolean>;
   markAsRead: (chatId: string) => void;
@@ -211,7 +227,7 @@ export const useChatStore = create<ChatState>()(
     }
   },
 
-  sendMessage: async (chatId, text, replyTo, media) => {
+  sendMessage: async (chatId, text, replyTo, media, linkPreview) => {
     const currentUser = useAuthStore.getState().user;
     if (!currentUser) return;
 
@@ -249,6 +265,7 @@ export const useChatStore = create<ChatState>()(
       mediaSize: media?.size,
       mediaWidth: media?.width,
       mediaHeight: media?.height,
+      linkPreview,
       createdAt: new Date().toISOString(),
     };
 
@@ -286,6 +303,7 @@ export const useChatStore = create<ChatState>()(
           mediaSize: media?.size,
           mediaWidth: media?.width,
           mediaHeight: media?.height,
+          linkPreview,
         });
         handleSuccess(res.data.message);
       } catch (err) {
@@ -314,6 +332,7 @@ export const useChatStore = create<ChatState>()(
           mediaSize: media?.size,
           mediaWidth: media?.width,
           mediaHeight: media?.height,
+          linkPreview,
         },
         (ack: { success: boolean; message?: Message; error?: string }) => {
           if (ack && ack.success && ack.message) {
@@ -551,6 +570,22 @@ export const useChatStore = create<ChatState>()(
       }
     });
 
+    newSocket.on('message_delivered', (data: { chatId: string; messageId: string; status: 'delivered' }) => {
+      set((state) => {
+        const list = state.messages[data.chatId] || [];
+        const updated = list.map((m) => (m._id === data.messageId ? { ...m, status: 'delivered' as const } : m));
+        return { messages: { ...state.messages, [data.chatId]: updated } };
+      });
+    });
+
+    newSocket.on('message_reaction_updated', (data: { chatId: string; messageId: string; reactions: Array<{ user: string; emoji: string }> }) => {
+      set((state) => {
+        const list = state.messages[data.chatId] || [];
+        const updated = list.map((m) => (m._id === data.messageId ? { ...m, reactions: data.reactions } : m));
+        return { messages: { ...state.messages, [data.chatId]: updated } };
+      });
+    });
+
     newSocket.on('chat_created', (newChat: Chat) => {
       set((state) => {
         if (state.chats.find((c) => c._id === newChat._id)) return {};
@@ -637,6 +672,31 @@ export const useChatStore = create<ChatState>()(
     if (socket && get().socketConnected) {
       socket.emit('typing_stop', { chatId });
     }
+  },
+
+  sendReaction: async (chatId, messageId, emoji) => {
+    const socket = get().socket;
+    if (socket && get().socketConnected) {
+      return new Promise<boolean>((resolve) => {
+        socket.emit(
+          'send_reaction',
+          { chatId, messageId, emoji },
+          (ack: { success: boolean; reactions?: any[] }) => {
+            if (ack && ack.success && ack.reactions) {
+              set((state) => {
+                const list = state.messages[chatId] || [];
+                const updated = list.map((m) => (m._id === messageId ? { ...m, reactions: ack.reactions } : m));
+                return { messages: { ...state.messages, [chatId]: updated } };
+              });
+              resolve(true);
+            } else {
+              resolve(false);
+            }
+          }
+        );
+      });
+    }
+    return false;
   },
 
   addOptimisticMessage: (chatId, message) => {

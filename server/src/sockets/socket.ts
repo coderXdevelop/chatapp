@@ -93,11 +93,12 @@ export function setupSockets(io: Server) {
       mediaSize?: number;
       mediaWidth?: number;
       mediaHeight?: number;
+      linkPreview?: { url: string; title?: string; description?: string; image?: string; domain?: string };
     }, callback) => {
       try {
         const { 
           chatId, text, tempId, replyTo,
-          mediaUrl, mediaType, mediaDuration, mediaSize, mediaWidth, mediaHeight
+          mediaUrl, mediaType, mediaDuration, mediaSize, mediaWidth, mediaHeight, linkPreview
         } = data;
         const chat = await Chat.findOne({ _id: chatId, participants: userId });
         if (!chat) {
@@ -132,6 +133,7 @@ export function setupSockets(io: Server) {
           mediaSize,
           mediaWidth,
           mediaHeight,
+          linkPreview: linkPreview || null,
         });
         await message.save();
 
@@ -281,6 +283,58 @@ export function setupSockets(io: Server) {
         io.to(`chat:${chatId}`).emit('messages_read', { chatId, userId });
       } catch (e) {
         console.error('Socket read_messages error:', e);
+      }
+    });
+
+    // Mark message as delivered when received by recipient client
+    socket.on('mark_delivered', async (data: { chatId: string; messageId: string }) => {
+      try {
+        const { chatId, messageId } = data;
+        const message = await Message.findOne({ _id: messageId, chat: chatId });
+        if (message && message.status === 'sent' && message.sender.toString() !== userId) {
+          message.status = 'delivered';
+          await message.save();
+          io.to(`chat:${chatId}`).emit('message_delivered', { chatId, messageId, status: 'delivered' });
+        }
+      } catch (e) {
+        console.error('Socket mark_delivered error:', e);
+      }
+    });
+
+    // Handle emoji reactions on messages
+    socket.on('send_reaction', async (data: { chatId: string; messageId: string; emoji: string }, callback) => {
+      try {
+        const { chatId, messageId, emoji } = data;
+        const message = await Message.findOne({ _id: messageId, chat: chatId });
+        if (!message) {
+          return callback && callback({ success: false, error: 'Message not found' });
+        }
+
+        if (!message.reactions) message.reactions = [];
+
+        const existingIdx = message.reactions.findIndex((r: any) => r.user?.toString() === userId);
+        if (existingIdx > -1) {
+          if (message.reactions[existingIdx]?.emoji === emoji) {
+            message.reactions.splice(existingIdx, 1); // Toggle off if same emoji tapped
+          } else {
+            message.reactions[existingIdx]!.emoji = emoji; // Change emoji
+          }
+        } else {
+          message.reactions.push({ user: userId as any, emoji });
+        }
+
+        await message.save();
+
+        io.to(`chat:${chatId}`).emit('message_reaction_updated', {
+          chatId,
+          messageId,
+          reactions: message.reactions,
+        });
+
+        if (callback) callback({ success: true, reactions: message.reactions });
+      } catch (err: any) {
+        console.error('Socket send_reaction error:', err);
+        if (callback) callback({ success: false, error: err.message });
       }
     });
 

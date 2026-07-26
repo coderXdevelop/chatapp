@@ -276,6 +276,8 @@ const VoiceMessageItem: React.FC<{
   isLocked: boolean;
   onPlayPress: () => void;
 }> = ({ messageId, url, duration, isLocked, onPlayPress }) => {
+  const [playbackRate, setPlaybackRate] = useState<number>(1.0);
+
   const peaks = React.useMemo(() => {
     const seed = messageId || 'defaultMsg';
     const list = [];
@@ -295,6 +297,18 @@ const VoiceMessageItem: React.FC<{
       player.pause();
     } else {
       player.play();
+    }
+  };
+
+  const handleToggleSpeed = () => {
+    const nextRate = playbackRate === 1.0 ? 1.5 : playbackRate === 1.5 ? 2.0 : 1.0;
+    setPlaybackRate(nextRate);
+    try {
+      if ((player as any)?.setRate) {
+        (player as any).setRate(nextRate);
+      }
+    } catch (e) {
+      console.warn('Playback rate error:', e);
     }
   };
 
@@ -362,6 +376,10 @@ const VoiceMessageItem: React.FC<{
           <Text style={styles.timeText}>{totalTime}</Text>
         </View>
       </View>
+
+      <TouchableOpacity onPress={handleToggleSpeed} style={styles.speedButton} activeOpacity={0.7}>
+        <Text style={styles.speedText}>{playbackRate}x</Text>
+      </TouchableOpacity>
     </View>
   );
 };
@@ -521,5 +539,21 @@ const styles = StyleSheet.create({
   },
   documentDownloadIcon: {
     marginLeft: 8,
+  },
+  speedButton: {
+    backgroundColor: '#1E293B',
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#334155',
+    marginLeft: 8,
+    alignSelf: 'center',
+  },
+  speedText: {
+    color: '#F59E0B',
+    fontSize: 11,
+    fontWeight: '800',
+    fontFamily: 'DM Mono',
   },
 });

@@ -1,5 +1,18 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
+export interface IReaction {
+  user: mongoose.Types.ObjectId;
+  emoji: string;
+}
+
+export interface ILinkPreview {
+  url: string;
+  title?: string;
+  description?: string;
+  image?: string;
+  domain?: string;
+}
+
 export interface IMessage extends Document {
   chat: mongoose.Types.ObjectId;
   sender: mongoose.Types.ObjectId;
@@ -13,6 +26,8 @@ export interface IMessage extends Document {
   mediaSize?: number;
   mediaWidth?: number;
   mediaHeight?: number;
+  reactions?: IReaction[];
+  linkPreview?: ILinkPreview;
   isEdited?: boolean;
   isDeleted?: boolean;
   replyTo?: mongoose.Types.ObjectId | null;
@@ -21,6 +36,32 @@ export interface IMessage extends Document {
   createdAt: Date;
   updatedAt: Date;
 }
+
+const ReactionSchema = new Schema(
+  {
+    user: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+    },
+    emoji: {
+      type: String,
+      required: true,
+    },
+  },
+  { _id: false }
+);
+
+const LinkPreviewSchema = new Schema(
+  {
+    url: { type: String, required: true },
+    title: { type: String, default: '' },
+    description: { type: String, default: '' },
+    image: { type: String, default: '' },
+    domain: { type: String, default: '' },
+  },
+  { _id: false }
+);
 
 const MessageSchema: Schema = new Schema(
   {
@@ -76,6 +117,14 @@ const MessageSchema: Schema = new Schema(
     },
     mediaHeight: {
       type: Number,
+      default: null,
+    },
+    reactions: {
+      type: [ReactionSchema],
+      default: [],
+    },
+    linkPreview: {
+      type: LinkPreviewSchema,
       default: null,
     },
     isEdited: {

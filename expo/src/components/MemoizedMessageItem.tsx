@@ -5,6 +5,8 @@ import {
   TouchableOpacity,
   StyleSheet,
   Vibration,
+  Image,
+  Linking,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -29,6 +31,7 @@ interface MemoizedMessageItemProps {
   uploadProgress?: number;
   onReply: () => void;
   onLongPress: (msg: Message) => void;
+  onReact?: (emoji: string) => void;
   onSelect: (msgId: string) => void;
   onMediaPress: (mediaInfo: { messageId: string; url: string; type: 'image' | 'video' | 'audio' }) => void;
   onCancelUpload: (tempId: string) => void;
@@ -214,6 +217,32 @@ const MemoizedMessageItemComponent: React.FC<MemoizedMessageItemProps> = ({
                 </Text>
               )}
 
+              {/* Rich Link Preview Card */}
+              {item.linkPreview && item.linkPreview.url && !item.isDeleted && (
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => item.linkPreview?.url && Linking.openURL(item.linkPreview.url)}
+                  style={styles.linkPreviewContainer}
+                >
+                  {item.linkPreview.image ? (
+                    <Image source={{ uri: item.linkPreview.image }} style={styles.linkPreviewImage} resizeMode="cover" />
+                  ) : null}
+                  <View style={styles.linkPreviewContent}>
+                    <Text style={styles.linkPreviewDomain} numberOfLines={1}>
+                      🌐 {item.linkPreview.domain || 'Link'}
+                    </Text>
+                    <Text style={styles.linkPreviewTitle} numberOfLines={2}>
+                      {item.linkPreview.title}
+                    </Text>
+                    {item.linkPreview.description ? (
+                      <Text style={styles.linkPreviewDesc} numberOfLines={2}>
+                        {item.linkPreview.description}
+                      </Text>
+                    ) : null}
+                  </View>
+                </TouchableOpacity>
+              )}
+
               {/* Time & Status Row */}
               {!item.isDeleted && (
                 <View style={onlyMedia ? styles.metaRowOnlyMedia : styles.metaRow}>
@@ -229,11 +258,29 @@ const MemoizedMessageItemComponent: React.FC<MemoizedMessageItemProps> = ({
                       style={[
                         onlyMedia ? styles.statusTextOnlyMedia : styles.statusText,
                         item.status === 'read' && styles.statusRead,
+                        item.status === 'delivered' && styles.statusDelivered,
                       ]}
                     >
-                      {item.status === 'sending' ? '⏳' : item.status === 'read' ? '✓✓' : '✓'}
+                      {item.status === 'sending' ? '⏳' : item.status === 'read' ? '✓✓' : item.status === 'delivered' ? '✓✓' : '✓'}
                     </Text>
                   )}
+                </View>
+              )}
+
+              {/* Active Reactions Badge */}
+              {item.reactions && item.reactions.length > 0 && !item.isDeleted && (
+                <View style={[styles.reactionsBadge, isMe ? styles.myReactionsBadge : styles.otherReactionsBadge]}>
+                  {Object.entries(
+                    item.reactions.reduce((acc: Record<string, number>, r) => {
+                      acc[r.emoji] = (acc[r.emoji] || 0) + 1;
+                      return acc;
+                    }, {})
+                  ).map(([emoji, count]) => (
+                    <View key={emoji} style={styles.reactionPill}>
+                      <Text style={styles.reactionEmojiText}>{emoji}</Text>
+                      {count > 1 && <Text style={styles.reactionCountText}>{count}</Text>}
+                    </View>
+                  ))}
                 </View>
               )}
             </View>
@@ -463,7 +510,76 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#FFFFFF',
   },
+  statusDelivered: {
+    color: COLORS.textSecondary,
+    fontWeight: '700',
+  },
   statusRead: {
     color: COLORS.primary,
+    fontWeight: '800',
+  },
+  linkPreviewContainer: {
+    marginTop: 6,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#070b13',
+    borderWidth: 1,
+    borderColor: '#1f293d',
+  },
+  linkPreviewImage: {
+    width: '100%',
+    height: 120,
+  },
+  linkPreviewContent: {
+    padding: 8,
+  },
+  linkPreviewDomain: {
+    color: COLORS.primary,
+    fontSize: 10,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  linkPreviewTitle: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  linkPreviewDesc: {
+    color: '#94A3B8',
+    fontSize: 11,
+    lineHeight: 14,
+  },
+  reactionsBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    position: 'absolute',
+    bottom: -10,
+    gap: 3,
+    backgroundColor: '#1E293B',
+    borderRadius: 12,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderWidth: 1.5,
+    borderColor: '#0F172A',
+  },
+  myReactionsBadge: {
+    right: 8,
+  },
+  otherReactionsBadge: {
+    left: 8,
+  },
+  reactionPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  reactionEmojiText: {
+    fontSize: 12,
+  },
+  reactionCountText: {
+    color: '#F8FAFC',
+    fontSize: 10,
+    fontWeight: '800',
   },
 });
