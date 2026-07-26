@@ -34,6 +34,7 @@ interface MemoizedMessageItemProps {
   onReply: () => void;
   onLongPress: (msg: Message) => void;
   onReact?: (emoji: string) => void;
+  onOpenEmojiPicker?: (msg: Message) => void;
   onSelect: (msgId: string) => void;
   onMediaPress: (mediaInfo: { messageId: string; url: string; type: 'image' | 'video' | 'audio' }) => void;
   onCancelUpload: (tempId: string) => void;
@@ -55,6 +56,7 @@ const MemoizedMessageItemComponent: React.FC<MemoizedMessageItemProps> = ({
   onReply,
   onLongPress,
   onReact,
+  onOpenEmojiPicker,
   onSelect,
   onMediaPress,
   onCancelUpload,
@@ -128,10 +130,10 @@ const MemoizedMessageItemComponent: React.FC<MemoizedMessageItemProps> = ({
         </Animated.View>
 
         <View style={[styles.messageRowWrapper, isSelected && styles.selectedRowHighlight]}>
-          {/* Floating Quick Emoji & Action Toolbar */}
+          {/* WhatsApp Style Floating Quick Reaction Bar */}
           {showQuickReactions && !item.isDeleted && (
             <View style={[styles.floatingReactionToolbar, isMe ? styles.myFloatingToolbar : styles.otherFloatingToolbar]}>
-              {['👍', '❤️', '😂', '😮', '😢', '🙏'].map((emoji) => (
+              {['👍', '❤️', '😂', '😮', '😢', '🙏', '😴'].map((emoji) => (
                 <TouchableOpacity
                   key={emoji}
                   onPress={() => {
@@ -146,20 +148,19 @@ const MemoizedMessageItemComponent: React.FC<MemoizedMessageItemProps> = ({
                 </TouchableOpacity>
               ))}
 
-              {item.text ? (
-                <TouchableOpacity
-                  onPress={async () => {
-                    setShowQuickReactions(false);
-                    triggerHaptic();
-                    await Clipboard.setStringAsync(item.text!);
-                    Alert.alert('Copied to Clipboard 📋', 'Message text copied!');
-                  }}
-                  style={[styles.floatingEmojiItem, styles.floatingCopyDivider]}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.floatingCopyText}>📋 Copy</Text>
-                </TouchableOpacity>
-              ) : null}
+              <TouchableOpacity
+                onPress={() => {
+                  setShowQuickReactions(false);
+                  triggerHaptic();
+                  if (onOpenEmojiPicker) onOpenEmojiPicker(item);
+                }}
+                style={styles.floatingPlusItem}
+                activeOpacity={0.75}
+              >
+                <View style={styles.plusCircle}>
+                  <Text style={styles.plusIconText}>+</Text>
+                </View>
+              </TouchableOpacity>
             </View>
           )}
 
@@ -631,20 +632,20 @@ const styles = StyleSheet.create({
   floatingReactionToolbar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0F172A',
-    borderRadius: 24,
+    backgroundColor: '#1E293B',
+    borderRadius: 26,
     paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingVertical: 5,
     borderWidth: 1.5,
     borderColor: '#334155',
     marginVertical: 4,
-    gap: 8,
+    gap: 6,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 6,
-    elevation: 8,
-    zIndex: 99,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 10,
+    zIndex: 999,
   },
   myFloatingToolbar: {
     alignSelf: 'flex-end',
@@ -655,22 +656,28 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   floatingEmojiItem: {
-    paddingHorizontal: 4,
+    paddingHorizontal: 3,
     paddingVertical: 2,
   },
   floatingEmojiText: {
-    fontSize: 22,
+    fontSize: 23,
   },
-  floatingCopyDivider: {
-    borderLeftWidth: 1,
-    borderLeftColor: '#334155',
-    paddingLeft: 8,
-    marginLeft: 2,
+  floatingPlusItem: {
+    paddingLeft: 4,
   },
-  floatingCopyText: {
-    color: '#F59E0B',
-    fontSize: 12,
-    fontWeight: '800',
+  plusCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#334155',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  plusIconText: {
+    color: '#94A3B8',
+    fontSize: 20,
+    fontWeight: '600',
+    marginTop: -2,
   },
   reactionsBadge: {
     flexDirection: 'row',

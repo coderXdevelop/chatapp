@@ -92,6 +92,9 @@ export default function ChatScreen() {
 
   const { isRecording, startRecording, stopRecording } = useVoiceRecorder();
   
+  const [reactingMessage, setReactingMessage] = useState<Message | null>(null);
+  const [isFullReactionPickerOpen, setIsFullReactionPickerOpen] = useState(false);
+  
   // States for long press options menu
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
@@ -1187,6 +1190,10 @@ export default function ChatScreen() {
           onReply={() => handleReplyMessage(item)}
           onLongPress={handleLongPressMsg}
           onReact={(emoji) => chatId && sendReaction(chatId, item._id, emoji)}
+          onOpenEmojiPicker={(msg) => {
+            setReactingMessage(msg);
+            setIsFullReactionPickerOpen(true);
+          }}
           onSelect={handleSelectMsg}
           onMediaPress={handleMediaPress}
           onCancelUpload={handleCancelUpload}
@@ -1344,6 +1351,8 @@ export default function ChatScreen() {
             maxToRenderPerBatch={10}
             windowSize={11}
             removeClippedSubviews={Platform.OS === 'android'}
+            keyboardShouldPersistTaps="handled"
+            scrollEnabled={true}
             maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
             scrollEventThrottle={16}
             onScroll={(e) => {
@@ -1508,6 +1517,24 @@ export default function ChatScreen() {
           onSelectEmoji={handleSelectEmoji}
           onSelectGif={handleSelectGif}
           onSelectSticker={handleSelectSticker}
+        />
+
+        {/* Full Emoji Reaction Picker Modal */}
+        <EmojiGifStickerPicker
+          visible={isFullReactionPickerOpen}
+          onClose={() => {
+            setIsFullReactionPickerOpen(false);
+            setReactingMessage(null);
+          }}
+          onSelectEmoji={(emoji) => {
+            if (reactingMessage && chatId) {
+              sendReaction(chatId, reactingMessage._id, emoji);
+            }
+            setIsFullReactionPickerOpen(false);
+            setReactingMessage(null);
+          }}
+          onSelectGif={() => {}}
+          onSelectSticker={() => {}}
         />
       </KeyboardAvoidingView>
 
