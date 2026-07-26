@@ -31,6 +31,7 @@ import { useVoiceRecorder } from '../../hooks/useVoiceRecorder';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
+import * as Clipboard from 'expo-clipboard';
 import { MemoizedMessageItem } from '../../components/MemoizedMessageItem';
 import { ScrollToBottomButton } from '../../components/ScrollToBottomButton';
 import { ZoomableImageViewer } from '../../components/ZoomableImageViewer';
@@ -811,11 +812,20 @@ export default function ChatScreen() {
 
     const options: any[] = [];
 
-    if (singleMsg && singleMsg.text) {
+    if (selectedMsgs.length > 0 && selectedMsgs.some((m) => m.text && !m.isDeleted)) {
       options.push({
-        text: 'Copy Text',
-        onPress: () => {
-          Alert.alert('Copied', 'Message text copied to clipboard!');
+        text: selectedMsgs.length > 1 ? `Copy ${selectedMsgs.length} Messages` : 'Copy Text',
+        onPress: async () => {
+          const validMsgs = selectedMsgs.filter((m) => m.text && !m.isDeleted);
+          const copyPayload =
+            validMsgs.length === 1
+              ? validMsgs[0].text!
+              : validMsgs.map((m) => `${m.sender.displayName}: ${m.text}`).join('\n');
+
+          if (copyPayload) {
+            await Clipboard.setStringAsync(copyPayload);
+            Alert.alert('Copied', 'Message text copied to clipboard!');
+          }
           setIsSelectionMode(false);
           setSelectedMessageIds([]);
         },

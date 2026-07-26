@@ -1,5 +1,6 @@
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import * as Clipboard from 'expo-clipboard';
 import React, { useState, useEffect } from 'react';
 import {
   ActivityIndicator,
@@ -407,16 +408,26 @@ export default function ProfileScreen() {
 
             {/* User ID */}
             <View style={globalStyles.inputGroup}>
-              <Text style={globalStyles.label}>USER ID (SHARE THIS WITH FRIENDS)</Text>
-              <View style={[globalStyles.inputWrapper, styles.disabledInputWrapper]}>
+              <Text style={globalStyles.label}>USER ID (TAP TO COPY)</Text>
+              <TouchableOpacity
+                onPress={async () => {
+                  if (user?.connectId) {
+                    await Clipboard.setStringAsync(user.connectId);
+                    Alert.alert('Copied', `User ID (${user.connectId}) copied to clipboard!`);
+                  }
+                }}
+                activeOpacity={0.7}
+                style={[globalStyles.inputWrapper, styles.disabledInputWrapper]}
+              >
                 <TextInput
                   style={[globalStyles.input, styles.disabledInput]}
-                  value={user.connectId || 'Not Allocated'}
+                  value={user?.connectId || 'Not Allocated'}
                   editable={false}
                   placeholder="User ID"
                   placeholderTextColor={COLORS.textSecondary}
+                  pointerEvents="none"
                 />
-              </View>
+              </TouchableOpacity>
             </View>
 
             {/* Email Address */}
