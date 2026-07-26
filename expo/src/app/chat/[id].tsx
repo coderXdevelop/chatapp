@@ -549,27 +549,70 @@ export default function ChatScreen() {
     }
   };
 
-  const handleCameraPress = async () => {
-    try {
-      const assets = await captureMediaWithCamera();
-      if (assets && assets.length > 0) {
-        setBatchAssets(assets);
-        setIsBatchPreviewOpen(true);
-      }
-    } catch (e) {
-      console.error('Camera launch error:', e);
-    }
+  const handleCameraPress = () => {
+    Alert.alert(
+      'Camera',
+      'Choose camera capture mode:',
+      [
+        {
+          text: '📷 Take Photo',
+          onPress: async () => {
+            const assets = await captureMediaWithCamera('photo');
+            if (assets && assets.length > 0) {
+              setBatchAssets(assets);
+              setIsBatchPreviewOpen(true);
+            }
+          },
+        },
+        {
+          text: '🎥 Record Video',
+          onPress: async () => {
+            const assets = await captureMediaWithCamera('video');
+            if (assets && assets.length > 0) {
+              setBatchAssets(assets);
+              setIsBatchPreviewOpen(true);
+            }
+          },
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+      ],
+      { cancelable: true }
+    );
   };
 
-  const handleAddMoreFromCamera = async () => {
-    try {
-      const assets = await captureMediaWithCamera();
-      if (assets && assets.length > 0) {
-        setBatchAssets((prev) => [...prev, ...assets]);
-      }
-    } catch (e) {
-      console.error('Add camera error:', e);
-    }
+  const handleAddMoreFromCamera = () => {
+    Alert.alert(
+      'Camera',
+      'Choose camera capture mode:',
+      [
+        {
+          text: '📷 Take Photo',
+          onPress: async () => {
+            const assets = await captureMediaWithCamera('photo');
+            if (assets && assets.length > 0) {
+              setBatchAssets((prev) => [...prev, ...assets]);
+            }
+          },
+        },
+        {
+          text: '🎥 Record Video',
+          onPress: async () => {
+            const assets = await captureMediaWithCamera('video');
+            if (assets && assets.length > 0) {
+              setBatchAssets((prev) => [...prev, ...assets]);
+            }
+          },
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+      ],
+      { cancelable: true }
+    );
   };
 
   const handleAddMoreFromGallery = async () => {

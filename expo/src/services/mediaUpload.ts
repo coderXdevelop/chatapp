@@ -50,18 +50,28 @@ export const pickAnyMediaFromGallery = async (): Promise<ImagePicker.ImagePicker
   return result.canceled ? null : result.assets;
 };
 
-export const captureMediaWithCamera = async (): Promise<ImagePicker.ImagePickerAsset[] | null> => {
+export const captureMediaWithCamera = async (
+  mode: 'photo' | 'video' | 'any' = 'any'
+): Promise<ImagePicker.ImagePickerAsset[] | null> => {
   const permission = await ImagePicker.requestCameraPermissionsAsync();
   if (!permission.granted) {
     alert('Permission to access camera is required!');
     return null;
   }
 
+  const mediaTypes =
+    mode === 'photo'
+      ? ['images']
+      : mode === 'video'
+      ? ['videos']
+      : ['images', 'videos'];
+
   const result = await ImagePicker.launchCameraAsync({
-    mediaTypes: ['images', 'videos'],
+    mediaTypes: mediaTypes as any,
     quality: 0.8,
     allowsEditing: false,
     videoExportPreset: ImagePicker.VideoExportPreset.H264_960x540,
+    videoMaxDuration: 120,
   });
 
   return result.canceled ? null : result.assets;
