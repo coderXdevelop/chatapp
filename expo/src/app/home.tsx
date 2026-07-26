@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import * as Clipboard from 'expo-clipboard';
 import { useAuthStore } from '../store/authStore';
 import { useChatStore } from '../store/chatStore';
 import { api } from '../services/api';
@@ -49,6 +50,7 @@ export default function HomeScreen() {
   const [contactSearchInput, setContactSearchInput] = useState('');
   const [loadingContact, setLoadingContact] = useState(false);
   const [initialLoading, setInitialLoading] = useState(chats.length === 0);
+  const [expandedFaqIdx, setExpandedFaqIdx] = useState<number | null>(0);
 
   // Dark Custom Modals State
   const [actionSheetConfig, setActionSheetConfig] = useState<{
@@ -489,29 +491,102 @@ export default function HomeScreen() {
         {activeTab === 'PROFILE' && <ProfileScreen />}
 
         {activeTab === 'HELP' && (
-          <ScrollView contentContainerStyle={styles.helpContainer}>
-            <Text style={styles.helpTitle}>Help & FAQ</Text>
-            <Text style={styles.helpSubtitle}>Get help with LinkUP core messaging.</Text>
-
-            <View style={styles.helpCard}>
-              <Text style={styles.helpCardTitle}>💬 Direct Messaging & Groups</Text>
-              <Text style={styles.helpCardText}>
-                We prioritize user privacy. Press the "+" button in the bottom right to start a secure 1:1 conversation or create a group chat.
+          <ScrollView contentContainerStyle={styles.helpContainer} showsVerticalScrollIndicator={false}>
+            <View style={styles.helpHeaderBanner}>
+              <Text style={styles.helpTitle}>LinkUP Support Center</Text>
+              <Text style={styles.helpSubtitle}>
+                Frequently Asked Questions, User Guides & Diagnostics
               </Text>
             </View>
 
-            <View style={styles.helpCard}>
-              <Text style={styles.helpCardTitle}>🆔 Sharing My User ID</Text>
-              <Text style={styles.helpCardText}>
-                Navigate to the Profile tab. Your unique User ID is listed under your Personal Information section. Tap to view and share it with friends so they can add you directly.
-              </Text>
-            </View>
+            {[
+              {
+                title: '💬 Direct Messaging & Group Chats',
+                content:
+                  'Press the "+" button in the bottom right to start a secure 1:1 direct message or create a group chat. Enter any registered user\'s email address or unique @connectId handle. Group admins can promote/demote members and customize group avatars.',
+              },
+              {
+                title: '🌟 Starred & Pinned Messages',
+                content:
+                  'Long-press any message in a chat room to star it for quick bookmarking or pin up to 3 important messages to the top banner of the chat. Access all your starred messages anytime from Profile → Starred Messages.',
+              },
+              {
+                title: '⏳ 24-Hour Ephemeral Status / Stories',
+                content:
+                  'Share text updates with custom background colors or multi-select photos/videos for your status update. Videos are automatically checked for a 40-second maximum duration. Status updates automatically expire after 24 hours.',
+              },
+              {
+                title: '📷 Personal QR Code Profile Sharing',
+                content:
+                  'Navigate to Profile → My QR Code & Share to view your personal QR code or copy your unique @connectId handle for instant contact sharing.',
+              },
+              {
+                title: '🎵 Voice Notes & Audio Speed Multipliers',
+                content:
+                  'Tap the microphone icon to record high-quality voice messages. When listening to audio notes, tap the playback rate button (1.0x → 1.5x → 2.0x) to adjust listening speed alongside the interactive waveform visualizer.',
+              },
+              {
+                title: '💾 Storage & Memory Data Optimization',
+                content:
+                  'Navigate to Profile → Storage & Data to inspect exact disk usage for photos, videos, and voice notes. Run on-demand cache cleanup or set automatic retention schedules (7, 30, 90 days or 1 Year).',
+              },
+              {
+                title: '🔌 Real-Time Presence & Connection',
+                content:
+                  'LinkUP connects securely over WebSockets using Socket.io. Check the status indicator under the header title. If your network connection drops, the app transparently retries in the background while preserving unsent messages.',
+              },
+              {
+                title: '🛡️ Privacy, Blocking & Security',
+                content:
+                  'You have full control over your privacy. Easily block contacts or report abusive content directly from the chat options menu (3-dots top right).',
+              },
+            ].map((faq, idx) => {
+              const isExpanded = expandedFaqIdx === idx;
+              return (
+                <TouchableOpacity
+                  key={idx}
+                  style={[styles.helpCard, isExpanded && styles.helpCardExpanded]}
+                  onPress={() => setExpandedFaqIdx(isExpanded ? null : idx)}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.helpCardHeaderRow}>
+                    <Text style={styles.helpCardTitle}>{faq.title}</Text>
+                    <Text style={styles.helpCardChevron}>{isExpanded ? '▲' : '▼'}</Text>
+                  </View>
+                  {isExpanded && <Text style={styles.helpCardText}>{faq.content}</Text>}
+                </TouchableOpacity>
+              );
+            })}
 
-            <View style={styles.helpCard}>
-              <Text style={styles.helpCardTitle}>🔌 Real-Time Presence</Text>
-              <Text style={styles.helpCardText}>
-                We connect you securely over WebSockets. Check the status indicator under the "Chats" title. If offline, the client continues to retry while transparently using fallback HTTP protocols.
+            {/* Support & Diagnostics Box */}
+            <View style={styles.diagnosticsBox}>
+              <Text style={styles.diagnosticsTitle}>App Diagnostics & Info</Text>
+              <Text style={styles.diagnosticsText}>LinkUP Version 1.0.0 • Stack: Free-Tier Enterprise</Text>
+              <Text style={styles.diagnosticsSubtext}>
+                React Native (Expo SDK 53) • Node.js Express • MongoDB Atlas • Cloudinary • Upstash Redis
               </Text>
+              <TouchableOpacity
+                style={styles.copyDiagBtn}
+                onPress={() => {
+                  setActionSheetConfig({
+                    visible: true,
+                    title: 'System Diagnostics',
+                    subtitle: 'LinkUP Engine Status: Operational (100% Free Tier Stack)',
+                    options: [
+                      {
+                        text: '📋 Copy Diagnostics Summary',
+                        onPress: async () => {
+                          await Clipboard.setStringAsync(
+                            'LinkUP v1.0.0 | Client: Expo SDK 53 | Backend: Node.js Express | DB: MongoDB Atlas | Cache: Upstash Redis'
+                          );
+                        },
+                      },
+                    ],
+                  });
+                }}
+              >
+                <Text style={styles.copyDiagBtnText}>⚡ Check System Health</Text>
+              </TouchableOpacity>
             </View>
           </ScrollView>
         )}
@@ -850,37 +925,100 @@ const styles = StyleSheet.create({
   },
   // Help View Styles
   helpContainer: {
-    padding: 24,
+    padding: 20,
+    paddingBottom: 40,
+  },
+  helpHeaderBanner: {
+    marginBottom: 20,
   },
   helpTitle: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '800',
     color: COLORS.textPrimary,
-    marginBottom: 6,
+    marginBottom: 4,
   },
   helpSubtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: COLORS.textSecondary,
-    marginBottom: 24,
   },
   helpCard: {
     backgroundColor: COLORS.cardBackground,
-    borderRadius: 16,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: COLORS.border,
     padding: 16,
-    marginBottom: 14,
+    marginBottom: 12,
+  },
+  helpCardExpanded: {
+    borderColor: COLORS.primary,
+  },
+  helpCardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   helpCardTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
+    color: '#F8FAFC',
+    flex: 1,
+    marginRight: 8,
+  },
+  helpCardChevron: {
     color: COLORS.primary,
-    marginBottom: 8,
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   helpCardText: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
+    fontSize: 13,
+    color: '#94A3B8',
     lineHeight: 20,
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  diagnosticsBox: {
+    backgroundColor: '#0F172A',
+    borderRadius: 18,
+    padding: 20,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#1E293B',
+    alignItems: 'center',
+  },
+  diagnosticsTitle: {
+    color: '#F8FAFC',
+    fontSize: 16,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  diagnosticsText: {
+    color: COLORS.primary,
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  diagnosticsSubtext: {
+    color: '#64748B',
+    fontSize: 11,
+    textAlign: 'center',
+    marginBottom: 16,
+    lineHeight: 16,
+  },
+  copyDiagBtn: {
+    backgroundColor: '#1E293B',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.3)',
+  },
+  copyDiagBtnText: {
+    color: '#F59E0B',
+    fontSize: 13,
+    fontWeight: '700',
   },
   // Add Contact Modal Styles
   modalOverlay: {

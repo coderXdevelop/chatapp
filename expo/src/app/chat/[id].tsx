@@ -634,10 +634,11 @@ export default function ChatScreen() {
   };
 
   const handleCameraPress = () => {
-    Alert.alert(
-      'Camera',
-      'Choose camera capture mode:',
-      [
+    setActionSheetConfig({
+      visible: true,
+      title: 'Camera Capture',
+      subtitle: 'Choose camera mode:',
+      options: [
         {
           text: '📷 Take Photo',
           onPress: async () => {
@@ -658,20 +659,16 @@ export default function ChatScreen() {
             }
           },
         },
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
       ],
-      { cancelable: true }
-    );
+    });
   };
 
   const handleAddMoreFromCamera = () => {
-    Alert.alert(
-      'Camera',
-      'Choose camera capture mode:',
-      [
+    setActionSheetConfig({
+      visible: true,
+      title: 'Camera Capture',
+      subtitle: 'Choose camera mode:',
+      options: [
         {
           text: '📷 Take Photo',
           onPress: async () => {
@@ -690,13 +687,8 @@ export default function ChatScreen() {
             }
           },
         },
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
       ],
-      { cancelable: true }
-    );
+    });
   };
 
   const handleAddMoreFromGallery = async () => {

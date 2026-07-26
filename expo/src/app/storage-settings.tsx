@@ -18,6 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
+import { CustomConfirmModal } from '../components/CustomConfirmModal';
 import {
   getStorageUsage,
   clearAppCache,
@@ -76,6 +77,17 @@ export default function StorageSettingsScreen() {
   // Full Screen Image Preview State
   const [previewImage, setPreviewImage] = useState<MediaFileDetail | null>(null);
 
+  const [confirmModalConfig, setConfirmModalConfig] = useState<{
+    visible: boolean;
+    title: string;
+    message?: string;
+    buttons: any[];
+  }>({
+    visible: false,
+    title: '',
+    buttons: [],
+  });
+
   const loadData = useCallback(async () => {
     try {
       const [usageData, settingsData] = await Promise.all([
@@ -125,11 +137,11 @@ export default function StorageSettingsScreen() {
   };
 
   const handleClearCache = async () => {
-    Alert.alert(
-      'Clear Cache',
-      'This will delete temporary image & app caches. Your downloaded chat media files will not be deleted.',
-      [
-        { text: 'Cancel', style: 'cancel' },
+    setConfirmModalConfig({
+      visible: true,
+      title: 'Clear Cache',
+      message: 'This will delete temporary image & app caches. Your downloaded chat media files will not be deleted.',
+      buttons: [
         {
           text: 'Clear Cache',
           style: 'destructive',
@@ -138,23 +150,34 @@ export default function StorageSettingsScreen() {
             const success = await clearAppCache();
             setActionLoading(false);
             if (success) {
-              Alert.alert('Success', 'Cache cleared successfully.');
+              setConfirmModalConfig({
+                visible: true,
+                title: 'Success',
+                message: 'Cache cleared successfully.',
+                buttons: [{ text: 'OK', style: 'primary', onPress: () => {} }],
+              });
               loadData();
             } else {
-              Alert.alert('Error', 'Failed to clear cache.');
+              setConfirmModalConfig({
+                visible: true,
+                title: 'Error',
+                message: 'Failed to clear cache.',
+                buttons: [{ text: 'OK', style: 'primary', onPress: () => {} }],
+              });
             }
           },
         },
-      ]
-    );
+        { text: 'Cancel', style: 'cancel', onPress: () => {} },
+      ],
+    });
   };
 
   const handleDeleteCategory = async (category: MediaCategory | 'all', label: string) => {
-    Alert.alert(
-      `Delete All ${label}`,
-      `Are you sure you want to delete all ${label.toLowerCase()} files from disk? They will need to be downloaded again from the server.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
+    setConfirmModalConfig({
+      visible: true,
+      title: `Delete All ${label}`,
+      message: `Are you sure you want to delete all ${label.toLowerCase()} files from disk? They will need to be downloaded again from the server.`,
+      buttons: [
         {
           text: 'Delete All',
           style: 'destructive',
@@ -163,26 +186,37 @@ export default function StorageSettingsScreen() {
             const success = await deleteMediaCategory(category);
             setActionLoading(false);
             if (success) {
-              Alert.alert('Success', `All ${label.toLowerCase()} files deleted.`);
+              setConfirmModalConfig({
+                visible: true,
+                title: 'Success',
+                message: `All ${label.toLowerCase()} files deleted.`,
+                buttons: [{ text: 'OK', style: 'primary', onPress: () => {} }],
+              });
               loadData();
               if (activeCategory === category || category === 'all') {
                 closeCategoryExplorer();
               }
             } else {
-              Alert.alert('Error', `Failed to delete ${label.toLowerCase()} files.`);
+              setConfirmModalConfig({
+                visible: true,
+                title: 'Error',
+                message: `Failed to delete ${label.toLowerCase()} files.`,
+                buttons: [{ text: 'OK', style: 'primary', onPress: () => {} }],
+              });
             }
           },
         },
-      ]
-    );
+        { text: 'Cancel', style: 'cancel', onPress: () => {} },
+      ],
+    });
   };
 
   const handleDeleteSingleFile = (file: MediaFileDetail) => {
-    Alert.alert(
-      'Delete File',
-      `Delete "${file.name}" (${file.formattedSize}) permanently from your device?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
+    setConfirmModalConfig({
+      visible: true,
+      title: 'Delete File',
+      message: `Delete "${file.name}" (${file.formattedSize}) permanently from your device?`,
+      buttons: [
         {
           text: 'Delete',
           style: 'destructive',
@@ -200,12 +234,18 @@ export default function StorageSettingsScreen() {
               }
               loadData();
             } else {
-              Alert.alert('Error', 'Failed to delete file.');
+              setConfirmModalConfig({
+                visible: true,
+                title: 'Error',
+                message: 'Failed to delete file.',
+                buttons: [{ text: 'OK', style: 'primary', onPress: () => {} }],
+              });
             }
           },
         },
-      ]
-    );
+        { text: 'Cancel', style: 'cancel', onPress: () => {} },
+      ],
+    });
   };
 
   const handleDeleteSelectedBatch = () => {
@@ -217,11 +257,11 @@ export default function StorageSettingsScreen() {
       .filter((f) => selectedUris.has(f.uri))
       .reduce((acc, curr) => acc + curr.size, 0);
 
-    Alert.alert(
-      'Delete Selected Items',
-      `Permanently delete ${count} selected item(s) freeing ${formatBytes(totalSelectedBytes)}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
+    setConfirmModalConfig({
+      visible: true,
+      title: 'Delete Selected Items',
+      message: `Permanently delete ${count} selected item(s) freeing ${formatBytes(totalSelectedBytes)}?`,
+      buttons: [
         {
           text: `Delete (${count})`,
           style: 'destructive',
@@ -235,12 +275,18 @@ export default function StorageSettingsScreen() {
               setIsMultiSelectMode(false);
               loadData();
             } else {
-              Alert.alert('Error', 'Failed to delete selected files.');
+              setConfirmModalConfig({
+                visible: true,
+                title: 'Error',
+                message: 'Failed to delete selected files.',
+                buttons: [{ text: 'OK', style: 'primary', onPress: () => {} }],
+              });
             }
           },
         },
-      ]
-    );
+        { text: 'Cancel', style: 'cancel', onPress: () => {} },
+      ],
+    });
   };
 
   const toggleSelectFile = (uri: string) => {
@@ -285,10 +331,21 @@ export default function StorageSettingsScreen() {
     setActionLoading(true);
     const { deletedCount, deletedBytes } = await runAutoCleanup();
     setActionLoading(false);
+
     if (deletedCount > 0) {
-      Alert.alert('Auto-Cleanup Finished', `Cleaned up ${deletedCount} file(s) freeing ${formatBytes(deletedBytes)}.`);
+      setConfirmModalConfig({
+        visible: true,
+        title: 'Auto-Cleanup Finished',
+        message: `Cleaned up ${deletedCount} file(s) freeing ${formatBytes(deletedBytes)}.`,
+        buttons: [{ text: 'OK', style: 'primary', onPress: () => {} }],
+      });
     } else {
-      Alert.alert('Auto-Cleanup Finished', 'No expired or excess files found matching cleanup rules.');
+      setConfirmModalConfig({
+        visible: true,
+        title: 'Auto-Cleanup Finished',
+        message: 'No expired or excess files found matching cleanup rules.',
+        buttons: [{ text: 'OK', style: 'primary', onPress: () => {} }],
+      });
     }
     loadData();
   };
@@ -866,6 +923,15 @@ export default function StorageSettingsScreen() {
           )}
         </View>
       </Modal>
+
+      {/* Dark Confirm Dialog Modal */}
+      <CustomConfirmModal
+        visible={confirmModalConfig.visible}
+        title={confirmModalConfig.title}
+        message={confirmModalConfig.message}
+        buttons={confirmModalConfig.buttons}
+        onClose={() => setConfirmModalConfig((prev) => ({ ...prev, visible: false }))}
+      />
     </SafeAreaView>
   );
 }
