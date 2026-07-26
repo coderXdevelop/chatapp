@@ -7,7 +7,9 @@ import {
   Vibration,
   Image,
   Linking,
+  Alert,
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -126,7 +128,7 @@ const MemoizedMessageItemComponent: React.FC<MemoizedMessageItemProps> = ({
         </Animated.View>
 
         <View style={[styles.messageRowWrapper, isSelected && styles.selectedRowHighlight]}>
-          {/* Floating Quick Emoji Reaction Bar */}
+          {/* Floating Quick Emoji & Action Toolbar */}
           {showQuickReactions && !item.isDeleted && (
             <View style={[styles.floatingReactionToolbar, isMe ? styles.myFloatingToolbar : styles.otherFloatingToolbar]}>
               {['👍', '❤️', '😂', '😮', '😢', '🙏'].map((emoji) => (
@@ -143,6 +145,21 @@ const MemoizedMessageItemComponent: React.FC<MemoizedMessageItemProps> = ({
                   <Text style={styles.floatingEmojiText}>{emoji}</Text>
                 </TouchableOpacity>
               ))}
+
+              {item.text ? (
+                <TouchableOpacity
+                  onPress={async () => {
+                    setShowQuickReactions(false);
+                    triggerHaptic();
+                    await Clipboard.setStringAsync(item.text!);
+                    Alert.alert('Copied to Clipboard 📋', 'Message text copied!');
+                  }}
+                  style={[styles.floatingEmojiItem, styles.floatingCopyDivider]}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.floatingCopyText}>📋 Copy</Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
           )}
 
@@ -643,6 +660,17 @@ const styles = StyleSheet.create({
   },
   floatingEmojiText: {
     fontSize: 22,
+  },
+  floatingCopyDivider: {
+    borderLeftWidth: 1,
+    borderLeftColor: '#334155',
+    paddingLeft: 8,
+    marginLeft: 2,
+  },
+  floatingCopyText: {
+    color: '#F59E0B',
+    fontSize: 12,
+    fontWeight: '800',
   },
   reactionsBadge: {
     flexDirection: 'row',

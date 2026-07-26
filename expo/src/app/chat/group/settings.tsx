@@ -19,6 +19,7 @@ import { useAuthStore } from '../../../store/authStore';
 import { useChatStore } from '../../../store/chatStore';
 import { COLORS, globalStyles } from '../../../styles/theme';
 import { pickMedia, getCloudinarySignature, compressImage, uploadToCloudinary } from '../../../services/mediaUpload';
+import * as Clipboard from 'expo-clipboard';
 
 export default function GroupSettingsScreen() {
   const router = useRouter();
@@ -120,59 +121,68 @@ export default function GroupSettingsScreen() {
   };
 
   const handleMemberOptions = (memberId: string, memberName: string) => {
-    if (!isAdmin) return;
-    if (memberId === user?.id) return; // Cannot manage yourself
+    if (memberId === user?.id) return;
 
+    const targetParticipant = chat.participants.find((p) => p._id === memberId);
     const memberIsAdmin = chat.admins?.includes(memberId);
     const memberIsCreator = chat.creator === memberId;
 
-    const options = [];
+    const options: any[] = [];
 
-    // Promote/Demote Admin actions
-    if (!memberIsCreator) {
+    if (targetParticipant?.connectId || targetParticipant?.email) {
+      const copyVal = targetParticipant.connectId || targetParticipant.email;
       options.push({
-        text: memberIsAdmin ? 'Dismiss as Admin' : 'Make Group Admin',
+        text: `Copy User ID (${copyVal}) 📋`,
         onPress: async () => {
-          try {
-            await promoteGroupAdmin(chat._id, memberId, memberIsAdmin ? 'demote' : 'promote');
-          } catch (e: any) {
-            Alert.alert('Action Failed', e.message);
-          }
+          await Clipboard.setStringAsync(copyVal);
+          Alert.alert('Copied to Clipboard 📋', `User ID: ${copyVal}`);
         },
       });
     }
 
-    // Remove member actions (creator cannot be removed, only admins can kick)
-    if (!memberIsCreator) {
-      options.push({
-        text: 'Remove from Group',
-        style: 'destructive' as const,
-        onPress: () => {
-          Alert.alert(
-            'Remove Member',
-            `Are you sure you want to remove ${memberName} from the group?`,
-            [
-              { text: 'Cancel', style: 'cancel' },
-              {
-                text: 'Remove',
-                style: 'destructive',
-                onPress: async () => {
-                  try {
-                    await removeGroupMember(chat._id, memberId);
-                  } catch (e: any) {
-                    Alert.alert('Action Failed', e.message);
-                  }
+    if (isAdmin) {
+      if (!memberIsCreator) {
+        options.push({
+          text: memberIsAdmin ? 'Dismiss as Admin' : 'Make Group Admin',
+          onPress: async () => {
+            try {
+              await promoteGroupAdmin(chat._id, memberId, memberIsAdmin ? 'demote' : 'promote');
+            } catch (e: any) {
+              Alert.alert('Action Failed', e.message);
+            }
+          },
+        });
+
+        options.push({
+          text: 'Remove from Group',
+          style: 'destructive' as const,
+          onPress: () => {
+            Alert.alert(
+              'Remove Member',
+              `Are you sure you want to remove ${memberName} from the group?`,
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Remove',
+                  style: 'destructive',
+                  onPress: async () => {
+                    try {
+                      await removeGroupMember(chat._id, memberId);
+                    } catch (e: any) {
+                      Alert.alert('Action Failed', e.message);
+                    }
+                  },
                 },
-              },
-            ]
-          );
-        },
-      });
+              ]
+            );
+          },
+        });
+      }
     }
 
     options.push({ text: 'Cancel', style: 'cancel' as const });
 
-    Alert.alert('Manage Member', `Choose action for ${memberName}:`, options, { cancelable: true });
+    Alert.alert('Member Options', `Choose action for ${memberName}:`, options, { cancelable: true });
   };
 
   const handleAddMembersSubmit = async () => {

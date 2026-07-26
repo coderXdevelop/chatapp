@@ -1617,10 +1617,29 @@ export default function ChatScreen() {
               <View style={styles.profileDivider} />
 
               {/* User ID / connectId */}
-              <View style={styles.profileInfoItem}>
-                <Text style={styles.profileLabel}>USER ID</Text>
-                <Text style={styles.profileValueMono}>{recipient?.connectId ? `@${recipient.connectId}` : 'Not Allocated'}</Text>
-              </View>
+              <TouchableOpacity
+                onPress={async () => {
+                  const copyVal = recipient?.connectId || recipient?.email || '';
+                  if (copyVal) {
+                    await Clipboard.setStringAsync(copyVal);
+                    Alert.alert('Copied to Clipboard 📋', `User ID (${copyVal}) copied!`);
+                  }
+                }}
+                activeOpacity={0.7}
+                style={[styles.profileInfoItem, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.profileLabel}>USER ID (TAP TO COPY)</Text>
+                  <Text style={styles.profileValueMono}>
+                    {recipient?.connectId ? `@${recipient.connectId}` : 'Not Allocated'}
+                  </Text>
+                </View>
+                {recipient?.connectId ? (
+                  <View style={{ backgroundColor: '#1E293B', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1, borderColor: '#334155' }}>
+                    <Text style={{ color: '#F59E0B', fontSize: 11, fontWeight: '800' }}>📋 Copy</Text>
+                  </View>
+                ) : null}
+              </TouchableOpacity>
 
               <View style={styles.profileDivider} />
 
