@@ -20,6 +20,8 @@ import { api } from '../services/api';
 import { COLORS, globalStyles } from '../styles/theme';
 import ProfileScreen from './profile';
 import { ChatListSkeleton } from '../components/SkeletonLoaders';
+import { CustomActionSheetModal, ActionOption } from '../components/CustomActionSheetModal';
+import { CustomConfirmModal } from '../components/CustomConfirmModal';
 
 interface SearchUser {
   _id: string;
@@ -47,6 +49,29 @@ export default function HomeScreen() {
   const [contactSearchInput, setContactSearchInput] = useState('');
   const [loadingContact, setLoadingContact] = useState(false);
   const [initialLoading, setInitialLoading] = useState(chats.length === 0);
+
+  // Dark Custom Modals State
+  const [actionSheetConfig, setActionSheetConfig] = useState<{
+    visible: boolean;
+    title: string;
+    subtitle?: string;
+    options: ActionOption[];
+  }>({
+    visible: false,
+    title: '',
+    options: [],
+  });
+
+  const [confirmModalConfig, setConfirmModalConfig] = useState<{
+    visible: boolean;
+    title: string;
+    message?: string;
+    buttons: any[];
+  }>({
+    visible: false,
+    title: '',
+    buttons: [],
+  });
 
   useEffect(() => {
     connectSocket();
@@ -132,13 +157,13 @@ export default function HomeScreen() {
 
   const handleDeleteSelected = () => {
     if (selectedChatIds.length === 0) return;
-    Alert.alert(
-      'Permanently Delete Chat(s)',
-      `Are you sure you want to permanently delete ${selectedChatIds.length} selected conversation(s)? This will clear all messages and remove the chat from your account.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
+    setConfirmModalConfig({
+      visible: true,
+      title: 'Permanently Delete Chat(s)',
+      message: `Are you sure you want to permanently delete ${selectedChatIds.length} selected conversation(s)? This will clear all messages and remove the chat from your account.`,
+      buttons: [
         {
-          text: 'Delete',
+          text: 'Delete Chats',
           style: 'destructive',
           onPress: async () => {
             const { deleteChats } = useChatStore.getState();
@@ -146,12 +171,18 @@ export default function HomeScreen() {
             if (success) {
               setSelectedChatIds([]);
             } else {
-              Alert.alert('Error', 'Failed to delete selected chats.');
+              setConfirmModalConfig({
+                visible: true,
+                title: 'Error',
+                message: 'Failed to delete selected chats.',
+                buttons: [{ text: 'OK', style: 'primary', onPress: () => {} }],
+              });
             }
           },
         },
-      ]
-    );
+        { text: 'Cancel', style: 'cancel', onPress: () => {} },
+      ],
+    });
   };
 
   return (
@@ -518,16 +549,21 @@ export default function HomeScreen() {
         <TouchableOpacity
           style={styles.fab}
           onPress={() => {
-            Alert.alert(
-              'New Conversation',
-              'Start a secure conversation or create a group:',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'New Secure DM', onPress: () => setIsAddModalOpen(true) },
-                { text: 'Create Group Chat', onPress: () => router.push('/chat/group/create' as any) },
+            setActionSheetConfig({
+              visible: true,
+              title: 'New Conversation',
+              subtitle: 'Start a direct message or group chat',
+              options: [
+                {
+                  text: '💬 New Direct Message',
+                  onPress: () => setIsAddModalOpen(true),
+                },
+                {
+                  text: '👥 Create Group Chat',
+                  onPress: () => router.push('/chat/group/create' as any),
+                },
               ],
-              { cancelable: true }
-            );
+            });
           }}
           activeOpacity={0.8}
         >
@@ -535,26 +571,25 @@ export default function HomeScreen() {
         </TouchableOpacity>
       )}
 
-
       {/* Add Contact Modal */}
       <Modal
         visible={isAddModalOpen}
-        animationType="fade"
+        animationType="slide"
         transparent
         onRequestClose={() => setIsAddModalOpen(false)}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Add Contact</Text>
+            <Text style={styles.modalTitle}>New Direct Message</Text>
             <Text style={styles.modalSubtitle}>
-              Type your contact's registered email address or unique User ID handle (e.g. "nanda" or "user_4910").
+              Enter email address or @connectId to connect:
             </Text>
 
             <View style={globalStyles.inputGroup}>
               <View style={globalStyles.inputWrapper}>
                 <TextInput
                   style={globalStyles.input}
-                  placeholder="User ID or Email"
+                  placeholder="User email or @connectId"
                   placeholderTextColor={COLORS.textSecondary}
                   value={contactSearchInput}
                   onChangeText={setContactSearchInput}
@@ -579,7 +614,7 @@ export default function HomeScreen() {
               <TouchableOpacity
                 style={[styles.saveModalButton, loadingContact && styles.disabledModalButton]}
                 onPress={handleAddContact}
-                disabled={loadingContact || !contactSearchInput.trim()}
+                disabled={loadingContact}
               >
                 {loadingContact ? (
                   <ActivityIndicator color={COLORS.primaryText} />
@@ -591,6 +626,24 @@ export default function HomeScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Dark Action Sheet Modal */}
+      <CustomActionSheetModal
+        visible={actionSheetConfig.visible}
+        title={actionSheetConfig.title}
+        subtitle={actionSheetConfig.subtitle}
+        options={actionSheetConfig.options}
+        onClose={() => setActionSheetConfig((prev) => ({ ...prev, visible: false }))}
+      />
+
+      {/* Dark Confirm Dialog Modal */}
+      <CustomConfirmModal
+        visible={confirmModalConfig.visible}
+        title={confirmModalConfig.title}
+        message={confirmModalConfig.message}
+        buttons={confirmModalConfig.buttons}
+        onClose={() => setConfirmModalConfig((prev) => ({ ...prev, visible: false }))}
+      />
     </SafeAreaView>
   );
 }

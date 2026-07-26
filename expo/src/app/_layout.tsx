@@ -2,7 +2,7 @@ import Constants from "expo-constants";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Stack, useSegments, useRouter } from "expo-router";
 import { useEffect } from "react";
-import { ActivityIndicator, StyleSheet, View } from "react-native";
+import { ActivityIndicator, StyleSheet, View, Image, Text } from "react-native";
 import { useAuthStore } from "../store/authStore";
 import { useAppState } from "../hooks/useAppState";
 
@@ -105,7 +105,14 @@ export default function RootLayout() {
   if (!isInitialized) {
     return (
       <View style={styles.splashContainer}>
-        <ActivityIndicator size="large" color="#F59E0B" />
+        <Image
+          source={require("../../assets/images/Linkup.png")}
+          style={styles.splashLogo}
+          resizeMode="contain"
+        />
+        <Text style={styles.splashTitle}>LinkUP</Text>
+        <Text style={styles.splashSubtitle}>Connecting People Real-Time</Text>
+        <ActivityIndicator size="large" color="#F59E0B" style={{ marginTop: 24 }} />
       </View>
     );
   }
@@ -129,8 +136,29 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   splashContainer: {
     flex: 1,
-    backgroundColor: "#0F172A",
+    backgroundColor: "#070b13",
     justifyContent: "center",
     alignItems: "center",
+    paddingHorizontal: 24,
+  },
+  splashLogo: {
+    width: 120,
+    height: 120,
+    borderRadius: 24,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "rgba(204, 255, 0, 0.25)",
+  },
+  splashTitle: {
+    color: "#F8FAFC",
+    fontSize: 28,
+    fontWeight: "800",
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  splashSubtitle: {
+    color: "#94A3B8",
+    fontSize: 13,
+    fontWeight: "500",
   },
 });

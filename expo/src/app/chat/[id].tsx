@@ -28,6 +28,8 @@ import { MediaMessage } from '../../components/MediaMessage';
 import { ChatMessageSkeleton } from '../../components/SkeletonLoaders';
 import { pickMedia, compressImage, uploadToCloudinary, getCloudinarySignature, captureMediaWithCamera, pickAnyMediaFromGallery } from '../../services/mediaUpload';
 import { useVoiceRecorder } from '../../hooks/useVoiceRecorder';
+import { CustomActionSheetModal, ActionOption } from '../../components/CustomActionSheetModal';
+import { CustomConfirmModal } from '../../components/CustomConfirmModal';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
@@ -71,6 +73,7 @@ export default function ChatScreen() {
     searchMessages,
     toggleStarMessage,
     togglePinMessage,
+    clearChat,
   } = useChatStore();
 
   const [text, setText] = useState('');
@@ -115,6 +118,29 @@ export default function ChatScreen() {
   const [batchAssets, setBatchAssets] = useState<ImagePicker.ImagePickerAsset[]>([]);
   const [isBatchPreviewOpen, setIsBatchPreviewOpen] = useState(false);
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
+
+  // Custom Dark Modals state
+  const [actionSheetConfig, setActionSheetConfig] = useState<{
+    visible: boolean;
+    title: string;
+    subtitle?: string;
+    options: ActionOption[];
+  }>({
+    visible: false,
+    title: '',
+    options: [],
+  });
+
+  const [confirmModalConfig, setConfirmModalConfig] = useState<{
+    visible: boolean;
+    title: string;
+    message?: string;
+    buttons: any[];
+  }>({
+    visible: false,
+    title: '',
+    buttons: [],
+  });
 
   useEffect(() => {
     const showSub = Keyboard.addListener(
@@ -819,11 +845,11 @@ export default function ChatScreen() {
     const singleMsg = selectedMsgs.length === 1 ? selectedMsgs[0] : null;
     const isMe = singleMsg?.sender._id === user?.id;
 
-    const options: any[] = [];
+    const options: ActionOption[] = [];
 
     if (selectedMsgs.length > 0 && selectedMsgs.some((m) => m.text && !m.isDeleted)) {
       options.push({
-        text: selectedMsgs.length > 1 ? `Copy ${selectedMsgs.length} Messages` : 'Copy Text',
+        text: selectedMsgs.length > 1 ? `📋 Copy ${selectedMsgs.length} Messages` : '📋 Copy Text',
         onPress: async () => {
           const validMsgs = selectedMsgs.filter((m) => m.text && !m.isDeleted);
           const copyPayload =
@@ -833,7 +859,6 @@ export default function ChatScreen() {
 
           if (copyPayload) {
             await Clipboard.setStringAsync(copyPayload);
-            Alert.alert('Copied', 'Message text copied to clipboard!');
           }
           setIsSelectionMode(false);
           setSelectedMessageIds([]);
@@ -843,7 +868,7 @@ export default function ChatScreen() {
 
     if (singleMsg && isMe && !singleMsg.isDeleted && singleMsg.text) {
       options.push({
-        text: 'Edit Message',
+        text: '✏️ Edit Message',
         onPress: () => {
           setEditingMessage(singleMsg);
           setText(singleMsg.text || '');
@@ -869,7 +894,12 @@ export default function ChatScreen() {
         onPress: async () => {
           const res = await togglePinMessage(chatId!, singleMsg._id);
           if (res) {
-            Alert.alert('Message Pin', res.isPinned ? 'Message pinned to chat top.' : 'Message unpinned.');
+            setConfirmModalConfig({
+              visible: true,
+              title: 'Message Pin',
+              message: res.isPinned ? 'Message pinned to top of chat.' : 'Message unpinned.',
+              buttons: [{ text: 'OK', style: 'primary', onPress: () => {} }],
+            });
           }
           setIsSelectionMode(false);
           setSelectedMessageIds([]);
@@ -879,7 +909,7 @@ export default function ChatScreen() {
 
     if (chatMessages.length > 0) {
       options.push({
-        text: 'Select All',
+        text: '☑️ Select All',
         onPress: () => {
           setSelectedMessageIds(chatMessages.map((m) => m._id));
         },
@@ -887,57 +917,56 @@ export default function ChatScreen() {
     }
 
     options.push({
-      text: 'Report Selected',
+      text: '🚩 Report Selected',
       onPress: () => {
         setIsReportModalOpen(true);
       },
     });
 
-    options.push({ text: 'Cancel', style: 'cancel' as const });
-
-    Alert.alert('Message Options', undefined, options, { cancelable: true });
+    setActionSheetConfig({
+      visible: true,
+      title: 'Message Options',
+      subtitle: singleMsg ? `Selected message from ${singleMsg.sender.displayName}` : `${selectedMessageIds.length} messages selected`,
+      options,
+    });
   };
 
   const handleDeleteMessage = (msg: Message) => {
     const isMe = msg.sender._id === user?.id;
-    const options: any[] = [
+    const buttons: any[] = [
       {
         text: 'Delete for me',
+        style: 'destructive',
         onPress: async () => {
           if (chatId) {
-            const success = await deleteMessage(chatId, msg._id, 'me');
-            if (!success) {
-              Alert.alert('Error', 'Failed to delete message.');
-            }
+            await deleteMessage(chatId, msg._id, 'me');
           }
         },
       },
     ];
 
     if (isMe) {
-      options.push({
+      buttons.push({
         text: 'Delete for everyone',
         style: 'destructive',
         onPress: async () => {
           if (chatId) {
-            const success = await deleteMessage(chatId, msg._id, 'everyone');
-            if (!success) {
-              Alert.alert('Error', 'Failed to delete message.');
-            }
+            await deleteMessage(chatId, msg._id, 'everyone');
           }
         },
       });
     }
 
-    options.push({ text: 'Cancel', style: 'cancel' });
+    buttons.push({ text: 'Cancel', style: 'cancel', onPress: () => {} });
 
-    Alert.alert(
-      'Delete Message',
-      isMe
+    setConfirmModalConfig({
+      visible: true,
+      title: 'Delete Message',
+      message: isMe
         ? 'Do you want to delete this message for yourself, or for everyone?'
-        : 'Do you want to delete this message for yourself?',
-      options
-    );
+        : 'Delete this message for yourself?',
+      buttons,
+    });
   };
 
   const handleForwardMessage = (msg: Message) => {
@@ -974,133 +1003,125 @@ export default function ChatScreen() {
   const handleDeleteSelected = () => {
     if (selectedMessageIds.length === 0) return;
 
-    const selectedMsgs = selectedMessageIds.map(id => chatMessages.find(m => m._id === id)).filter(Boolean);
-    const allMe = selectedMsgs.every(msg => msg?.sender._id === user?.id);
+    const selectedMsgs = selectedMessageIds
+      .map((id) => chatMessages.find((m) => m._id === id))
+      .filter(Boolean) as Message[];
+
+    const allMe = selectedMsgs.every((m) => m.sender._id === user?.id);
 
     const deleteMessages = async (type: 'me' | 'everyone') => {
       for (const msgId of selectedMessageIds) {
-        const msg = chatMessages.find((m) => m._id === msgId);
-        if (msg) {
-          await deleteMessage(chatId!, msgId, type);
-        }
+        await deleteMessage(chatId!, msgId, type);
       }
       setIsSelectionMode(false);
       setSelectedMessageIds([]);
     };
 
     if (allMe) {
-      Alert.alert(
-        'Delete Messages',
-        `Do you want to delete these ${selectedMessageIds.length} messages for yourself, or for everyone?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Delete for me',
-            onPress: () => deleteMessages('me'),
-          },
-          {
-            text: 'Delete for everyone',
-            style: 'destructive',
-            onPress: () => deleteMessages('everyone'),
-          },
-        ]
-      );
+      setConfirmModalConfig({
+        visible: true,
+        title: 'Delete Messages',
+        message: `Delete these ${selectedMessageIds.length} messages for yourself, or for everyone?`,
+        buttons: [
+          { text: 'Delete for me', style: 'destructive', onPress: () => deleteMessages('me') },
+          { text: 'Delete for everyone', style: 'destructive', onPress: () => deleteMessages('everyone') },
+          { text: 'Cancel', style: 'cancel', onPress: () => {} },
+        ],
+      });
     } else {
-      Alert.alert(
-        'Delete Messages',
-        `Delete these ${selectedMessageIds.length} selected messages for yourself?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Delete for me',
-            style: 'destructive',
-            onPress: () => deleteMessages('me'),
-          },
-        ]
-      );
+      setConfirmModalConfig({
+        visible: true,
+        title: 'Delete Messages',
+        message: `Delete these ${selectedMessageIds.length} selected messages for yourself?`,
+        buttons: [
+          { text: 'Delete for me', style: 'destructive', onPress: () => deleteMessages('me') },
+          { text: 'Cancel', style: 'cancel', onPress: () => {} },
+        ],
+      });
     }
   };
 
   const handleChatOptions = () => {
     const isCurrentlyBlocked = blockedUsers.some((u) => u._id === recipient?._id);
 
-    const options: any[] = [];
+    const options: ActionOption[] = [];
     if (currentChat?.isGroup) {
       options.push({
-        text: 'Group Info & Settings',
-        onPress: () => router.push({ pathname: '/chat/group/settings', params: { chatId } } as any),
-      });
-    } else if (recipient) {
-      options.push({
-        text: isCurrentlyBlocked ? 'Unblock Contact' : 'Block Contact',
-        style: isCurrentlyBlocked ? 'default' : 'destructive' as const,
-        onPress: () => {
-          Alert.alert(
-            isCurrentlyBlocked ? 'Unblock User' : 'Block User',
-            isCurrentlyBlocked
-              ? `Are you sure you want to unblock ${recipient.displayName}?`
-              : `Blocked contacts will no longer be able to message you or see your online status. Block ${recipient.displayName}?`,
-            [
-              { text: 'Cancel', style: 'cancel' },
-              {
-                text: isCurrentlyBlocked ? 'Unblock' : 'Block',
-                style: isCurrentlyBlocked ? 'default' : 'destructive',
-                onPress: async () => {
-                  if (isCurrentlyBlocked) {
-                    await unblockUser(recipient._id);
-                    Alert.alert('Contact Unblocked', `${recipient.displayName} has been unblocked.`);
-                  } else {
-                    await blockUser(recipient._id);
-                    Alert.alert('Contact Blocked', `${recipient.displayName} has been blocked.`);
-                    router.back(); // Go back after blocking
-                  }
-                },
-              },
-            ]
-          );
-        },
+        text: '👥 Group Info & Settings',
+        onPress: () => router.push(`/chat/group/settings?chatId=${chatId}` as any),
       });
     }
 
     options.push({
-      text: 'Clear Chat',
-      style: 'destructive' as const,
+      text: '🔍 Search Messages',
+      onPress: () => setIsSearchOpen(true),
+    });
+
+    options.push({
+      text: '🧹 Clear Chat History',
+      style: 'destructive',
       onPress: () => {
-        Alert.alert(
-          'Clear Chat',
-          'Are you sure you want to clear all messages in this chat? This cannot be undone.',
-          [
-            { text: 'Cancel', style: 'cancel' },
+        setConfirmModalConfig({
+          visible: true,
+          title: 'Clear Chat History',
+          message: 'Are you sure you want to clear all messages in this chat? This action cannot be undone.',
+          buttons: [
             {
               text: 'Clear Chat',
               style: 'destructive',
               onPress: async () => {
-                if (chatId) {
-                  const clearStore = useChatStore.getState().clearChat;
-                  const success = await clearStore(chatId);
-                  if (success) {
-                    Alert.alert('Chat Cleared', 'All messages cleared.');
-                  } else {
-                    Alert.alert('Error', 'Failed to clear chat.');
-                  }
+                const res = await clearChat(chatId!);
+                if (res) {
+                  setConfirmModalConfig({
+                    visible: true,
+                    title: 'Chat Cleared',
+                    message: 'All messages have been cleared from this chat.',
+                    buttons: [{ text: 'OK', style: 'primary', onPress: () => {} }],
+                  });
                 }
               },
             },
-          ]
-        );
+            { text: 'Cancel', style: 'cancel', onPress: () => {} },
+          ],
+        });
       },
     });
 
-    options.push({
-      text: currentChat?.isGroup ? 'Report Group' : 'Report User',
-      onPress: () => {
-        setIsReportModalOpen(true);
-      },
+    if (!currentChat?.isGroup && recipient) {
+      options.push({
+        text: isCurrentlyBlocked ? '🔓 Unblock User' : '🚫 Block User',
+        style: 'destructive',
+        onPress: () => {
+          setConfirmModalConfig({
+            visible: true,
+            title: isCurrentlyBlocked ? 'Unblock User' : 'Block User',
+            message: isCurrentlyBlocked
+              ? `Unblock ${recipient.displayName}? They will be able to send you messages again.`
+              : `Block ${recipient.displayName}? They will no longer be able to send you messages.`,
+            buttons: [
+              {
+                text: isCurrentlyBlocked ? 'Unblock' : 'Block',
+                style: 'destructive',
+                onPress: async () => {
+                  if (isCurrentlyBlocked) {
+                    await unblockUser(recipient._id);
+                  } else {
+                    await blockUser(recipient._id);
+                  }
+                },
+              },
+              { text: 'Cancel', style: 'cancel', onPress: () => {} },
+            ],
+          });
+        },
+      });
+    }
+
+    setActionSheetConfig({
+      visible: true,
+      title: currentChat?.name || recipient?.displayName || 'Chat Options',
+      options,
     });
-
-    options.push({ text: 'Cancel', style: 'cancel' as const });
-
-    Alert.alert('Options', 'Select an action:', options, { cancelable: true });
   };
 
   const handleSearchSubmit = async () => {
@@ -1968,6 +1989,24 @@ export default function ChatScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Dark Action Sheet Modal */}
+      <CustomActionSheetModal
+        visible={actionSheetConfig.visible}
+        title={actionSheetConfig.title}
+        subtitle={actionSheetConfig.subtitle}
+        options={actionSheetConfig.options}
+        onClose={() => setActionSheetConfig((prev) => ({ ...prev, visible: false }))}
+      />
+
+      {/* Dark Confirm Dialog Modal */}
+      <CustomConfirmModal
+        visible={confirmModalConfig.visible}
+        title={confirmModalConfig.title}
+        message={confirmModalConfig.message}
+        buttons={confirmModalConfig.buttons}
+        onClose={() => setConfirmModalConfig((prev) => ({ ...prev, visible: false }))}
+      />
     </SafeAreaView>
   );
 }

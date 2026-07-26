@@ -20,6 +20,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '../store/authStore';
 import { COLORS, globalStyles } from '../styles/theme';
 import { QRCodeModal } from '../components/QRCodeModal';
+import { CustomConfirmModal } from '../components/CustomConfirmModal';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -39,6 +40,17 @@ export default function ProfileScreen() {
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   const [isResetLoading, setIsResetLoading] = useState(false);
   const [isQRModalOpen, setIsQRModalOpen] = useState(false);
+
+  const [confirmModalConfig, setConfirmModalConfig] = useState<{
+    visible: boolean;
+    title: string;
+    message?: string;
+    buttons: any[];
+  }>({
+    visible: false,
+    title: '',
+    buttons: [],
+  });
 
   // Profile Edit fields
   const [newDisplayName, setNewDisplayName] = useState('');
@@ -197,40 +209,55 @@ export default function ProfileScreen() {
   };
 
   const handleLogout = async () => {
-    Alert.alert('Logout', 'Are you sure you want to sign out?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Logout',
-        style: 'destructive',
-        onPress: async () => {
-          await logout();
-          router.replace('/login' as any);
+    setConfirmModalConfig({
+      visible: true,
+      title: 'Logout',
+      message: 'Are you sure you want to sign out of LinkUP?',
+      buttons: [
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: async () => {
+            await logout();
+            router.replace('/login' as any);
+          },
         },
-      },
-    ]);
+        { text: 'Cancel', style: 'cancel', onPress: () => {} },
+      ],
+    });
   };
 
   const handleDeleteAccount = async () => {
-    Alert.alert(
-      'Delete Account',
-      'Are you sure you want to permanently delete your account? This action cannot be undone and all your data will be erased.',
-      [
-        { text: 'Cancel', style: 'cancel' },
+    setConfirmModalConfig({
+      visible: true,
+      title: 'Delete Account',
+      message: 'Are you sure you want to permanently delete your account? This action cannot be undone and all your data will be erased.',
+      buttons: [
         {
-          text: 'Delete',
+          text: 'Delete Account',
           style: 'destructive',
           onPress: async () => {
             const res = await deleteAccount();
             if (res.success) {
-              Alert.alert('Success', 'Your account has been deleted.');
-              router.replace('/login' as any);
+              setConfirmModalConfig({
+                visible: true,
+                title: 'Account Deleted',
+                message: 'Your account has been deleted.',
+                buttons: [{ text: 'OK', style: 'primary', onPress: () => router.replace('/login' as any) }],
+              });
             } else {
-              Alert.alert('Error', res.message || 'Failed to delete account.');
+              setConfirmModalConfig({
+                visible: true,
+                title: 'Error',
+                message: res.message || 'Failed to delete account.',
+                buttons: [{ text: 'OK', style: 'primary', onPress: () => {} }],
+              });
             }
           },
         },
-      ]
-    );
+        { text: 'Cancel', style: 'cancel', onPress: () => {} },
+      ],
+    });
   };
 
   const initial = (user.displayName || 'C').charAt(0).toUpperCase();
@@ -609,6 +636,15 @@ export default function ProfileScreen() {
         visible={isQRModalOpen}
         onClose={() => setIsQRModalOpen(false)}
         user={user}
+      />
+
+      {/* Dark Confirm Dialog Modal */}
+      <CustomConfirmModal
+        visible={confirmModalConfig.visible}
+        title={confirmModalConfig.title}
+        message={confirmModalConfig.message}
+        buttons={confirmModalConfig.buttons}
+        onClose={() => setConfirmModalConfig((prev) => ({ ...prev, visible: false }))}
       />
     </SafeAreaView>
   );
