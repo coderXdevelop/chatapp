@@ -42,6 +42,7 @@ initBackgroundCronServices();
 
 
 app.get('/health', (_, res) => res.send({ status: 'ok', timestamp: new Date() }));
+app.get('/api/keep-alive', (_, res) => res.status(200).json({ status: 'active', timestamp: new Date() }));
 
 // Setup Sockets
 setupSockets(io);
@@ -50,7 +51,11 @@ const MONGO_URI = process.env.MONGO_URI || process.env.MONGODB_URI || '';
 
 if (MONGO_URI) {
   mongoose
-    .connect(MONGO_URI)
+    .connect(MONGO_URI, {
+      maxPoolSize: 10,
+      serverSelectionTimeoutMS: 5000,
+      connectTimeoutMS: 10000,
+    })
     .then(async () => {
       console.log('Connected to MongoDB successfully.');
       try {

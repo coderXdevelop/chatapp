@@ -19,6 +19,7 @@ import { useChatStore } from '../store/chatStore';
 import { api } from '../services/api';
 import { COLORS, globalStyles } from '../styles/theme';
 import ProfileScreen from './profile';
+import { ChatListSkeleton } from '../components/SkeletonLoaders';
 
 interface SearchUser {
   _id: string;
@@ -40,18 +41,17 @@ export default function HomeScreen() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [contactSearchInput, setContactSearchInput] = useState('');
   const [loadingContact, setLoadingContact] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(chats.length === 0);
 
   useEffect(() => {
-    // Ensure socket connects and chats are fetched on mount
     connectSocket();
-    fetchChats();
+    fetchChats().finally(() => setInitialLoading(false));
 
-    // Fetch chats periodically or when returning to HOME tab
     const interval = setInterval(() => {
       if (activeTab === 'HOME') {
         fetchChats();
       }
-    }, 15000); // 15 seconds poll fallback
+    }, 15000);
 
     return () => clearInterval(interval);
   }, [activeTab]);
@@ -96,10 +96,13 @@ export default function HomeScreen() {
             </View>
 
             {/* List of active chat threads */}
-            <FlatList
-              data={chats}
-              keyExtractor={(item) => item._id}
-              contentContainerStyle={styles.listContainer}
+            {initialLoading && chats.length === 0 ? (
+              <ChatListSkeleton />
+            ) : (
+              <FlatList
+                data={chats}
+                keyExtractor={(item) => item._id}
+                contentContainerStyle={styles.listContainer}
               ListEmptyComponent={
                 <View style={styles.emptyContainer}>
                   <Text style={styles.emptyIcon}>💬</Text>
@@ -161,6 +164,7 @@ export default function HomeScreen() {
                 );
               }}
             />
+            )}
           </View>
         )}
 

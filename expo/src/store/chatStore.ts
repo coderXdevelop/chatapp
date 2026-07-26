@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { io, Socket } from 'socket.io-client';
 import { api } from '../services/api';
 import { useAuthStore } from './authStore';
@@ -125,7 +127,9 @@ interface ChatState {
 // Extract base URL from Axios instance configuration
 const SOCKET_URL = api.defaults.baseURL || 'https://chatapp-4cpr.onrender.com';
 
-export const useChatStore = create<ChatState>((set, get) => ({
+export const useChatStore = create<ChatState>()(
+  persist(
+    (set, get) => ({
   chats: [],
   messages: {},
   loadingMessages: {},
@@ -455,7 +459,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     const newSocket = io(SOCKET_URL, {
       auth: { token },
-      transports: ['websocket'],
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      randomizationFactor: 0.5,
+      timeout: 20000,
     });
 
     newSocket.on('connect', () => {
@@ -846,5 +856,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return [];
     }
   },
-}));
+    }),
+    {
+      name: 'chatconnect_persistent_chat_store',
+      storage: createJSONStorage(() => AsyncStorage),
+      partialize: (state) => ({
+        chats: state.chats,
+        messages: state.messages,
+        blockedUsers: state.blockedUsers,
+      }),
+    }
+  )
+);
 

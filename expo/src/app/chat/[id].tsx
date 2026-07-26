@@ -24,6 +24,7 @@ import { COLORS, globalStyles } from '../../styles/theme';
 import axios from 'axios';
 import { Ionicons } from '@expo/vector-icons';
 import { MediaMessage } from '../../components/MediaMessage';
+import { ChatMessageSkeleton } from '../../components/SkeletonLoaders';
 import { pickMedia, compressImage, uploadToCloudinary, getCloudinarySignature, captureMediaWithCamera, pickAnyMediaFromGallery } from '../../services/mediaUpload';
 import { useVoiceRecorder } from '../../hooks/useVoiceRecorder';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -1297,10 +1298,13 @@ export default function ChatScreen() {
       >
         {/* Message List */}
         <View style={{ flex: 1, position: 'relative' }}>
-          <FlatList
-            ref={flatListRef}
-            data={chatMessages}
-            keyExtractor={keyExtractor}
+          {loadingMessages[chatId || ''] && chatMessages.length === 0 ? (
+            <ChatMessageSkeleton />
+          ) : (
+            <FlatList
+              ref={flatListRef}
+              data={chatMessages}
+              keyExtractor={keyExtractor}
             inverted // Renders list from bottom to top
             onEndReached={handleLoadMore}
             onEndReachedThreshold={0.3}
@@ -1326,6 +1330,7 @@ export default function ChatScreen() {
             contentContainerStyle={styles.listContent}
             renderItem={renderMessageItem}
           />
+          )}
 
           <ScrollToBottomButton
             visible={showScrollToBottom}
