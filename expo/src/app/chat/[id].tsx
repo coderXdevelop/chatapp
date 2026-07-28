@@ -1233,6 +1233,38 @@ export default function ChatScreen() {
     handleCancelParticularUpload(tempId);
   }, [handleCancelParticularUpload]);
 
+  const handlePressReplyPreview = useCallback(
+    (replyToId: string) => {
+      const idx = chatMessages.findIndex((m) => m._id === replyToId || m.tempId === replyToId);
+      if (idx !== -1) {
+        try {
+          flatListRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.5 });
+        } catch (e) {
+          flatListRef.current?.scrollToOffset({ offset: idx * 80, animated: true });
+        }
+        setHighlightedMessageId(replyToId);
+        setTimeout(() => {
+          setHighlightedMessageId(null);
+        }, 2500);
+      } else {
+        Alert.alert('Original Message', 'The replied message is further up in chat history.');
+      }
+    },
+    [chatMessages]
+  );
+
+  const handlePressStatusReplyPreview = useCallback(
+    (statusReply: any) => {
+      if (statusReply?.statusOwner) {
+        const ownerId = typeof statusReply.statusOwner === 'object' ? statusReply.statusOwner._id : statusReply.statusOwner;
+        if (ownerId) {
+          router.push(`/status/view?userId=${ownerId}` as any);
+        }
+      }
+    },
+    [router]
+  );
+
   const scrollToBottom = useCallback(() => {
     flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
   }, []);
@@ -1264,6 +1296,8 @@ export default function ChatScreen() {
           onSelect={handleSelectMsg}
           onMediaPress={handleMediaPress}
           onCancelUpload={handleCancelUpload}
+          onPressReplyPreview={handlePressReplyPreview}
+          onPressStatusReplyPreview={handlePressStatusReplyPreview}
         />
       );
     },
@@ -1279,6 +1313,8 @@ export default function ChatScreen() {
       handleSelectMsg,
       handleMediaPress,
       handleCancelUpload,
+      handlePressReplyPreview,
+      handlePressStatusReplyPreview,
     ]
   );
 

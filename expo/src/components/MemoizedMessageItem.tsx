@@ -38,6 +38,8 @@ interface MemoizedMessageItemProps {
   onSelect: (msgId: string) => void;
   onMediaPress: (mediaInfo: { messageId: string; url: string; type: 'image' | 'video' | 'audio' }) => void;
   onCancelUpload: (tempId: string) => void;
+  onPressReplyPreview?: (replyToId: string) => void;
+  onPressStatusReplyPreview?: (statusReply: any) => void;
 }
 
 const triggerHaptic = () => {
@@ -60,6 +62,8 @@ const MemoizedMessageItemComponent: React.FC<MemoizedMessageItemProps> = ({
   onSelect,
   onMediaPress,
   onCancelUpload,
+  onPressReplyPreview,
+  onPressStatusReplyPreview,
 }) => {
   const [showQuickReactions, setShowQuickReactions] = React.useState(false);
   const translateX = useSharedValue(0);
@@ -224,11 +228,13 @@ const MemoizedMessageItemComponent: React.FC<MemoizedMessageItemProps> = ({
 
               {/* Replied-To Message Header inside bubble */}
               {item.replyTo && !item.isDeleted && (
-                <View
+                <TouchableOpacity
                   style={[
                     styles.bubbleReplyPreview,
                     isMe ? styles.myBubbleReplyPreview : styles.otherBubbleReplyPreview,
                   ]}
+                  onPress={() => item.replyTo?._id && onPressReplyPreview?.(item.replyTo._id)}
+                  activeOpacity={0.75}
                 >
                   <Text style={styles.bubbleReplySender} numberOfLines={1}>
                     {item.replyTo.sender._id === userId ? 'You' : item.replyTo.sender.displayName}
@@ -236,16 +242,18 @@ const MemoizedMessageItemComponent: React.FC<MemoizedMessageItemProps> = ({
                   <Text style={styles.bubbleReplyText} numberOfLines={1}>
                     {item.replyTo.text}
                   </Text>
-                </View>
+                </TouchableOpacity>
               )}
 
               {/* Status Reply Header inside bubble */}
               {item.statusReply && !item.isDeleted && (
-                <View
+                <TouchableOpacity
                   style={[
                     styles.statusReplyPreview,
                     isMe ? styles.myStatusReplyPreview : styles.otherStatusReplyPreview,
                   ]}
+                  onPress={() => item.statusReply && onPressStatusReplyPreview?.(item.statusReply)}
+                  activeOpacity={0.75}
                 >
                   {item.statusReply.mediaUrl ? (
                     <Image
@@ -272,7 +280,7 @@ const MemoizedMessageItemComponent: React.FC<MemoizedMessageItemProps> = ({
                       {item.statusReply.caption || item.statusReply.text || 'Status Update'}
                     </Text>
                   </View>
-                </View>
+                </TouchableOpacity>
               )}
 
               {/* Forwarded Tag */}

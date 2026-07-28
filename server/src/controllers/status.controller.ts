@@ -97,7 +97,8 @@ export async function getStatusFeed(req: AuthenticatedRequest, res: Response) {
       createdAt: { $gte: twentyFourHoursAgo },
     })
       .sort({ createdAt: 1 })
-      .populate('user', 'displayName avatarUrl email connectId');
+      .populate('user', 'displayName avatarUrl email connectId')
+      .populate('views.user', 'displayName avatarUrl email connectId');
 
     // Filter statuses based on privacy permissions
     const statuses = rawStatuses.filter((st) => {

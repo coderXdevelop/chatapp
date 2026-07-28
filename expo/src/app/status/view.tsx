@@ -270,6 +270,26 @@ export default function ViewStatusScreen() {
             </View>
           ) : null}
 
+          {/* Reaction Overlay Summary Badge */}
+          {currentItem.views && currentItem.views.some((v: any) => v.reaction) && (
+            <TouchableOpacity
+              style={styles.reactionSummaryBadge}
+              onPress={isOwner ? handleOpenViewers : undefined}
+              activeOpacity={0.8}
+            >
+              {Array.from(new Set(currentItem.views.filter((v: any) => v.reaction).map((v: any) => v.reaction)))
+                .slice(0, 4)
+                .map((emoji: any, i) => (
+                  <Text key={i} style={styles.reactionBadgeEmoji}>
+                    {emoji}
+                  </Text>
+                ))}
+              <Text style={styles.reactionBadgeCount}>
+                {currentItem.views.filter((v: any) => v.reaction).length}
+              </Text>
+            </TouchableOpacity>
+          )}
+
           {/* Floating Reaction Emojis Animation */}
           {floatingEmojis.map((fe) => (
             <Animated.View
@@ -507,6 +527,28 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 15,
     textAlign: 'center',
+  },
+  reactionSummaryBadge: {
+    position: 'absolute',
+    bottom: 80,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.9)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.4)',
+    gap: 4,
+  },
+  reactionBadgeEmoji: {
+    fontSize: 16,
+  },
+  reactionBadgeCount: {
+    color: '#F59E0B',
+    fontSize: 13,
+    fontWeight: '800',
+    marginLeft: 4,
   },
   floatingEmojiContainer: {
     position: 'absolute',
