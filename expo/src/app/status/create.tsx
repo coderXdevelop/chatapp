@@ -15,6 +15,7 @@ import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { useChatStore } from '../../store/chatStore';
 import { uploadToCloudinary, getCloudinarySignature } from '../../services/mediaUpload';
+import { CustomConfirmModal } from '../../components/CustomConfirmModal';
 
 const BG_COLORS = ['#0F172A', '#4C1D95', '#831843', '#065F46', '#1E3A8A', '#78350F'];
 
@@ -28,6 +29,26 @@ export interface StatusMediaItem {
 export default function CreateStatusScreen() {
   const router = useRouter();
   const { postStatus } = useChatStore();
+
+  const [confirmModalConfig, setConfirmModalConfig] = useState<{
+    visible: boolean;
+    title: string;
+    message?: string;
+    buttons: Array<{ text: string; style?: 'default' | 'cancel' | 'destructive' | 'primary'; onPress: () => void }>;
+  }>({
+    visible: false,
+    title: '',
+    buttons: [],
+  });
+
+  const showAlert = (title: string, message: string, onOk?: () => void) => {
+    setConfirmModalConfig({
+      visible: true,
+      title,
+      message,
+      buttons: [{ text: 'OK', style: 'primary', onPress: () => onOk?.() }],
+    });
+  };
 
   const [textStatus, setTextStatus] = useState('');
   const [selectedItems, setSelectedItems] = useState<StatusMediaItem[]>([]);
@@ -71,7 +92,7 @@ export default function CreateStatusScreen() {
         }
 
         if (skippedCount > 0) {
-          Alert.alert(
+          showAlert(
             'Video Length Limit (30-40s)',
             `${skippedCount} video(s) exceeded the 40-second limit and were excluded. Status videos must be 40s or less.`
           );
@@ -86,7 +107,7 @@ export default function CreateStatusScreen() {
         }
       }
     } catch (e) {
-      Alert.alert('Error', 'Could not select photos or videos.');
+      showAlert('Error', 'Could not select photos or videos.');
     }
   };
 
@@ -110,7 +131,7 @@ export default function CreateStatusScreen() {
 
   const handlePost = async () => {
     if (selectedItems.length === 0 && !textStatus.trim()) {
-      Alert.alert('Empty Status', 'Please enter text or select photos/videos.');
+      showAlert('Empty Status', 'Please enter text or select photos/videos.');
       return;
     }
 
@@ -145,7 +166,7 @@ export default function CreateStatusScreen() {
         if (success) {
           router.back();
         } else {
-          Alert.alert('Error', 'Failed to post status updates.');
+          showAlert('Error', 'Failed to post status updates.');
         }
       } else {
         // Text status
@@ -157,11 +178,11 @@ export default function CreateStatusScreen() {
         if (success) {
           router.back();
         } else {
-          Alert.alert('Error', 'Failed to post text status.');
+          showAlert('Error', 'Failed to post text status.');
         }
       }
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to post status update.');
+      showAlert('Error', e.message || 'Failed to post status update.');
     } finally {
       setIsPosting(false);
       setUploadProgressText('');
@@ -278,6 +299,15 @@ export default function CreateStatusScreen() {
           ))}
         </View>
       )}
+
+      {/* Dark Confirm Dialog Modal */}
+      <CustomConfirmModal
+        visible={confirmModalConfig.visible}
+        title={confirmModalConfig.title}
+        message={confirmModalConfig.message}
+        buttons={confirmModalConfig.buttons}
+        onClose={() => setConfirmModalConfig((prev) => ({ ...prev, visible: false }))}
+      />
     </SafeAreaView>
   );
 }

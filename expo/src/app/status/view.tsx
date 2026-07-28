@@ -18,6 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useChatStore } from '../../store/chatStore';
 import { useAuthStore } from '../../store/authStore';
+import { CustomConfirmModal } from '../../components/CustomConfirmModal';
 
 const { width, height } = Dimensions.get('window');
 const QUICK_EMOJIS = ['😂', '❤️', '😮', '😢', '🙏', '🔥', '👏', '🎉'];
@@ -58,6 +59,18 @@ export default function ViewStatusScreen() {
 
   // Floating reactions animation state
   const [floatingEmojis, setFloatingEmojis] = useState<FloatingEmoji[]>([]);
+
+  // Custom Confirm Modal State
+  const [confirmModalConfig, setConfirmModalConfig] = useState<{
+    visible: boolean;
+    title: string;
+    message?: string;
+    buttons: Array<{ text: string; style?: 'default' | 'cancel' | 'destructive' | 'primary'; onPress: () => void }>;
+  }>({
+    visible: false,
+    title: '',
+    buttons: [],
+  });
 
   const progressAnim = useRef(new Animated.Value(0)).current;
   const isOwner = currentUser?.id === userStoryGroup?.user?._id;
@@ -181,10 +194,11 @@ export default function ViewStatusScreen() {
   const handleDeleteStatus = () => {
     if (!currentItem) return;
     setIsPaused(true);
-    Alert.alert(
-      'Delete Status Update',
-      'Are you sure you want to delete this status update? It will be removed for everyone.',
-      [
+    setConfirmModalConfig({
+      visible: true,
+      title: 'Delete Status Update',
+      message: 'Are you sure you want to delete this status update? It will be removed for everyone.',
+      buttons: [
         {
           text: 'Cancel',
           style: 'cancel',
@@ -205,13 +219,17 @@ export default function ViewStatusScreen() {
                 setIsPaused(false);
               }
             } else {
-              Alert.alert('Error', 'Failed to delete status.');
-              setIsPaused(false);
+              setConfirmModalConfig({
+                visible: true,
+                title: 'Error',
+                message: 'Failed to delete status. Please try again.',
+                buttons: [{ text: 'OK', style: 'primary', onPress: () => setIsPaused(false) }],
+              });
             }
           },
         },
-      ]
-    );
+      ],
+    });
   };
 
   if (!userStoryGroup || items.length === 0) {
@@ -481,6 +499,15 @@ export default function ViewStatusScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Dark Confirm Dialog Modal */}
+      <CustomConfirmModal
+        visible={confirmModalConfig.visible}
+        title={confirmModalConfig.title}
+        message={confirmModalConfig.message}
+        buttons={confirmModalConfig.buttons}
+        onClose={() => setConfirmModalConfig((prev) => ({ ...prev, visible: false }))}
+      />
     </SafeAreaView>
   );
 }

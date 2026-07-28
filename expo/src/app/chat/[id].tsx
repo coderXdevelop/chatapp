@@ -143,6 +143,15 @@ export default function ChatScreen() {
     buttons: [],
   });
 
+  const showAlert = useCallback((title: string, message: string, onOk?: () => void) => {
+    setConfirmModalConfig({
+      visible: true,
+      title,
+      message,
+      buttons: [{ text: 'OK', style: 'primary', onPress: () => onOk?.() }],
+    });
+  }, []);
+
   useEffect(() => {
     const showSub = Keyboard.addListener(
       Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
@@ -1247,10 +1256,10 @@ export default function ChatScreen() {
           setHighlightedMessageId(null);
         }, 2500);
       } else {
-        Alert.alert('Original Message', 'The replied message is further up in chat history.');
+        showAlert('Original Message', 'The replied message is further up in chat history.');
       }
     },
-    [chatMessages]
+    [chatMessages, showAlert]
   );
 
   const handlePressStatusReplyPreview = useCallback(

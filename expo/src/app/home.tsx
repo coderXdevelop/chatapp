@@ -110,7 +110,12 @@ export default function HomeScreen() {
       router.push(`/chat/${newChat._id}` as any);
     } catch (error: any) {
       const errMsg = error.response?.data?.message || 'Failed to establish contact.';
-      Alert.alert('Contact Error', errMsg);
+      setConfirmModalConfig({
+        visible: true,
+        title: 'Contact Error',
+        message: errMsg,
+        buttons: [{ text: 'OK', style: 'primary', onPress: () => {} }],
+      });
     } finally {
       setLoadingContact(false);
     }

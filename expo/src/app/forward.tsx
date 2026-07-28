@@ -17,12 +17,33 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useChatStore } from '../store/chatStore';
 import { useAuthStore } from '../store/authStore';
 import { COLORS, globalStyles } from '../styles/theme';
+import { CustomConfirmModal } from '../components/CustomConfirmModal';
 
 export default function ForwardScreen() {
   const router = useRouter();
   const { messageIds: rawMessageIds } = useLocalSearchParams<{ messageIds: string }>();
   const { chats, fetchChats, forwardMessages } = useChatStore();
   const { user } = useAuthStore();
+
+  const [confirmModalConfig, setConfirmModalConfig] = useState<{
+    visible: boolean;
+    title: string;
+    message?: string;
+    buttons: Array<{ text: string; style?: 'default' | 'cancel' | 'destructive' | 'primary'; onPress: () => void }>;
+  }>({
+    visible: false,
+    title: '',
+    buttons: [],
+  });
+
+  const showAlert = (title: string, message: string, onOk?: () => void) => {
+    setConfirmModalConfig({
+      visible: true,
+      title,
+      message,
+      buttons: [{ text: 'OK', style: 'primary', onPress: () => onOk?.() }],
+    });
+  };
 
   const messageIds = typeof rawMessageIds === 'string' ? rawMessageIds.split(',') : [];
 
@@ -55,12 +76,12 @@ export default function ForwardScreen() {
     if (!trimmed) return;
 
     if (trimmed === user?.email?.toLowerCase() || trimmed === user?.connectId?.toLowerCase()) {
-      Alert.alert('Invalid Contact', 'You cannot forward messages to yourself.');
+      showAlert('Invalid Contact', 'You cannot forward messages to yourself.');
       return;
     }
 
     if (customContacts.includes(trimmed)) {
-      Alert.alert('Duplicate Contact', 'This contact is already in your selection list.');
+      showAlert('Duplicate Contact', 'This contact is already in your selection list.');
       return;
     }
 
@@ -86,7 +107,7 @@ export default function ForwardScreen() {
     const contacts = Object.keys(selectedCustomContacts).filter((c) => selectedCustomContacts[c]);
 
     if (chatIds.length === 0 && contacts.length === 0) {
-      Alert.alert('No Recipients', 'Please select at least one recipient.');
+      showAlert('No Recipients', 'Please select at least one recipient.');
       return;
     }
 
@@ -94,19 +115,14 @@ export default function ForwardScreen() {
     try {
       const success = await forwardMessages(messageIds, chatIds, contacts);
       if (success) {
-        Alert.alert('Success', 'Message forwarded successfully!', [
-          {
-            text: 'OK',
-            onPress: () => {
-              router.replace('/home');
-            },
-          },
-        ]);
+        showAlert('Success', 'Message forwarded successfully!', () => {
+          router.replace('/home');
+        });
       } else {
-        Alert.alert('Error', 'Failed to forward messages.');
+        showAlert('Error', 'Failed to forward messages.');
       }
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'An error occurred.');
+      showAlert('Error', e.message || 'An error occurred.');
     } finally {
       setLoading(false);
     }
@@ -253,6 +269,15 @@ export default function ForwardScreen() {
           </TouchableOpacity>
         </View>
       )}
+
+      {/* Dark Confirm Dialog Modal */}
+      <CustomConfirmModal
+        visible={confirmModalConfig.visible}
+        title={confirmModalConfig.title}
+        message={confirmModalConfig.message}
+        buttons={confirmModalConfig.buttons}
+        onClose={() => setConfirmModalConfig((prev) => ({ ...prev, visible: false }))}
+      />
     </SafeAreaView>
   );
 }
