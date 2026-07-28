@@ -24,7 +24,18 @@ import {
   GIF_CATEGORIES,
   STICKER_CATEGORIES,
 } from '../services/giphyService';
-import { STICKER_PACKS, StickerItem } from '../services/stickerPacks';
+import {
+  getRecentStickers,
+  addRecentSticker,
+  getRecentGifs,
+  addRecentGif,
+  addRecentEmoji,
+  getFavoriteStickers,
+  toggleFavoriteSticker,
+  isStickerFavorite,
+  RecentStickerItem,
+  RecentGifItem,
+} from '../services/mediaRecentsService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -61,13 +72,30 @@ const MemoizedGifCell = React.memo<{
 const MemoizedGiphyStickerCell = React.memo<{
   item: GiphyGifItem;
   onPress: (url: string) => void;
+  isFav?: boolean;
+  onToggleFav?: (url: string, previewUrl?: string) => void;
 }>(
-  ({ item, onPress }) => (
-    <TouchableOpacity onPress={() => onPress(item.originalUrl)} style={styles.stickerItem}>
-      <Image source={{ uri: item.previewUrl }} style={styles.stickerImage} contentFit="contain" autoplay />
-    </TouchableOpacity>
+  ({ item, onPress, isFav, onToggleFav }) => (
+    <View style={styles.stickerItemWrapper}>
+      <TouchableOpacity onPress={() => onPress(item.originalUrl)} style={styles.stickerItem}>
+        <Image source={{ uri: item.previewUrl }} style={styles.stickerImage} contentFit="contain" autoplay />
+      </TouchableOpacity>
+      {onToggleFav && (
+        <TouchableOpacity
+          onPress={() => onToggleFav(item.originalUrl, item.previewUrl)}
+          style={styles.favBadgeBtn}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+        >
+          <Ionicons
+            name={isFav ? 'star' : 'star-outline'}
+            size={14}
+            color={isFav ? '#FFD700' : 'rgba(255, 255, 255, 0.4)'}
+          />
+        </TouchableOpacity>
+      )}
+    </View>
   ),
-  (prev, next) => prev.item.id === next.item.id
+  (prev, next) => prev.item.id === next.item.id && prev.isFav === next.isFav
 );
 
 export const EmojiGifStickerPicker: React.FC<EmojiGifStickerPickerProps> = ({
@@ -85,21 +113,47 @@ export const EmojiGifStickerPicker: React.FC<EmojiGifStickerPickerProps> = ({
   const [gifs, setGifs] = useState<GiphyGifItem[]>([]);
   const [loadingGifs, setLoadingGifs] = useState(false);
 
-  // Giphy Sticker state
+  // Sticker state
   const [stickerQuery, setStickerQuery] = useState('');
-  const [selectedStickerCategoryId, setSelectedStickerCategoryId] = useState('trending');
+  const [selectedStickerCategoryId, setSelectedStickerCategoryId] = useState('favorites');
   const [giphyStickers, setGiphyStickers] = useState<GiphyGifItem[]>([]);
   const [loadingStickers, setLoadingStickers] = useState(false);
-  const [useLocalPacks, setUseLocalPacks] = useState(false);
-  const [selectedPackIndex, setSelectedPackIndex] = useState(0);
+
+  // Recents & Favorites state
+  const [favoriteStickers, setFavoriteStickers] = useState<RecentStickerItem[]>([]);
+  const [recentStickers, setRecentStickers] = useState<RecentStickerItem[]>([]);
+  const [recentGifs, setRecentGifs] = useState<RecentGifItem[]>([]);
 
   useEffect(() => {
-    if (visible && activeTab === 'gif' && gifs.length === 0) {
-      loadGifs('');
-    } else if (visible && activeTab === 'sticker' && giphyStickers.length === 0) {
-      loadStickers('');
+    if (visible) {
+      loadMediaRecentsAndFavorites();
+      if (activeTab === 'gif' && gifs.length === 0 && selectedGifCategoryId !== 'recent') {
+        loadGifs('');
+      } else if (
+        activeTab === 'sticker' &&
+        giphyStickers.length === 0 &&
+        selectedStickerCategoryId !== 'favorites' &&
+        selectedStickerCategoryId !== 'recents'
+      ) {
+        loadStickers('');
+      }
     }
   }, [visible, activeTab]);
+
+  const loadMediaRecentsAndFavorites = async () => {
+    try {
+      const [favs, recStk, recGifs] = await Promise.all([
+        getFavoriteStickers(),
+        getRecentStickers(),
+        getRecentGifs(),
+      ]);
+      setFavoriteStickers(favs);
+      setRecentStickers(recStk);
+      setRecentGifs(recGifs);
+    } catch (e) {
+      console.warn('Error loading media recents/favorites:', e);
+    }
+  };
 
   const loadGifs = async (query: string) => {
     setLoadingGifs(true);
@@ -128,41 +182,134 @@ export const EmojiGifStickerPicker: React.FC<EmojiGifStickerPickerProps> = ({
   const handleSelectGifCategory = (catId: string, query: string) => {
     setSelectedGifCategoryId(catId);
     setGifQuery(query);
-    loadGifs(query);
+    if (catId !== 'recent') {
+      loadGifs(query);
+    }
   };
 
   const handleSelectStickerCategory = (catId: string, query: string) => {
     setSelectedStickerCategoryId(catId);
     setStickerQuery(query);
-    setUseLocalPacks(false);
-    loadStickers(query);
+    if (catId !== 'favorites' && catId !== 'recents') {
+      loadStickers(query);
+    }
   };
 
   const handleGifSearchSubmit = () => {
+    if (selectedGifCategoryId === 'recent') {
+      setSelectedGifCategoryId('trending');
+    }
     loadGifs(gifQuery);
   };
 
   const handleStickerSearchSubmit = () => {
-    setUseLocalPacks(false);
+    if (selectedStickerCategoryId === 'favorites' || selectedStickerCategoryId === 'recents') {
+      setSelectedStickerCategoryId('trending');
+    }
     loadStickers(stickerQuery);
+  };
+
+  const handleEmojiSelectInternal = async (emoji: string) => {
+    try {
+      await addRecentEmoji(emoji);
+    } catch (e) {
+      console.warn('Failed to record recent emoji:', e);
+    }
+    onSelectEmoji(emoji);
+  };
+
+  const handleGifSelectInternal = async (url: string, w: number, h: number) => {
+    try {
+      const updated = await addRecentGif({ url, previewUrl: url, width: w, height: h });
+      setRecentGifs(updated);
+    } catch (e) {
+      console.warn('Failed to record recent GIF:', e);
+    }
+    onSelectGif(url, w, h);
+  };
+
+  const handleStickerSelectInternal = async (url: string) => {
+    try {
+      const updated = await addRecentSticker(url, url);
+      setRecentStickers(updated);
+    } catch (e) {
+      console.warn('Failed to record recent sticker:', e);
+    }
+    onSelectSticker(url);
+  };
+
+  const handleToggleFavoriteSticker = async (url: string, previewUrl?: string) => {
+    try {
+      const result = await toggleFavoriteSticker(url, previewUrl);
+      setFavoriteStickers(result.favorites);
+    } catch (e) {
+      console.warn('Failed to toggle sticker favorite:', e);
+    }
   };
 
   const renderGifItem = useCallback(
     ({ item }: { item: GiphyGifItem }) => (
-      <MemoizedGifCell item={item} onPress={onSelectGif} />
+      <MemoizedGifCell item={item} onPress={handleGifSelectInternal} />
     ),
-    [onSelectGif]
+    [handleGifSelectInternal]
   );
 
   const renderGiphyStickerItem = useCallback(
-    ({ item }: { item: GiphyGifItem }) => (
-      <MemoizedGiphyStickerCell item={item} onPress={onSelectSticker} />
-    ),
-    [onSelectSticker]
+    ({ item }: { item: GiphyGifItem }) => {
+      const isFav = isStickerFavorite(item.originalUrl, favoriteStickers);
+      return (
+        <MemoizedGiphyStickerCell
+          item={item}
+          onPress={handleStickerSelectInternal}
+          isFav={isFav}
+          onToggleFav={handleToggleFavoriteSticker}
+        />
+      );
+    },
+    [favoriteStickers, handleStickerSelectInternal]
   );
 
   const gifKeyExtractor = useCallback((item: GiphyGifItem) => item.id, []);
   const stickerKeyExtractor = useCallback((item: GiphyGifItem) => item.id, []);
+
+  // Map Recents/Favorites into GiphyGifItem format for uniform rendering
+  const displayedStickers: GiphyGifItem[] = React.useMemo(() => {
+    if (selectedStickerCategoryId === 'favorites') {
+      return favoriteStickers.map((s) => ({
+        id: s.id,
+        title: s.name || 'Favorite Sticker',
+        previewUrl: s.previewUrl || s.url,
+        originalUrl: s.url,
+        width: 120,
+        height: 120,
+      }));
+    }
+    if (selectedStickerCategoryId === 'recents') {
+      return recentStickers.map((s) => ({
+        id: s.id,
+        title: s.name || 'Recent Sticker',
+        previewUrl: s.previewUrl || s.url,
+        originalUrl: s.url,
+        width: 120,
+        height: 120,
+      }));
+    }
+    return giphyStickers;
+  }, [selectedStickerCategoryId, favoriteStickers, recentStickers, giphyStickers]);
+
+  const displayedGifs: GiphyGifItem[] = React.useMemo(() => {
+    if (selectedGifCategoryId === 'recent') {
+      return recentGifs.map((g) => ({
+        id: g.id,
+        title: 'Recent GIF',
+        previewUrl: g.previewUrl || g.url,
+        originalUrl: g.url,
+        width: g.width || 200,
+        height: g.height || 180,
+      }));
+    }
+    return gifs;
+  }, [selectedGifCategoryId, recentGifs, gifs]);
 
   if (!visible) return null;
 
@@ -179,14 +326,26 @@ export const EmojiGifStickerPicker: React.FC<EmojiGifStickerPickerProps> = ({
           </TouchableOpacity>
 
           <TouchableOpacity
-            onPress={() => setActiveTab('gif')}
+            onPress={() => {
+              setActiveTab('gif');
+              if (gifs.length === 0 && selectedGifCategoryId !== 'recent') loadGifs('');
+            }}
             style={[styles.tabButton, activeTab === 'gif' && styles.tabButtonActive]}
           >
             <Text style={styles.tabText}>🎬 GIFs</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            onPress={() => setActiveTab('sticker')}
+            onPress={() => {
+              setActiveTab('sticker');
+              if (
+                giphyStickers.length === 0 &&
+                selectedStickerCategoryId !== 'favorites' &&
+                selectedStickerCategoryId !== 'recents'
+              ) {
+                loadStickers('');
+              }
+            }}
             style={[styles.tabButton, activeTab === 'sticker' && styles.tabButtonActive]}
           >
             <Text style={styles.tabText}>🎨 Stickers</Text>
@@ -201,7 +360,7 @@ export const EmojiGifStickerPicker: React.FC<EmojiGifStickerPickerProps> = ({
       {/* TAB 1: EMOJI PICKER */}
       {activeTab === 'emoji' && (
         <View style={styles.emojiSelectorWrapper}>
-          <WhatsAppEmojiSelector onEmojiSelected={onSelectEmoji} />
+          <WhatsAppEmojiSelector onEmojiSelected={handleEmojiSelectInternal} />
         </View>
       )}
 
@@ -230,6 +389,23 @@ export const EmojiGifStickerPicker: React.FC<EmojiGifStickerPickerProps> = ({
           {/* GIF Category Pills */}
           <View style={styles.gifCategoriesPillsBar}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.gifCategoryPillsContent}>
+              <TouchableOpacity
+                onPress={() => setSelectedGifCategoryId('recent')}
+                style={[
+                  styles.gifCategoryPill,
+                  selectedGifCategoryId === 'recent' && styles.gifCategoryPillActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.gifCategoryPillText,
+                    selectedGifCategoryId === 'recent' && styles.gifCategoryPillTextActive,
+                  ]}
+                >
+                  🕒 Recent
+                </Text>
+              </TouchableOpacity>
+
               {GIF_CATEGORIES.map((cat) => (
                 <TouchableOpacity
                   key={cat.id}
@@ -252,13 +428,19 @@ export const EmojiGifStickerPicker: React.FC<EmojiGifStickerPickerProps> = ({
             </ScrollView>
           </View>
 
-          {loadingGifs ? (
+          {loadingGifs && selectedGifCategoryId !== 'recent' ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="small" color={COLORS.primary} />
             </View>
+          ) : selectedGifCategoryId === 'recent' && displayedGifs.length === 0 ? (
+            <View style={styles.emptyStateContainer}>
+              <Ionicons name="time-outline" size={32} color={COLORS.textSecondary} />
+              <Text style={styles.emptyStateTitle}>No Recent GIFs</Text>
+              <Text style={styles.emptyStateSub}>GIFs you send will appear here (up to 6).</Text>
+            </View>
           ) : (
             <FlatList
-              data={gifs}
+              data={displayedGifs}
               keyExtractor={gifKeyExtractor}
               renderItem={renderGifItem}
               numColumns={3}
@@ -272,7 +454,7 @@ export const EmojiGifStickerPicker: React.FC<EmojiGifStickerPickerProps> = ({
         </View>
       )}
 
-      {/* TAB 3: STICKER PICKER (Powered by Giphy Stickers API & Packs) */}
+      {/* TAB 3: STICKER PICKER (Powered by Favorites, Recents & Giphy Stickers API) */}
       {activeTab === 'sticker' && (
         <View style={styles.tabContent}>
           {/* Search Bar for Giphy Stickers */}
@@ -294,22 +476,56 @@ export const EmojiGifStickerPicker: React.FC<EmojiGifStickerPickerProps> = ({
             )}
           </View>
 
-          {/* Giphy Sticker Category Pills */}
+          {/* Sticker Category Pills: Favorites, Recents, Trending, & Categories */}
           <View style={styles.gifCategoriesPillsBar}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.gifCategoryPillsContent}>
+              <TouchableOpacity
+                onPress={() => setSelectedStickerCategoryId('favorites')}
+                style={[
+                  styles.gifCategoryPill,
+                  selectedStickerCategoryId === 'favorites' && styles.gifCategoryPillActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.gifCategoryPillText,
+                    selectedStickerCategoryId === 'favorites' && styles.gifCategoryPillTextActive,
+                  ]}
+                >
+                  ⭐ Favorites ({favoriteStickers.length})
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => setSelectedStickerCategoryId('recents')}
+                style={[
+                  styles.gifCategoryPill,
+                  selectedStickerCategoryId === 'recents' && styles.gifCategoryPillActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.gifCategoryPillText,
+                    selectedStickerCategoryId === 'recents' && styles.gifCategoryPillTextActive,
+                  ]}
+                >
+                  🕒 Recent
+                </Text>
+              </TouchableOpacity>
+
               {STICKER_CATEGORIES.map((cat) => (
                 <TouchableOpacity
                   key={cat.id}
                   onPress={() => handleSelectStickerCategory(cat.id, cat.query)}
                   style={[
                     styles.gifCategoryPill,
-                    !useLocalPacks && selectedStickerCategoryId === cat.id && styles.gifCategoryPillActive,
+                    selectedStickerCategoryId === cat.id && styles.gifCategoryPillActive,
                   ]}
                 >
                   <Text
                     style={[
                       styles.gifCategoryPillText,
-                      !useLocalPacks && selectedStickerCategoryId === cat.id && styles.gifCategoryPillTextActive,
+                      selectedStickerCategoryId === cat.id && styles.gifCategoryPillTextActive,
                     ]}
                   >
                     {cat.name}
@@ -319,13 +535,27 @@ export const EmojiGifStickerPicker: React.FC<EmojiGifStickerPickerProps> = ({
             </ScrollView>
           </View>
 
-          {loadingStickers ? (
+          {loadingStickers && selectedStickerCategoryId !== 'favorites' && selectedStickerCategoryId !== 'recents' ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="small" color={COLORS.primary} />
             </View>
+          ) : selectedStickerCategoryId === 'favorites' && displayedStickers.length === 0 ? (
+            <View style={styles.emptyStateContainer}>
+              <Ionicons name="star-outline" size={32} color="#FFD700" />
+              <Text style={styles.emptyStateTitle}>No Favorite Stickers Yet</Text>
+              <Text style={styles.emptyStateSub}>
+                Tap the ⭐ icon on any sticker to add it to your favorites for quick access.
+              </Text>
+            </View>
+          ) : selectedStickerCategoryId === 'recents' && displayedStickers.length === 0 ? (
+            <View style={styles.emptyStateContainer}>
+              <Ionicons name="time-outline" size={32} color={COLORS.textSecondary} />
+              <Text style={styles.emptyStateTitle}>No Recent Stickers</Text>
+              <Text style={styles.emptyStateSub}>Stickers you send will appear here (up to 6).</Text>
+            </View>
           ) : (
             <FlatList
-              data={giphyStickers}
+              data={displayedStickers}
               keyExtractor={stickerKeyExtractor}
               renderItem={renderGiphyStickerItem}
               numColumns={4}
@@ -436,6 +666,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  emptyStateContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  emptyStateTitle: {
+    color: COLORS.textPrimary,
+    fontSize: 14,
+    fontWeight: '700',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  emptyStateSub: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    textAlign: 'center',
+  },
   gifGridContent: {
     paddingHorizontal: 8,
     gap: 6,
@@ -457,15 +705,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
-  stickerItem: {
+  stickerItemWrapper: {
     width: (SCREEN_WIDTH - 24) / 4,
-    height: 70,
-    justifyContent: 'center',
+    height: 74,
     alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 8,
+    position: 'relative',
   },
-  stickerImage: {
+  stickerItem: {
     width: 60,
     height: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  stickerImage: {
+    width: 56,
+    height: 56,
+  },
+  favBadgeBtn: {
+    position: 'absolute',
+    top: 2,
+    right: 6,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    borderRadius: 10,
+    padding: 3,
+    zIndex: 10,
   },
 });

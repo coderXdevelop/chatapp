@@ -61,7 +61,7 @@ export const WhatsAppEmojiSelector: React.FC<WhatsAppEmojiSelectorProps> = ({
 
     try {
       setRecentEmojis((prev) => {
-        const updated = [item, ...prev.filter((e) => e.emoji !== item.emoji)].slice(0, 32);
+        const updated = [item, ...prev.filter((e) => e.emoji !== item.emoji)].slice(0, 6);
         AsyncStorage.setItem(EMOJI_HISTORY_KEY, JSON.stringify(updated)).catch(() => {});
         return updated;
       });
@@ -78,7 +78,7 @@ export const WhatsAppEmojiSelector: React.FC<WhatsAppEmojiSelectorProps> = ({
         id: 'recent',
         name: 'Recently Used',
         icon: '🕒',
-        emojis: recentEmojis,
+        emojis: recentEmojis.slice(0, 6),
       });
     }
 

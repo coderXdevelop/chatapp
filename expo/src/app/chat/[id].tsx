@@ -40,6 +40,7 @@ import { ZoomableImageViewer } from '../../components/ZoomableImageViewer';
 import { FullscreenVideoViewer } from '../../components/FullscreenVideoViewer';
 import { MultiMediaPreviewModal } from '../../components/MultiMediaPreviewModal';
 import { EmojiGifStickerPicker } from '../../components/EmojiGifStickerPicker';
+import { toggleFavoriteSticker, addRecentSticker, addRecentGif } from '../../services/mediaRecentsService';
 
 export default function ChatScreen() {
   const { id: chatId } = useLocalSearchParams<{ id: string }>();
@@ -792,6 +793,7 @@ export default function ChatScreen() {
     setIsEmojiPickerOpen(false);
     if (!chatId) return;
     try {
+      await addRecentGif({ url: gifUrl, previewUrl: gifUrl, width, height });
       await sendMessage(chatId, '', undefined, {
         url: gifUrl,
         type: 'gif',
@@ -807,6 +809,7 @@ export default function ChatScreen() {
     setIsEmojiPickerOpen(false);
     if (!chatId) return;
     try {
+      await addRecentSticker(stickerUrl, stickerUrl);
       await sendMessage(chatId, '', undefined, {
         url: stickerUrl,
         type: 'sticker',
@@ -880,6 +883,21 @@ export default function ChatScreen() {
           setSelectedMessageIds([]);
         },
       });
+
+      if (singleMsg.mediaType === 'sticker' && singleMsg.mediaUrl) {
+        options.push({
+          text: '🎨 Toggle Favorite Sticker',
+          onPress: async () => {
+            const res = await toggleFavoriteSticker(singleMsg.mediaUrl!);
+            Alert.alert(
+              'Sticker Favorites',
+              res.isFavorite ? 'Sticker added to Favorites!' : 'Sticker removed from Favorites.'
+            );
+            setIsSelectionMode(false);
+            setSelectedMessageIds([]);
+          },
+        });
+      }
 
       options.push({
         text: '📌 Pin / Unpin Message',
