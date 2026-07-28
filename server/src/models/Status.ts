@@ -1,5 +1,11 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
+export interface IStatusView {
+  user: mongoose.Types.ObjectId;
+  reaction?: string | null;
+  viewedAt: Date;
+}
+
 export interface IStatus extends Document {
   user: mongoose.Types.ObjectId;
   text?: string;
@@ -7,9 +13,30 @@ export interface IStatus extends Document {
   mediaType?: 'image' | 'video';
   caption?: string;
   backgroundColor?: string;
+  views: IStatusView[];
+  allowedUsers?: mongoose.Types.ObjectId[] | null;
   createdAt: Date;
   updatedAt: Date;
 }
+
+const StatusViewSchema = new Schema(
+  {
+    user: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+    },
+    reaction: {
+      type: String,
+      default: null,
+    },
+    viewedAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  { _id: false }
+);
 
 const StatusSchema: Schema = new Schema(
   {
@@ -39,6 +66,14 @@ const StatusSchema: Schema = new Schema(
     backgroundColor: {
       type: String,
       default: '#0F172A',
+    },
+    views: {
+      type: [StatusViewSchema],
+      default: [],
+    },
+    allowedUsers: {
+      type: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+      default: null, // null means standard contacts access
     },
   },
   {

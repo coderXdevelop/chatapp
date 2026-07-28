@@ -239,6 +239,42 @@ const MemoizedMessageItemComponent: React.FC<MemoizedMessageItemProps> = ({
                 </View>
               )}
 
+              {/* Status Reply Header inside bubble */}
+              {item.statusReply && !item.isDeleted && (
+                <View
+                  style={[
+                    styles.statusReplyPreview,
+                    isMe ? styles.myStatusReplyPreview : styles.otherStatusReplyPreview,
+                  ]}
+                >
+                  {item.statusReply.mediaUrl ? (
+                    <Image
+                      source={{ uri: item.statusReply.mediaUrl }}
+                      style={styles.statusReplyThumb}
+                    />
+                  ) : (
+                    <View
+                      style={[
+                        styles.statusReplyColorThumb,
+                        { backgroundColor: item.statusReply.backgroundColor || '#F59E0B' },
+                      ]}
+                    >
+                      <Text style={styles.statusReplyColorThumbText} numberOfLines={1}>
+                        {(item.statusReply.text || 'Status').substring(0, 8)}
+                      </Text>
+                    </View>
+                  )}
+                  <View style={{ flex: 1, justifyContent: 'center' }}>
+                    <Text style={styles.statusReplySender} numberOfLines={1}>
+                      📷 Status
+                    </Text>
+                    <Text style={styles.statusReplyText} numberOfLines={1}>
+                      {item.statusReply.caption || item.statusReply.text || 'Status Update'}
+                    </Text>
+                  </View>
+                </View>
+              )}
+
               {/* Forwarded Tag */}
               {item.isForwarded && !item.isDeleted && (
                 <Text style={[styles.forwardedText, isMe ? styles.myForwardedText : styles.otherForwardedText]}>
@@ -472,20 +508,65 @@ const styles = StyleSheet.create({
   bubbleReplyPreview: {
     borderLeftWidth: 3,
     borderLeftColor: COLORS.primary,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    paddingLeft: 8,
     paddingVertical: 4,
-    paddingHorizontal: 8,
     borderRadius: 4,
     marginBottom: 6,
-    width: '100%',
   },
   myBubbleReplyPreview: {
-    borderLeftColor: '#000',
-    backgroundColor: 'rgba(0,0,0,0.08)',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderLeftColor: '#F59E0B',
   },
   otherBubbleReplyPreview: {
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
     borderLeftColor: COLORS.primary,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  statusReplyPreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderLeftWidth: 3,
+    borderLeftColor: '#F59E0B',
+    padding: 6,
+    borderRadius: 8,
+    marginBottom: 8,
+    gap: 8,
+  },
+  myStatusReplyPreview: {
+    backgroundColor: 'rgba(0, 0, 0, 0.25)',
+    borderLeftColor: '#F59E0B',
+  },
+  otherStatusReplyPreview: {
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    borderLeftColor: '#F59E0B',
+  },
+  statusReplyThumb: {
+    width: 36,
+    height: 36,
+    borderRadius: 6,
+  },
+  statusReplyColorThumb: {
+    width: 36,
+    height: 36,
+    borderRadius: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 2,
+  },
+  statusReplyColorThumbText: {
+    color: '#FFFFFF',
+    fontSize: 8,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  statusReplySender: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#F59E0B',
+    marginBottom: 2,
+  },
+  statusReplyText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
   },
   bubbleReplySender: {
     fontWeight: '700',

@@ -13,6 +13,16 @@ export interface ILinkPreview {
   domain?: string;
 }
 
+export interface IStatusReply {
+  statusId: mongoose.Types.ObjectId;
+  mediaUrl?: string;
+  mediaType?: 'image' | 'video' | null;
+  text?: string;
+  caption?: string;
+  backgroundColor?: string;
+  statusOwner: mongoose.Types.ObjectId;
+}
+
 export interface IMessage extends Document {
   chat: mongoose.Types.ObjectId;
   sender: mongoose.Types.ObjectId;
@@ -28,6 +38,7 @@ export interface IMessage extends Document {
   mediaHeight?: number;
   reactions?: IReaction[];
   linkPreview?: ILinkPreview;
+  statusReply?: IStatusReply;
   isEdited?: boolean;
   isDeleted?: boolean;
   replyTo?: mongoose.Types.ObjectId | null;
@@ -60,6 +71,19 @@ const LinkPreviewSchema = new Schema(
     description: { type: String, default: '' },
     image: { type: String, default: '' },
     domain: { type: String, default: '' },
+  },
+  { _id: false }
+);
+
+const StatusReplySchema = new Schema(
+  {
+    statusId: { type: Schema.Types.ObjectId, ref: 'Status', required: true },
+    mediaUrl: { type: String, default: null },
+    mediaType: { type: String, default: null },
+    text: { type: String, default: '' },
+    caption: { type: String, default: '' },
+    backgroundColor: { type: String, default: '#0F172A' },
+    statusOwner: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   },
   { _id: false }
 );
@@ -126,6 +150,10 @@ const MessageSchema: Schema = new Schema(
     },
     linkPreview: {
       type: LinkPreviewSchema,
+      default: null,
+    },
+    statusReply: {
+      type: StatusReplySchema,
       default: null,
     },
     isEdited: {

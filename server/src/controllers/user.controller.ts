@@ -152,3 +152,51 @@ export async function toggleChatMute(req: AuthenticatedRequest, res: Response) {
     return res.status(500).json({ message: 'Error toggling mute status', error: error.message });
   }
 }
+
+export async function getStatusPrivacy(req: AuthenticatedRequest, res: Response) {
+  const userId = req.user?.userId;
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+  try {
+    const user = await User.findById(userId)
+      .populate('statusPrivacy.excludedUsers', 'displayName email avatarUrl connectId')
+      .populate('statusPrivacy.includedUsers', 'displayName email avatarUrl connectId');
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const privacy = user.statusPrivacy || { type: 'contacts', excludedUsers: [], includedUsers: [] };
+    return res.status(200).json({ privacy });
+  } catch (error: any) {
+    return res.status(500).json({ message: 'Error getting status privacy', error: error.message });
+  }
+}
+
+export async function updateStatusPrivacy(req: AuthenticatedRequest, res: Response) {
+  const userId = req.user?.userId;
+  const { type, excludedUsers, includedUsers } = req.body;
+
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+  if (!type || !['contacts', 'except', 'only'].includes(type)) {
+    return res.status(400).json({ message: 'Invalid status privacy type' });
+  }
+
+  try {
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    user.statusPrivacy = {
+      type,
+      excludedUsers: Array.isArray(excludedUsers) ? excludedUsers : [],
+      includedUsers: Array.isArray(includedUsers) ? includedUsers : [],
+    };
+
+    await user.save();
+
+    const updatedUser = await User.findById(userId)
+      .populate('statusPrivacy.excludedUsers', 'displayName email avatarUrl connectId')
+      .populate('statusPrivacy.includedUsers', 'displayName email avatarUrl connectId');
+
+    return res.status(200).json({ success: true, privacy: updatedUser?.statusPrivacy });
+  } catch (error: any) {
+    return res.status(500).json({ message: 'Error updating status privacy', error: error.message });
+  }
+}

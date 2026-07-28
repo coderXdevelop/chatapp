@@ -1,5 +1,11 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
+export interface IStatusPrivacy {
+  type: 'contacts' | 'except' | 'only';
+  excludedUsers: mongoose.Types.ObjectId[];
+  includedUsers: mongoose.Types.ObjectId[];
+}
+
 export interface IUser extends Document {
   email: string;
   password?: string;
@@ -14,6 +20,7 @@ export interface IUser extends Document {
   blockedUsers: mongoose.Types.ObjectId[];
   notificationsEnabled: boolean;
   mutedChats: mongoose.Types.ObjectId[];
+  statusPrivacy: IStatusPrivacy;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -84,6 +91,25 @@ const UserSchema: Schema = new Schema(
         ref: 'Chat',
       },
     ],
+    statusPrivacy: {
+      type: {
+        type: String,
+        enum: ['contacts', 'except', 'only'],
+        default: 'contacts',
+      },
+      excludedUsers: [
+        {
+          type: Schema.Types.ObjectId,
+          ref: 'User',
+        },
+      ],
+      includedUsers: [
+        {
+          type: Schema.Types.ObjectId,
+          ref: 'User',
+        },
+      ],
+    },
   },
   {
     timestamps: true,

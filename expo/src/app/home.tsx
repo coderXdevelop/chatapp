@@ -23,6 +23,7 @@ import ProfileScreen from './profile';
 import { ChatListSkeleton } from '../components/SkeletonLoaders';
 import { CustomActionSheetModal, ActionOption } from '../components/CustomActionSheetModal';
 import { CustomConfirmModal } from '../components/CustomConfirmModal';
+import { StatusPrivacyModal } from '../components/StatusPrivacyModal';
 
 interface SearchUser {
   _id: string;
@@ -47,6 +48,7 @@ export default function HomeScreen() {
 
   // Modal states for adding contact
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
   const [contactSearchInput, setContactSearchInput] = useState('');
   const [loadingContact, setLoadingContact] = useState(false);
   const [initialLoading, setInitialLoading] = useState(chats.length === 0);
@@ -272,6 +274,15 @@ export default function HomeScreen() {
 
             {/* Status / Stories Bar */}
             <View style={{ marginBottom: 18 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, paddingHorizontal: 2 }}>
+                <Text style={{ color: '#94A3B8', fontSize: 11, fontWeight: '700', letterSpacing: 0.5 }}>STATUS UPDATES</Text>
+                <TouchableOpacity
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                  onPress={() => setIsPrivacyModalOpen(true)}
+                >
+                  <Text style={{ color: '#F59E0B', fontSize: 12, fontWeight: '600' }}>🔒 Privacy</Text>
+                </TouchableOpacity>
+              </View>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 14 }}>
                 {/* My Status Item */}
                 <TouchableOpacity
@@ -718,6 +729,12 @@ export default function HomeScreen() {
         message={confirmModalConfig.message}
         buttons={confirmModalConfig.buttons}
         onClose={() => setConfirmModalConfig((prev) => ({ ...prev, visible: false }))}
+      />
+
+      {/* Status Privacy Settings Modal */}
+      <StatusPrivacyModal
+        visible={isPrivacyModalOpen}
+        onClose={() => setIsPrivacyModalOpen(false)}
       />
     </SafeAreaView>
   );

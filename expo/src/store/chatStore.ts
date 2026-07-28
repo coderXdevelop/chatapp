@@ -31,6 +31,15 @@ export interface Message {
     image?: string;
     domain?: string;
   };
+  statusReply?: {
+    statusId: string;
+    mediaUrl?: string;
+    mediaType?: 'image' | 'video' | null;
+    text?: string;
+    caption?: string;
+    backgroundColor?: string;
+    statusOwner: string;
+  };
   isEdited?: boolean;
   isDeleted?: boolean;
   replyTo?: {
@@ -84,6 +93,7 @@ interface ChatState {
   blockedUsers: any[];
   starredMessages: Message[];
   activeStatuses: Array<{ user: any; items: any[] }>;
+  statusPrivacy: { type: 'contacts' | 'except' | 'only'; excludedUsers: any[]; includedUsers: any[] } | null;
 
   enterChatRoom: (chatId: string) => void;
   leaveChatRoom: (chatId: string) => void;
@@ -163,6 +173,12 @@ interface ChatState {
     items?: Array<{ text?: string; mediaUrl?: string; mediaType?: 'image' | 'video'; caption?: string; backgroundColor?: string }>;
   }) => Promise<boolean>;
   deleteStatus: (statusId: string) => Promise<boolean>;
+  recordStatusView: (statusId: string) => Promise<void>;
+  reactToStatus: (statusId: string, emoji: string) => Promise<boolean>;
+  fetchStatusViewers: (statusId: string) => Promise<any[]>;
+  replyToStatus: (statusId: string, text: string) => Promise<boolean>;
+  fetchStatusPrivacy: () => Promise<void>;
+  updateStatusPrivacy: (payload: { type: string; excludedUsers: string[]; includedUsers: string[] }) => Promise<boolean>;
   globalSearchAll: (query: string) => Promise<{ chats: Chat[]; messages: Message[] }>;
 }
 
@@ -183,6 +199,7 @@ export const useChatStore = create<ChatState>()(
   blockedUsers: [],
   starredMessages: [],
   activeStatuses: [],
+  statusPrivacy: null,
 
   enterChatRoom: (chatId: string) => {
     set({ activeChatId: chatId });
@@ -1092,6 +1109,71 @@ export const useChatStore = create<ChatState>()(
       return false;
     } catch (e) {
       console.error('Delete status error:', e);
+      return false;
+    }
+  },
+
+  recordStatusView: async (statusId: string) => {
+    try {
+      await api.post(`/api/status/${statusId}/view`);
+    } catch (e) {
+      console.error('Record status view error:', e);
+    }
+  },
+
+  reactToStatus: async (statusId: string, emoji: string) => {
+    try {
+      const res = await api.post(`/api/status/${statusId}/react`, { emoji });
+      return res.status === 200;
+    } catch (e) {
+      console.error('React to status error:', e);
+      return false;
+    }
+  },
+
+  fetchStatusViewers: async (statusId: string) => {
+    try {
+      const res = await api.get(`/api/status/${statusId}/viewers`);
+      return res.data.viewers || [];
+    } catch (e) {
+      console.error('Fetch status viewers error:', e);
+      return [];
+    }
+  },
+
+  replyToStatus: async (statusId: string, text: string) => {
+    try {
+      const res = await api.post(`/api/status/${statusId}/reply`, { text });
+      if (res.status === 201) {
+        await get().fetchChats();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      console.error('Reply to status error:', e);
+      return false;
+    }
+  },
+
+  fetchStatusPrivacy: async () => {
+    try {
+      const res = await api.get('/api/users/status-privacy');
+      set({ statusPrivacy: res.data.privacy });
+    } catch (e) {
+      console.error('Fetch status privacy error:', e);
+    }
+  },
+
+  updateStatusPrivacy: async (payload) => {
+    try {
+      const res = await api.put('/api/users/status-privacy', payload);
+      if (res.data.success) {
+        set({ statusPrivacy: res.data.privacy });
+        return true;
+      }
+      return false;
+    } catch (e) {
+      console.error('Update status privacy error:', e);
       return false;
     }
   },
