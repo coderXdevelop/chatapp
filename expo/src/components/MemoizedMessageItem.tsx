@@ -66,6 +66,7 @@ const MemoizedMessageItemComponent: React.FC<MemoizedMessageItemProps> = ({
   const hasVibrated = useSharedValue(false);
 
   const onlyMedia = Boolean(item.mediaUrl && !item.text && !item.isDeleted);
+  const isSticker = Boolean(item.mediaType === 'sticker' && !item.isDeleted);
   const hasReactions = Array.isArray(item.reactions) && item.reactions.length > 0 && !item.isDeleted;
   const groupedReactions = React.useMemo(() => {
     if (!hasReactions || !item.reactions) return {};
@@ -154,7 +155,7 @@ const MemoizedMessageItemComponent: React.FC<MemoizedMessageItemProps> = ({
             hasReactions && { marginBottom: 10 },
           ]}
         >
-          <View style={styles.bubbleWrapper}>
+          <View style={[styles.bubbleWrapper, isSticker && styles.stickerBubbleWrapper]}>
             {/* WhatsApp Style Floating Quick Reaction Bar */}
             {showQuickReactions && !item.isDeleted && (
               <View style={[styles.floatingReactionToolbar, isMe ? styles.myFloatingToolbar : styles.otherFloatingToolbar]}>
@@ -210,6 +211,7 @@ const MemoizedMessageItemComponent: React.FC<MemoizedMessageItemProps> = ({
                 styles.bubble,
                 isMe ? styles.myBubble : styles.otherBubble,
                 onlyMedia && styles.onlyMediaBubble,
+                isSticker && styles.stickerBubble,
                 isHighlighted && styles.highlightedBubble,
               ]}
             >
@@ -249,7 +251,7 @@ const MemoizedMessageItemComponent: React.FC<MemoizedMessageItemProps> = ({
                 <TouchableOpacity
                   activeOpacity={0.9}
                   onPress={handleMediaTap}
-                  style={{ marginBottom: item.text ? 8 : 0 }}
+                  style={isSticker ? styles.stickerMediaContainer : { marginBottom: item.text ? 8 : 0 }}
                 >
                   <MediaMessage
                     messageId={item._id}
@@ -313,9 +315,9 @@ const MemoizedMessageItemComponent: React.FC<MemoizedMessageItemProps> = ({
 
               {/* Time & Status Row */}
               {!item.isDeleted && (
-                <View style={onlyMedia ? styles.metaRowOnlyMedia : styles.metaRow}>
+                <View style={isSticker ? styles.metaRowSticker : onlyMedia ? styles.metaRowOnlyMedia : styles.metaRow}>
                   {item.isEdited && <Text style={styles.editedText}>(edited)</Text>}
-                  <Text style={onlyMedia ? styles.timeTextOnlyMedia : styles.timeText}>
+                  <Text style={isSticker || onlyMedia ? styles.timeTextOnlyMedia : styles.timeText}>
                     {new Date(item.createdAt).toLocaleTimeString([], {
                       hour: '2-digit',
                       minute: '2-digit',
@@ -324,7 +326,7 @@ const MemoizedMessageItemComponent: React.FC<MemoizedMessageItemProps> = ({
                   {isMe && (
                     <Text
                       style={[
-                        onlyMedia ? styles.statusTextOnlyMedia : styles.statusText,
+                        isSticker || onlyMedia ? styles.statusTextOnlyMedia : styles.statusText,
                         item.status === 'read' && styles.statusRead,
                         item.status === 'delivered' && styles.statusDelivered,
                       ]}
@@ -716,5 +718,34 @@ const styles = StyleSheet.create({
     color: '#F59E0B',
     fontSize: 11,
     fontWeight: '800',
+  },
+  stickerBubbleWrapper: {
+    maxWidth: 160,
+    alignItems: 'flex-start',
+  },
+  stickerBubble: {
+    paddingHorizontal: 0,
+    paddingTop: 0,
+    paddingBottom: 0,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    alignItems: 'flex-start',
+  },
+  stickerMediaContainer: {
+    width: 140,
+    height: 140,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  metaRowSticker: {
+    flexDirection: 'row',
+    alignSelf: 'flex-end',
+    alignItems: 'center',
+    marginTop: 4,
+    gap: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
   },
 });
