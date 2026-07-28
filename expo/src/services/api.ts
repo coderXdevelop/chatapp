@@ -33,6 +33,23 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+let isRefreshing = false;
+let failedQueue: Array<{
+  resolve: (token: string) => void;
+  reject: (error: any) => void;
+}> = [];
+
+const processQueue = (error: any, token: string | null = null) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else if (token) {
+      prom.resolve(token);
+    }
+  });
+  failedQueue = [];
+};
+
 // Response interceptor: Exponential Backoff Retries + Token Refresh Handling
 api.interceptors.response.use(
   (response) => response,
@@ -51,7 +68,20 @@ api.interceptors.response.use(
       !originalRequest.url?.includes('/api/auth/login') &&
       !originalRequest.url?.includes('/api/auth/verify-otp')
     ) {
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        })
+          .then((newToken) => {
+            originalRequest.headers.Authorization = `Bearer ${newToken}`;
+            return api(originalRequest);
+          })
+          .catch((err) => Promise.reject(err));
+      }
+
       originalRequest._retry = true;
+      isRefreshing = true;
+
       try {
         const refreshToken = await getItem('refresh_token');
         if (refreshToken) {
@@ -76,10 +106,13 @@ api.interceptors.response.use(
             }
 
             originalRequest.headers.Authorization = `Bearer ${newToken}`;
+            processQueue(null, newToken);
             return api(originalRequest);
           }
         }
+        processQueue(new Error('No refresh token available'), null);
       } catch (refreshError) {
+        processQueue(refreshError, null);
         console.error('Auto-refresh token failed, logging out user:', refreshError);
         await removeItem('access_token');
         await removeItem('refresh_token');
@@ -91,6 +124,8 @@ api.interceptors.response.use(
         } catch (storeError) {
           // ignore
         }
+      } finally {
+        isRefreshing = false;
       }
       return Promise.reject(error);
     }
