@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -38,23 +38,7 @@ export default function GroupSettingsScreen() {
 
   const chat = chats.find((c) => c._id === chatId);
 
-  if (!chat) {
-    return (
-      <SafeAreaView style={globalStyles.safeArea}>
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>Group chat not found.</Text>
-          <TouchableOpacity style={globalStyles.button} onPress={() => router.back()}>
-            <Text style={globalStyles.buttonText}>Go Back</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  const isAdmin = chat.admins?.includes(user?.id || '');
-  const isCreator = chat.creator === user?.id;
-
-  const [groupName, setGroupName] = useState(chat.name || '');
+  const [groupName, setGroupName] = useState(chat?.name || '');
   const [editingName, setEditingName] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [newGroupName, setNewGroupName] = useState(chat?.name || '');
@@ -86,6 +70,29 @@ export default function GroupSettingsScreen() {
     title: '',
     buttons: [],
   });
+
+  useEffect(() => {
+    if (chat?.name) {
+      setGroupName(chat.name);
+      setNewGroupName(chat.name);
+    }
+  }, [chat?.name]);
+
+  if (!chat) {
+    return (
+      <SafeAreaView style={globalStyles.safeArea}>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>Group chat not found.</Text>
+          <TouchableOpacity style={globalStyles.button} onPress={() => router.replace('/home' as any)}>
+            <Text style={globalStyles.buttonText}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const isAdmin = chat.admins?.includes(user?.id || '');
+  const isCreator = chat.creator === user?.id;
 
   // Find contacts not in this group
   const existingParticipantIds = chat.participants.map((p) => p._id);
