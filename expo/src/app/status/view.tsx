@@ -12,6 +12,7 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -177,6 +178,42 @@ export default function ViewStatusScreen() {
     setIsPaused(false);
   };
 
+  const handleDeleteStatus = () => {
+    if (!currentItem) return;
+    setIsPaused(true);
+    Alert.alert(
+      'Delete Status Update',
+      'Are you sure you want to delete this status update? It will be removed for everyone.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+          onPress: () => setIsPaused(false),
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setShowViewersModal(false);
+            const statusIdToDelete = currentItem._id;
+            const success = await deleteStatus(statusIdToDelete);
+            if (success) {
+              if (items.length <= 1) {
+                router.back();
+              } else {
+                setCurrentIndex((prev) => (prev > 0 ? prev - 1 : 0));
+                setIsPaused(false);
+              }
+            } else {
+              Alert.alert('Error', 'Failed to delete status.');
+              setIsPaused(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   if (!userStoryGroup || items.length === 0) {
     return (
       <SafeAreaView style={styles.safeArea}>
@@ -251,9 +288,16 @@ export default function ViewStatusScreen() {
             </View>
           </View>
 
-          <TouchableOpacity style={styles.closeIcon} onPress={() => router.back()}>
-            <Text style={styles.closeIconText}>✕</Text>
-          </TouchableOpacity>
+          <View style={styles.headerRightActions}>
+            {isOwner && (
+              <TouchableOpacity style={styles.deleteIconBtn} onPress={handleDeleteStatus}>
+                <Text style={styles.deleteIconText}>🗑️</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity style={styles.closeIcon} onPress={() => router.back()}>
+              <Text style={styles.closeIconText}>✕</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Main Story Content */}
@@ -391,9 +435,14 @@ export default function ViewStatusScreen() {
               <Text style={styles.modalTitle}>
                 Viewed by {viewersList.length} {viewersList.length === 1 ? 'person' : 'people'}
               </Text>
-              <TouchableOpacity onPress={handleCloseViewers}>
-                <Text style={styles.modalCloseText}>✕</Text>
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+                <TouchableOpacity onPress={handleDeleteStatus}>
+                  <Text style={{ color: '#EF4444', fontSize: 13, fontWeight: '700' }}>🗑️ Delete</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleCloseViewers}>
+                  <Text style={styles.modalCloseText}>✕</Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             {isLoadingViewers ? (
@@ -486,6 +535,21 @@ const styles = StyleSheet.create({
   timeAgo: {
     color: 'rgba(248, 250, 252, 0.7)',
     fontSize: 11,
+  },
+  headerRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  deleteIconBtn: {
+    padding: 6,
+    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.4)',
+  },
+  deleteIconText: {
+    fontSize: 16,
   },
   closeIcon: {
     padding: 6,
