@@ -203,6 +203,15 @@ export async function sendMessageHttp(req: AuthenticatedRequest, res: Response) 
     const chat = await Chat.findOne({ _id: chatId, participants: userId } as any);
     if (!chat) return res.status(403).json({ message: 'Forbidden' });
 
+    if (chat.isGroup && chat.onlyAdminsCanSend) {
+      const isAdmin =
+        chat.admins.some((adminId) => adminId.toString() === userId) ||
+        (chat.creator && chat.creator.toString() === userId);
+      if (!isAdmin) {
+        return res.status(403).json({ message: 'Only admins can send messages in this group' });
+      }
+    }
+
     const message = new Message({
       chat: chatId,
       sender: userId,
@@ -516,7 +525,7 @@ export async function createGroup(req: AuthenticatedRequest, res: Response) {
 export async function updateGroupSettings(req: AuthenticatedRequest, res: Response) {
   const userId = req.user?.userId;
   const { chatId } = req.params;
-  const { name, avatarUrl, avatarPublicId } = req.body;
+  const { name, avatarUrl, avatarPublicId, onlyAdminsCanSend } = req.body;
 
   if (!userId) return res.status(401).json({ message: 'Unauthorized' });
 
@@ -536,6 +545,7 @@ export async function updateGroupSettings(req: AuthenticatedRequest, res: Respon
     }
     if (avatarUrl !== undefined) chat.avatarUrl = avatarUrl;
     if (avatarPublicId !== undefined) chat.avatarPublicId = avatarPublicId;
+    if (onlyAdminsCanSend !== undefined) chat.onlyAdminsCanSend = Boolean(onlyAdminsCanSend);
 
     await chat.save();
 
@@ -733,6 +743,43 @@ export async function leaveGroup(req: AuthenticatedRequest, res: Response) {
     return res.status(200).json({ success: true, chat: chatObj });
   } catch (error: any) {
     return res.status(500).json({ message: 'Error leaving group chat', error: error.message });
+  }
+}
+
+export async function deleteGroup(req: AuthenticatedRequest, res: Response) {
+  const userId = req.user?.userId;
+  const { chatId } = req.params;
+
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+  try {
+    const chat = await Chat.findOne({ _id: chatId, isGroup: true } as any);
+    if (!chat) return res.status(404).json({ message: 'Group chat not found' });
+
+    // Check if current user is owner (creator) or fallback to admin if creator not set
+    const isOwner =
+      (chat.creator && chat.creator.toString() === userId) ||
+      (!chat.creator && chat.admins.some((a) => a.toString() === userId));
+
+    if (!isOwner) {
+      return res.status(403).json({ message: 'Forbidden: Only the group owner can delete this group' });
+    }
+
+    const io = req.app.get('io') as Server;
+    if (io) {
+      io.to(`chat:${chatId}`).emit('chat_deleted', { chatId });
+      io.in(`chat:${chatId}`).socketsLeave(`chat:${chatId}`);
+    }
+
+    // Delete all messages associated with this group chat
+    await Message.deleteMany({ chat: chatId } as any);
+
+    // Delete the chat document
+    await Chat.findByIdAndDelete(chatId);
+
+    return res.status(200).json({ success: true, message: 'Group deleted successfully' });
+  } catch (error: any) {
+    return res.status(500).json({ message: 'Error deleting group chat', error: error.message });
   }
 }
 

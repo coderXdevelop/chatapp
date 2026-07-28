@@ -68,6 +68,7 @@ export interface Chat {
   avatarPublicId?: string;
   creator?: string;
   admins?: string[];
+  onlyAdminsCanSend?: boolean;
   isFavourite?: boolean;
 }
 
@@ -139,10 +140,11 @@ interface ChatState {
   unblockUser: (targetUserId: string) => Promise<void>;
   submitReport: (payload: { reportedUserId?: string; reportedChatId?: string; category: string; reason: string }) => Promise<boolean>;
   createGroup: (name: string, participants: string[], avatarUrl?: string, avatarPublicId?: string) => Promise<Chat | null>;
-  updateGroupSettings: (chatId: string, name?: string, avatarUrl?: string, avatarPublicId?: string) => Promise<Chat | null>;
+  updateGroupSettings: (chatId: string, name?: string, avatarUrl?: string, avatarPublicId?: string, onlyAdminsCanSend?: boolean) => Promise<Chat | null>;
   addGroupMembers: (chatId: string, userIds: string[]) => Promise<Chat | null>;
   removeGroupMember: (chatId: string, memberId: string) => Promise<Chat | null>;
   leaveGroup: (chatId: string) => Promise<boolean>;
+  deleteGroup: (chatId: string) => Promise<boolean>;
   promoteGroupAdmin: (chatId: string, targetUserId: string, action: 'promote' | 'demote') => Promise<Chat | null>;
   searchMessages: (chatId: string | null, query: string) => Promise<Message[]>;
   clearChat: (chatId: string) => Promise<boolean>;
@@ -928,9 +930,9 @@ export const useChatStore = create<ChatState>()(
     }
   },
 
-  updateGroupSettings: async (chatId, name, avatarUrl, avatarPublicId) => {
+  updateGroupSettings: async (chatId, name, avatarUrl, avatarPublicId, onlyAdminsCanSend) => {
     try {
-      const res = await api.put(`/api/chats/group/${chatId}/settings`, { name, avatarUrl, avatarPublicId });
+      const res = await api.put(`/api/chats/group/${chatId}/settings`, { name, avatarUrl, avatarPublicId, onlyAdminsCanSend });
       const updatedChat: Chat = res.data.chat;
       set((state) => ({
         chats: state.chats.map((c) => (c._id === chatId ? updatedChat : c)),
@@ -979,6 +981,19 @@ export const useChatStore = create<ChatState>()(
       return true;
     } catch (e) {
       console.error('Leave group error:', e);
+      return false;
+    }
+  },
+
+  deleteGroup: async (chatId) => {
+    try {
+      await api.delete(`/api/chats/group/${chatId}`);
+      set((state) => ({
+        chats: state.chats.filter((c) => c._id !== chatId),
+      }));
+      return true;
+    } catch (e) {
+      console.error('Delete group error:', e);
       return false;
     }
   },

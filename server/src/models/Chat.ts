@@ -10,6 +10,7 @@ export interface IChat extends Document {
   avatarPublicId: string;
   creator?: mongoose.Types.ObjectId;
   admins: mongoose.Types.ObjectId[];
+  onlyAdminsCanSend?: boolean;
   favourites?: mongoose.Types.ObjectId[];
   deletedForUsers?: mongoose.Types.ObjectId[];
   pinnedMessages?: mongoose.Types.ObjectId[];
@@ -64,6 +65,10 @@ const ChatSchema: Schema = new Schema(
         ref: 'User',
       },
     ],
+    onlyAdminsCanSend: {
+      type: Boolean,
+      default: false,
+    },
     favourites: [
       {
         type: Schema.Types.ObjectId,

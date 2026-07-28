@@ -162,6 +162,12 @@ export default function ChatScreen() {
   const recipient = currentChat?.participants.find((p) => p._id !== user?.id);
   const chatTitle = currentChat?.isGroup ? (currentChat.name || 'Group Chat') : (recipient?.displayName || 'Conversation');
 
+  // Resolve admin status & permission to send messages in group
+  const isUserAdminOrOwner = currentChat?.isGroup
+    ? ((currentChat.admins || []).includes(user?.id || '') || currentChat.creator === user?.id)
+    : true;
+  const canSendMessage = !currentChat?.isGroup || !currentChat?.onlyAdminsCanSend || isUserAdminOrOwner;
+
   const flatListRef = useRef<FlatList>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const activeUploadsRef = useRef<Record<string, AbortController>>({});
@@ -1506,6 +1512,11 @@ export default function ChatScreen() {
                 Forward ({selectedMessageIds.length})
               </Text>
             </TouchableOpacity>
+          </View>
+        ) : !canSendMessage ? (
+          <View style={styles.adminsOnlyContainer}>
+            <Ionicons name="lock-closed-outline" size={18} color="#94A3B8" style={{ marginRight: 8 }} />
+            <Text style={styles.adminsOnlyText}>Only group admins can send messages in this group.</Text>
           </View>
         ) : (
           <View style={styles.inputContainer}>
@@ -2961,6 +2972,21 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     fontWeight: '700',
     fontSize: 14,
+  },
+  adminsOnlyContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    backgroundColor: '#0c121e',
+  },
+  adminsOnlyText: {
+    color: '#94A3B8',
+    fontSize: 13,
+    fontWeight: '600',
   },
 });
 

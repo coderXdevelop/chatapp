@@ -127,6 +127,13 @@ export function setupSockets(io: Server) {
               return callback && callback({ success: false, error: 'You have blocked this user. Unblock them to send messages.' });
             }
           }
+        } else if (chat.onlyAdminsCanSend) {
+          const isAdmin =
+            chat.admins.some((adminId) => adminId.toString() === userId) ||
+            (chat.creator && chat.creator.toString() === userId);
+          if (!isAdmin) {
+            return callback && callback({ success: false, error: 'Only admins can send messages in this group' });
+          }
         }
 
         const message = new Message({

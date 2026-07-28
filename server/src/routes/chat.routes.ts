@@ -10,6 +10,7 @@ import {
   addGroupMembers,
   removeGroupMember,
   leaveGroup,
+  deleteGroup,
   promoteGroupAdmin,
   searchMessages,
   clearChat,
@@ -43,6 +44,7 @@ router.put('/group/:chatId/settings', updateGroupSettings);
 router.post('/group/:chatId/members', addGroupMembers);
 router.delete('/group/:chatId/members/:memberId', removeGroupMember);
 router.post('/group/:chatId/leave', leaveGroup);
+router.delete('/group/:chatId', deleteGroup);
 router.put('/group/:chatId/admins', promoteGroupAdmin);
 
 // Message search routes

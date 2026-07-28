@@ -33,6 +33,7 @@ export default function GroupSettingsScreen() {
     addGroupMembers,
     removeGroupMember,
     leaveGroup,
+    deleteGroup,
     promoteGroupAdmin,
   } = useChatStore();
 
@@ -47,6 +48,7 @@ export default function GroupSettingsScreen() {
   const [isAddMemberModalOpen, setIsAddMemberModalOpen] = useState(false);
   const [selectedNewUserIds, setSelectedNewUserIds] = useState<string[]>([]);
   const [updatingAvatar, setUpdatingAvatar] = useState(false);
+  const [onlyAdminsCanSend, setOnlyAdminsCanSend] = useState(chat?.onlyAdminsCanSend || false);
 
   // Dark Custom Modals State
   const [actionSheetConfig, setActionSheetConfig] = useState<{
@@ -72,11 +74,14 @@ export default function GroupSettingsScreen() {
   });
 
   useEffect(() => {
-    if (chat?.name) {
+    if (chat?.name !== undefined) {
       setGroupName(chat.name);
       setNewGroupName(chat.name);
     }
-  }, [chat?.name]);
+    if (chat?.onlyAdminsCanSend !== undefined) {
+      setOnlyAdminsCanSend(chat.onlyAdminsCanSend);
+    }
+  }, [chat?.name, chat?.onlyAdminsCanSend]);
 
   if (!chat) {
     return (
@@ -119,6 +124,17 @@ export default function GroupSettingsScreen() {
       Alert.alert('Error', e.message || 'Failed to update name.');
     } finally {
       setUpdating(false);
+    }
+  };
+
+  const handleToggleOnlyAdmins = async (val: boolean) => {
+    if (!isAdmin || !chat) return;
+    setOnlyAdminsCanSend(val);
+    try {
+      await updateGroupSettings(chat._id, undefined, undefined, undefined, val);
+    } catch (e: any) {
+      setOnlyAdminsCanSend(!val);
+      Alert.alert('Error', e.message || 'Failed to update setting.');
     }
   };
 
@@ -275,6 +291,27 @@ export default function GroupSettingsScreen() {
     });
   };
 
+  const handleDeleteGroup = () => {
+    setConfirmModalConfig({
+      visible: true,
+      title: 'Delete Group',
+      message: 'Are you sure you want to delete this group? All group messages and data will be permanently removed for all members.',
+      buttons: [
+        {
+          text: 'Delete Group',
+          style: 'destructive',
+          onPress: async () => {
+            const success = await deleteGroup(chat._id);
+            if (success) {
+              router.replace('/home' as any);
+            }
+          },
+        },
+        { text: 'Cancel', style: 'cancel', onPress: () => {} },
+      ],
+    });
+  };
+
   const toggleSelectNewMember = (userId: string) => {
     if (selectedNewUserIds.includes(userId)) {
       setSelectedNewUserIds(selectedNewUserIds.filter((id) => id !== userId));
@@ -385,6 +422,25 @@ export default function GroupSettingsScreen() {
               />
             </View>
 
+            {/* Only Admins Can Send Messages Toggle */}
+            <View style={styles.muteRowContainer}>
+              <View style={styles.muteTextContainer}>
+                <Text style={styles.muteLabel}>Only Admins Can Message</Text>
+                <Text style={styles.muteSubtitle}>
+                  {onlyAdminsCanSend
+                    ? 'Only group admins & owner can send messages'
+                    : 'All members can send messages'}
+                </Text>
+              </View>
+              <Switch
+                disabled={!isAdmin}
+                value={onlyAdminsCanSend}
+                onValueChange={handleToggleOnlyAdmins}
+                trackColor={{ false: '#162235', true: COLORS.primary }}
+                thumbColor={Platform.OS === 'android' ? (onlyAdminsCanSend ? COLORS.primaryText : '#888') : undefined}
+              />
+            </View>
+
             <Text style={styles.participantHeaderTitle}>
               Members ({chat.participants.length})
             </Text>
@@ -449,6 +505,11 @@ export default function GroupSettingsScreen() {
             <TouchableOpacity style={styles.leaveButton} onPress={handleLeaveGroup}>
               <Text style={styles.leaveButtonText}>Leave Group</Text>
             </TouchableOpacity>
+            {isCreator && (
+              <TouchableOpacity style={styles.deleteGroupButton} onPress={handleDeleteGroup}>
+                <Text style={styles.deleteGroupButtonText}>Delete Group</Text>
+              </TouchableOpacity>
+            )}
           </View>
         }
       />
@@ -801,6 +862,22 @@ const styles = StyleSheet.create({
   },
   leaveButtonText: {
     color: '#FCA5A5',
+    fontWeight: '800',
+    fontSize: 15,
+    letterSpacing: 0.3,
+  },
+  deleteGroupButton: {
+    borderWidth: 1,
+    borderColor: '#EF4444',
+    borderRadius: 24,
+    paddingVertical: 14,
+    width: '100%',
+    alignItems: 'center',
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    marginTop: 12,
+  },
+  deleteGroupButtonText: {
+    color: '#EF4444',
     fontWeight: '800',
     fontSize: 15,
     letterSpacing: 0.3,
