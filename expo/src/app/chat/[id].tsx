@@ -22,6 +22,7 @@ import { useChatStore, Message } from '../../store/chatStore';
 import { useAuthStore } from '../../store/authStore';
 import { api } from '../../services/api';
 import { COLORS, globalStyles } from '../../styles/theme';
+import { isSameUser } from '../../utils/user';
 import axios from 'axios';
 import { Ionicons } from '@expo/vector-icons';
 import { MediaMessage } from '../../components/MediaMessage';
@@ -853,7 +854,7 @@ export default function ChatScreen() {
       .map((id) => chatMessages.find((m) => m._id === id))
       .filter(Boolean) as Message[];
     const singleMsg = selectedMsgs.length === 1 ? selectedMsgs[0] : null;
-    const isMe = singleMsg?.sender._id === user?.id;
+    const isMe = isSameUser(singleMsg?.sender, user);
 
     const options: ActionOption[] = [];
 
@@ -957,7 +958,7 @@ export default function ChatScreen() {
   };
 
   const handleDeleteMessage = (msg: Message) => {
-    const isMe = msg.sender._id === user?.id;
+    const isMe = isSameUser(msg?.sender, user);
     const buttons: any[] = [
       {
         text: 'Delete for me',
@@ -1032,7 +1033,7 @@ export default function ChatScreen() {
       .map((id) => chatMessages.find((m) => m._id === id))
       .filter(Boolean) as Message[];
 
-    const allMe = selectedMsgs.every((m) => m.sender._id === user?.id);
+    const allMe = selectedMsgs.every((m) => isSameUser(m.sender, user));
 
     const deleteMessages = async (type: 'me' | 'everyone') => {
       for (const msgId of selectedMessageIds) {
@@ -1282,9 +1283,7 @@ export default function ChatScreen() {
 
   const renderMessageItem = useCallback(
     ({ item }: { item: Message }) => {
-      const senderId = typeof item.sender === 'object' ? item.sender?._id : item.sender;
-      const currentUserId = user?.id || (user as any)?._id;
-      const isMe = Boolean(senderId && currentUserId && String(senderId) === String(currentUserId));
+      const isMe = isSameUser(item.sender, user);
       const isSelected = selectedMessageIds.includes(item._id);
 
       return (
@@ -1499,7 +1498,7 @@ export default function ChatScreen() {
             <View style={styles.replyBannerBorder} />
             <View style={styles.replyBannerContent}>
               <Text style={styles.replyBannerSender}>
-                Replying to {replyingTo.sender._id === user?.id ? 'yourself' : replyingTo.sender.displayName}
+                Replying to {isSameUser(replyingTo.sender, user) ? 'yourself' : replyingTo.sender.displayName}
               </Text>
               <Text style={styles.replyBannerText} numberOfLines={1}>
                 {replyingTo.mediaType && !replyingTo.text
@@ -1977,7 +1976,7 @@ export default function ChatScreen() {
                 </View>
               }
               renderItem={({ item }) => {
-                const isMe = item.sender._id === user?.id;
+                const isMe = isSameUser(item.sender, user);
                 const senderName = isMe ? 'You' : item.sender.displayName;
                 const timeStr = new Date(item.createdAt).toLocaleDateString([], {
                   month: 'short',

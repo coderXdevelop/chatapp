@@ -21,6 +21,7 @@ import { Message } from '../store/chatStore';
 import { COLORS } from '../styles/theme';
 import { MediaMessage } from './MediaMessage';
 import * as FileSystem from 'expo-file-system/legacy';
+import { isSameUser } from '../utils/user';
 
 interface MemoizedMessageItemProps {
   item: Message;
@@ -245,9 +246,9 @@ const MemoizedMessageItemComponent: React.FC<MemoizedMessageItemProps> = ({
                         ]}
                         numberOfLines={1}
                       >
-                        {item.replyTo.sender?._id === userId
+                        {isSameUser(item.replyTo.sender, userId)
                           ? 'You'
-                          : item.replyTo.sender?.displayName || 'User'}
+                          : (typeof item.replyTo.sender === 'object' ? item.replyTo.sender?.displayName : 'User')}
                       </Text>
                       <Text
                         style={[

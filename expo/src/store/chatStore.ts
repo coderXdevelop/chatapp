@@ -5,6 +5,7 @@ import { io, Socket } from 'socket.io-client';
 import { api } from '../services/api';
 import { useAuthStore } from './authStore';
 import { presentLocalNotification } from '../services/notifications';
+import { isSameUser, extractId } from '../utils/user';
 
 export interface Message {
   _id: string;
@@ -323,7 +324,7 @@ export const useChatStore = create<ChatState>()(
       tempId,
       chat: chatId,
       sender: {
-        _id: currentUser.id,
+        _id: extractId(currentUser),
         displayName: currentUser.displayName,
         avatarUrl: currentUser.avatarUrl,
       },
@@ -625,17 +626,16 @@ export const useChatStore = create<ChatState>()(
 
     newSocket.on('new_message', (msg: Message) => {
       const currentUser = useAuthStore.getState().user;
-      const currentUserId = currentUser?.id;
       const activeChatId = get().activeChatId;
 
       // Notify server of delivery if message is from another user
-      if (msg.sender?._id !== currentUserId) {
+      if (!isSameUser(msg.sender, currentUser)) {
         newSocket.emit('mark_delivered', { chatId: msg.chat, messageId: msg._id });
       }
 
       // Present local notification if user is not currently in this chat room and sender is not current user
-      if (msg.sender?._id !== currentUserId && msg.chat !== activeChatId) {
-        const title = msg.sender?.displayName || 'New Message';
+      if (!isSameUser(msg.sender, currentUser) && msg.chat !== activeChatId) {
+        const title = (typeof msg.sender === 'object' && msg.sender?.displayName) || 'New Message';
         let body = msg.text || '';
         if (!body && msg.mediaType) {
           const typeIcons: Record<string, string> = { image: '📷 Photo', video: '🎥 Video', audio: '🎵 Voice note', document: '📄 Document', gif: '👾 GIF', sticker: '🎨 Sticker' };
@@ -709,7 +709,7 @@ export const useChatStore = create<ChatState>()(
         set((state) => {
           const chatMsgs = state.messages[data.chatId] || [];
           const updated = chatMsgs.map((m) =>
-            m.sender._id !== data.userId ? { ...m, status: 'read' as const } : m
+            !isSameUser(m.sender, data.userId) ? { ...m, status: 'read' as const } : m
           );
           return {
             messages: { ...state.messages, [data.chatId]: updated },

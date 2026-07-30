@@ -294,6 +294,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
     await removeItem('access_token');
     await removeItem('refresh_token');
+    await removeItem('chatconnect_persistent_chat_store');
     set({ user: null, token: null, isLoading: false, isInitialized: true });
   },
 
@@ -306,6 +307,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       } catch (e) {}
       await removeItem('access_token');
       await removeItem('refresh_token');
+      await removeItem('chatconnect_persistent_chat_store');
       set({ user: null, token: null, isLoading: false, isInitialized: true });
       return { success: true };
     } catch (error: any) {
