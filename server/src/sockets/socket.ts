@@ -35,10 +35,26 @@ export function setupSockets(io: Server) {
 
     let userChats: any[] = [];
     try {
-      userChats = await Chat.find({ participants: userId });
+      userChats = await Chat.find({ participants: userId, deletedForUsers: { $ne: userId } });
+      // Automatically join socket to all chat rooms user belongs to (resolves reconnect break)
+      for (const chat of userChats) {
+        await socket.join(`chat:${chat._id}`);
+      }
     } catch (e) {
       console.error('Error finding user chats for connecting socket:', e);
     }
+
+    // Explicit client request to rejoin chat rooms upon reconnect
+    socket.on('join_chats', async () => {
+      try {
+        const chats = await Chat.find({ participants: userId, deletedForUsers: { $ne: userId } });
+        for (const c of chats) {
+          await socket.join(`chat:${c._id}`);
+        }
+      } catch (e) {
+        console.error('Error in join_chats listener:', e);
+      }
+    });
 
     // Presence: Track Redis connections
     if (redisClient) {

@@ -1,6 +1,7 @@
 import type { Response } from 'express';
 import type { AuthenticatedRequest } from '../middleware/auth.middleware.js';
 import { generateUploadSignature } from '../services/cloudinary.service.js';
+import { validateSafeUrl } from '../utils/ssrfGuard.js';
 
 export async function getCloudinarySignature(req: AuthenticatedRequest, res: Response) {
   const userId = req.user?.userId;
@@ -63,6 +64,12 @@ export async function getLinkPreview(req: AuthenticatedRequest, res: Response) {
     let targetUrl = url.trim();
     if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
       targetUrl = `https://${targetUrl}`;
+    }
+
+    // SSRF Validation: Block local/internal IP ranges, private domains, non-HTTP schemes
+    const validation = await validateSafeUrl(targetUrl);
+    if (!validation.safe) {
+      return res.status(400).json({ message: validation.reason || 'Invalid or unsafe URL' });
     }
 
     // 1. Specialized Handler for YouTube Videos (Fastest, 100% reliable thumbnail & title via oEmbed)

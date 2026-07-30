@@ -6,6 +6,7 @@ import { deleteAvatar, uploadAvatar } from '../services/cloudinary.service.js';
 import { sendOTPEmail } from '../services/email.service.js';
 import { generateAccessToken, generateRefreshToken, verifyRefreshToken } from '../services/jwt.service.js';
 import { generateOTP, storeOTP, verifyOTP } from '../services/otp.service.js';
+import { isValidEmail, isValidPassword, sanitizeEmail } from '../utils/validators.js';
 
 async function generateUniqueConnectId(email: string): Promise<string> {
   const parts = (email || '').split('@');
@@ -26,20 +27,15 @@ export async function registerInit(req: Request, res: Response) {
   try {
     const { email, password } = req.body;
 
-    if (!email || typeof email !== 'string') {
+    if (!isValidEmail(email)) {
       return res.status(400).json({ message: 'Valid email address is required' });
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email.trim())) {
-      return res.status(400).json({ message: 'Invalid email address format' });
-    }
-
-    if (!password || typeof password !== 'string' || password.length < 6) {
+    if (!isValidPassword(password)) {
       return res.status(400).json({ message: 'Password must be at least 6 characters long' });
     }
 
-    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedEmail = sanitizeEmail(email);
     const existingUser = await User.findOne({ email: normalizedEmail });
 
     if (existingUser) {
@@ -215,16 +211,11 @@ export async function sendOTP(req: Request, res: Response) {
   try {
     const { email } = req.body;
 
-    if (!email || typeof email !== 'string') {
+    if (!isValidEmail(email)) {
       return res.status(400).json({ message: 'Valid email address is required' });
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email.trim())) {
-      return res.status(400).json({ message: 'Invalid email address format' });
-    }
-
-    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedEmail = sanitizeEmail(email);
     const otp = generateOTP();
 
     await storeOTP(normalizedEmail, otp, 300);
@@ -442,16 +433,11 @@ export async function forgotPassword(req: Request, res: Response) {
   try {
     const { email } = req.body;
 
-    if (!email || typeof email !== 'string') {
+    if (!isValidEmail(email)) {
       return res.status(400).json({ message: 'Valid email address is required' });
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email.trim())) {
-      return res.status(400).json({ message: 'Invalid email address format' });
-    }
-
-    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedEmail = sanitizeEmail(email);
     const user = await User.findOne({ email: normalizedEmail });
 
     if (!user) {

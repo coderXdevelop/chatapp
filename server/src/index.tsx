@@ -13,21 +13,47 @@ import statusRoutes from './routes/status.routes.js';
 import User from './models/User.js';
 import { setupSockets } from './sockets/socket.js';
 import { initBackgroundCronServices } from './services/cron.service.js';
+import { validateEnv } from './services/env.service.js';
 
 dotenv.config();
+validateEnv();
 
 const app = express();
 const httpServer = createServer(app);
+
+const allowedOrigins = process.env.CLIENT_ORIGIN
+  ? process.env.CLIENT_ORIGIN.split(',').map((o) => o.trim())
+  : ['http://localhost:8081', 'http://localhost:19006', 'http://localhost:3000'];
+
+const corsOptions: cors.CorsOptions = {
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps, Expo client, cURL) or matching whitelist
+    if (!origin || allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+};
+
 const io = new Server(httpServer, {
   cors: {
-    origin: '*',
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by Socket.IO CORS'));
+      }
+    },
     methods: ['GET', 'POST'],
+    credentials: true,
   },
 });
 
 app.set('io', io); // Register socket.io instance for controller usage
 
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
@@ -58,26 +84,8 @@ if (MONGO_URI) {
       serverSelectionTimeoutMS: 5000,
       connectTimeoutMS: 10000,
     })
-    .then(async () => {
+    .then(() => {
       console.log('Connected to MongoDB successfully.');
-      try {
-        const legacyUsers = await User.find({ connectId: { $exists: false } });
-        for (const user of legacyUsers) {
-          const parts = (user.email || '').split('@');
-          const base = (parts[0] || 'user').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-          let uniqueId = base;
-          let collision = await User.findOne({ connectId: uniqueId });
-          while (collision) {
-            uniqueId = `${base}_${Math.floor(1000 + Math.random() * 9000)}`;
-            collision = await User.findOne({ connectId: uniqueId });
-          }
-          user.connectId = uniqueId;
-          await user.save();
-          console.log(`Migrated User: ${user.email} -> allocated connectId: ${uniqueId}`);
-        }
-      } catch (err) {
-        console.error('Error migrating legacy users:', err);
-      }
     })
     .catch((err) => console.error('MongoDB connection error:', err));
 } else {
