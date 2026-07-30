@@ -618,14 +618,25 @@ export const useChatStore = create<ChatState>()(
       }
     });
 
-    newSocket.on('connect_error', (err) => {
+    newSocket.on('connect_error', async (err) => {
       set({ socketConnected: false });
       console.warn('[Socket] Connect error:', err.message);
-      const latestToken = useAuthStore.getState().token;
-      if (latestToken) {
-        newSocket.auth = { token: latestToken };
+
+      if (err.message?.includes('Auth failed') || err.message?.includes('Invalid token') || err.message?.includes('Token missing')) {
+        await useAuthStore.getState().checkAuth();
+        const refreshedToken = useAuthStore.getState().token;
+        if (refreshedToken) {
+          newSocket.auth = { token: refreshedToken };
+          newSocket.connect();
+        }
+      } else {
+        const latestToken = useAuthStore.getState().token;
+        if (latestToken) {
+          newSocket.auth = { token: latestToken };
+        }
       }
     });
+
 
     newSocket.on('disconnect', (reason) => {
       set({ socketConnected: false });
