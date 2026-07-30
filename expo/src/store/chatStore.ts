@@ -19,7 +19,7 @@ export interface Message {
   text?: string;
   status: 'sending' | 'sent' | 'delivered' | 'read';
   mediaUrl?: string;
-  mediaType?: 'image' | 'video' | 'audio' | 'document' | 'gif' | 'sticker';
+  mediaType?: 'image' | 'video' | 'audio' | 'document' | 'gif' | 'sticker' | 'call_log';
   mediaDuration?: number;
   mediaSize?: number;
   mediaWidth?: number;
@@ -41,6 +41,14 @@ export interface Message {
     backgroundColor?: string;
     statusOwner: string;
   };
+  callMetadata?: {
+    callId: string;
+    isVideo: boolean;
+    callStatus: 'accepted' | 'declined' | 'missed';
+    durationSeconds?: number;
+    recipientId?: string;
+  };
+
   isEdited?: boolean;
   isDeleted?: boolean;
   replyTo?: {

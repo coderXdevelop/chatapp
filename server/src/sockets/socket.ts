@@ -527,22 +527,134 @@ export function setupSockets(io: Server) {
       }
     });
 
+    // Helper to persist system call log message to MongoDB & broadcast new_message event
+    const saveCallLogMessage = async (params: {
+      chatId?: string;
+      senderId: string;
+      recipientId: string;
+      callId: string;
+      isVideo: boolean;
+      callStatus: 'accepted' | 'declined' | 'missed';
+      durationSeconds?: number;
+    }) => {
+      try {
+        const { chatId, senderId, recipientId, callId, isVideo, callStatus, durationSeconds = 0 } = params;
+
+        let targetChatId = chatId;
+        if (!targetChatId && mongoose.connection.readyState === 1) {
+          const existingChat = await Chat.findOne({
+            isGroup: false,
+            participants: { $all: [senderId, recipientId] },
+          });
+          if (existingChat) {
+            targetChatId = existingChat._id.toString();
+          }
+        }
+
+        if (!targetChatId) return;
+
+        let text = '';
+        const icon = isVideo ? '🎥' : '📞';
+        const callTypeStr = isVideo ? 'Video call' : 'Voice call';
+
+        if (callStatus === 'accepted') {
+          const mins = Math.floor(durationSeconds / 60);
+          const secs = durationSeconds % 60;
+          const formatted = `${mins < 10 ? '0' + mins : mins}:${secs < 10 ? '0' + secs : secs}`;
+          text = `${icon} ${callTypeStr} (${formatted})`;
+        } else if (callStatus === 'declined') {
+          text = `${icon} Declined ${callTypeStr.toLowerCase()}`;
+        } else {
+          text = `${icon} Missed ${callTypeStr.toLowerCase()}`;
+        }
+
+        const message = new Message({
+          chat: targetChatId,
+          sender: senderId,
+          text,
+          status: 'sent',
+          mediaType: 'call_log',
+          mediaDuration: durationSeconds,
+          callMetadata: {
+            callId,
+            isVideo,
+            callStatus,
+            durationSeconds,
+            recipientId,
+          },
+        });
+
+        if (mongoose.connection.readyState === 1) {
+          await message.save();
+          const populated = await message.populate([
+            { path: 'sender', select: 'displayName avatarUrl status' },
+          ]);
+
+          const chat = await Chat.findById(targetChatId);
+          if (chat) {
+            chat.lastMessage = message._id as any;
+            await chat.save();
+          }
+
+          io.to(`active_chat:${targetChatId}`).emit('new_message', populated);
+          io.to(`user:${senderId}`).emit('new_message', populated);
+          io.to(`user:${recipientId}`).emit('new_message', populated);
+        }
+      } catch (err) {
+        console.error('Error saving call log message:', err);
+      }
+    };
+
+    // Handle explicit client save_call_log
+    socket.on('save_call_log', async (data: {
+      chatId?: string;
+      recipientId: string;
+      callId: string;
+      isVideo: boolean;
+      callStatus: 'accepted' | 'declined' | 'missed';
+      durationSeconds?: number;
+    }) => {
+      await saveCallLogMessage({
+        ...(data.chatId ? { chatId: data.chatId } : {}),
+        senderId: userId,
+        recipientId: data.recipientId,
+        callId: data.callId,
+        isVideo: data.isVideo,
+        callStatus: data.callStatus,
+        durationSeconds: data.durationSeconds || 0,
+      });
+    });
+
     // Handle call_reject (Recipient -> Server -> Caller)
-    socket.on('call_reject', (data: {
+    socket.on('call_reject', async (data: {
       callId: string;
       callerId: string;
+      isVideo?: boolean;
+      chatId?: string;
       reason?: string;
     }) => {
       try {
-        const { callId, callerId, reason } = data;
+        const { callId, callerId, isVideo = false, chatId, reason } = data;
         if (callerId) {
           io.to(`user:${callerId}`).emit('call_reject', {
             callId,
             recipientId: userId,
             reason: reason || 'declined',
           });
+
+          // Log call rejection in chat thread
+          await saveCallLogMessage({
+            ...(chatId ? { chatId } : {}),
+            senderId: callerId,
+            recipientId: userId,
+            callId,
+            isVideo,
+            callStatus: reason === 'busy' ? 'missed' : 'declined',
+            durationSeconds: 0,
+          });
         }
       } catch (err: any) {
+
         console.error('Socket call_reject error:', err);
       }
     });
@@ -566,6 +678,7 @@ export function setupSockets(io: Server) {
         console.error('Socket call_end error:', err);
       }
     });
+
 
     socket.on('disconnect', async () => {
       console.log(`Socket client disconnected: ${userId}`);

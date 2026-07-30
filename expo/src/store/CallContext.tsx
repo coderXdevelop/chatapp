@@ -148,6 +148,8 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         socket.emit('call_reject', {
           callId,
           callerId: peerInfo.userId,
+          isVideo,
+          chatId,
           reason,
         });
       }
@@ -160,7 +162,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIncomingOfferSdp(null);
       }, 1000);
     },
-    [socket, callId, peerInfo, webrtc]
+    [socket, callId, peerInfo, isVideo, chatId, webrtc]
   );
 
   // End Active Call
@@ -172,6 +174,18 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
           targetUserId: peerInfo.userId,
           reason,
         });
+
+        // Save call log message if call was accepted and active
+        if (callState === 'ACCEPTED') {
+          socket.emit('save_call_log', {
+            chatId,
+            recipientId: peerInfo.userId,
+            callId,
+            isVideo,
+            callStatus: 'accepted',
+            durationSeconds: callDurationSeconds,
+          });
+        }
       }
       if (timerRef.current) {
         clearInterval(timerRef.current);
@@ -187,8 +201,9 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setCallDurationSeconds(0);
       }, 1200);
     },
-    [socket, callId, peerInfo, webrtc]
+    [socket, callId, peerInfo, callState, chatId, isVideo, callDurationSeconds, webrtc]
   );
+
 
   // Listen to Global Socket Call Events
   useEffect(() => {

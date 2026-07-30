@@ -10,6 +10,8 @@ import mediaRoutes from './routes/media.routes.js';
 import userRoutes from './routes/user.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import statusRoutes from './routes/status.routes.js';
+import callRoutes from './routes/call.routes.js';
+
 import User from './models/User.js';
 import { setupSockets } from './sockets/socket.js';
 import { initBackgroundCronServices } from './services/cron.service.js';
@@ -78,6 +80,8 @@ app.use('/api/chats', chatRoutes);
 app.use('/api/media', mediaRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/calls', callRoutes);
+
 app.use('/api/status', statusRoutes);
 
 // Start background Cloudinary maintenance cron jobs

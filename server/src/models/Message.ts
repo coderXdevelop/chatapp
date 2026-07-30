@@ -23,6 +23,14 @@ export interface IStatusReply {
   statusOwner: mongoose.Types.ObjectId;
 }
 
+export interface ICallMetadata {
+  callId: string;
+  isVideo: boolean;
+  callStatus: 'accepted' | 'declined' | 'missed';
+  durationSeconds?: number;
+  recipientId: mongoose.Types.ObjectId;
+}
+
 export interface IMessage extends Document {
   chat: mongoose.Types.ObjectId;
   sender: mongoose.Types.ObjectId;
@@ -31,7 +39,7 @@ export interface IMessage extends Document {
   tempId?: string;
   mediaUrl?: string;
   mediaPublicId?: string;
-  mediaType?: 'image' | 'video' | 'audio' | 'document' | 'gif' | 'sticker';
+  mediaType?: 'image' | 'video' | 'audio' | 'document' | 'gif' | 'sticker' | 'call_log';
   mediaDuration?: number;
   mediaSize?: number;
   mediaWidth?: number;
@@ -39,6 +47,7 @@ export interface IMessage extends Document {
   reactions?: IReaction[];
   linkPreview?: ILinkPreview;
   statusReply?: IStatusReply;
+  callMetadata?: ICallMetadata;
   isEdited?: boolean;
   isDeleted?: boolean;
   replyTo?: mongoose.Types.ObjectId | null;
@@ -48,6 +57,7 @@ export interface IMessage extends Document {
   createdAt: Date;
   updatedAt: Date;
 }
+
 
 const ReactionSchema = new Schema(
   {
@@ -84,6 +94,17 @@ const StatusReplySchema = new Schema(
     caption: { type: String, default: '' },
     backgroundColor: { type: String, default: '#0F172A' },
     statusOwner: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  },
+  { _id: false }
+);
+
+const CallMetadataSchema = new Schema(
+  {
+    callId: { type: String, required: true },
+    isVideo: { type: Boolean, default: false },
+    callStatus: { type: String, enum: ['accepted', 'declined', 'missed'], required: true },
+    durationSeconds: { type: Number, default: 0 },
+    recipientId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   },
   { _id: false }
 );
@@ -125,7 +146,7 @@ const MessageSchema: Schema = new Schema(
     },
     mediaType: {
       type: String,
-      enum: ['image', 'video', 'audio', 'document', 'gif', 'sticker', null],
+      enum: ['image', 'video', 'audio', 'document', 'gif', 'sticker', 'call_log', null],
       default: null,
     },
     mediaDuration: {
@@ -156,6 +177,11 @@ const MessageSchema: Schema = new Schema(
       type: StatusReplySchema,
       default: null,
     },
+    callMetadata: {
+      type: CallMetadataSchema,
+      default: null,
+    },
+
     isEdited: {
       type: Boolean,
       default: false,

@@ -9,6 +9,7 @@ import {
   Linking,
   Alert,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import Animated, {
   useSharedValue,
@@ -328,7 +329,8 @@ const MemoizedMessageItemComponent: React.FC<MemoizedMessageItemProps> = ({
               )}
 
               {/* Media Content */}
-              {item.mediaUrl && item.mediaType && !item.isDeleted && (
+              {item.mediaUrl && item.mediaType && item.mediaType !== 'call_log' && !item.isDeleted && (
+
                 <TouchableOpacity
                   activeOpacity={0.9}
                   onPress={handleMediaTap}
@@ -348,8 +350,45 @@ const MemoizedMessageItemComponent: React.FC<MemoizedMessageItemProps> = ({
                 </TouchableOpacity>
               )}
 
+              {/* Call Log Badge Content */}
+              {item.mediaType === 'call_log' && !item.isDeleted && (
+                <View style={styles.callLogBadgeContainer}>
+                  <View style={styles.callLogIconWrapper}>
+                    <Ionicons
+                      name={
+                        item.callMetadata?.isVideo
+                          ? 'videocam'
+                          : item.callMetadata?.callStatus === 'missed' || item.callMetadata?.callStatus === 'declined'
+                          ? 'call-outline'
+                          : 'call'
+                      }
+                      size={20}
+                      color={
+                        item.callMetadata?.callStatus === 'missed' || item.callMetadata?.callStatus === 'declined'
+                          ? '#EF4444'
+                          : isMe
+                          ? COLORS.primary
+                          : '#3B82F6'
+                      }
+                    />
+                  </View>
+                  <View style={styles.callLogTextCol}>
+                    <Text style={[styles.callLogTitle, isMe ? styles.myCallLogTitle : styles.otherCallLogTitle]}>
+                      {item.text || 'Call Log'}
+                    </Text>
+                    <Text style={styles.callLogSubtitle}>
+                      {item.callMetadata?.callStatus === 'accepted'
+                        ? 'Tap header call icon to call back'
+                        : item.callMetadata?.callStatus === 'declined'
+                        ? 'Call declined'
+                        : 'Missed call'}
+                    </Text>
+                  </View>
+                </View>
+              )}
+
               {/* Message Text */}
-              {(item.text ? true : false || item.isDeleted) && (
+              {item.mediaType !== 'call_log' && (item.text ? true : false || item.isDeleted) && (
                 <Text
                   style={[
                     styles.bubbleText,
@@ -360,6 +399,7 @@ const MemoizedMessageItemComponent: React.FC<MemoizedMessageItemProps> = ({
                   {item.text}
                 </Text>
               )}
+
 
               {/* Rich Link Preview Card */}
               {item.linkPreview && item.linkPreview.url && !item.isDeleted && (
@@ -906,4 +946,39 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 10,
   },
+  callLogBadgeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 2,
+    gap: 10,
+  },
+  callLogIconWrapper: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  callLogTextCol: {
+    flexDirection: 'column',
+    justifyContent: 'center',
+  },
+  callLogTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  myCallLogTitle: {
+    color: COLORS.primaryText,
+  },
+  otherCallLogTitle: {
+    color: '#F8FAFC',
+  },
+  callLogSubtitle: {
+    color: '#CBD5E1',
+    fontSize: 11,
+    marginTop: 1,
+  },
 });
+
