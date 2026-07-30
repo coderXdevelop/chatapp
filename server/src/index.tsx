@@ -23,15 +23,30 @@ const httpServer = createServer(app);
 
 const allowedOrigins = process.env.CLIENT_ORIGIN
   ? process.env.CLIENT_ORIGIN.split(',').map((o) => o.trim())
-  : ['http://localhost:8081', 'http://localhost:19006', 'http://localhost:3000'];
+  : ['*'];
+
+const isOriginAllowed = (origin: string | undefined): boolean => {
+  if (!origin || origin === 'null' || origin.startsWith('file://') || origin.startsWith('exp://')) {
+    return true;
+  }
+  if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
+    return true;
+  }
+  // Allow local network IPs and localhost during development
+  if (process.env.NODE_ENV !== 'production') {
+    if (origin.includes('localhost') || origin.includes('127.0.0.1') || origin.includes('192.168.') || origin.includes('10.')) {
+      return true;
+    }
+  }
+  return false;
+};
 
 const corsOptions: cors.CorsOptions = {
   origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps, Expo client, cURL) or matching whitelist
-    if (!origin || allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+    if (isOriginAllowed(origin)) {
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'));
+      callback(new Error(`Not allowed by CORS: ${origin}`));
     }
   },
   credentials: true,
@@ -40,10 +55,10 @@ const corsOptions: cors.CorsOptions = {
 const io = new Server(httpServer, {
   cors: {
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+      if (isOriginAllowed(origin)) {
         callback(null, true);
       } else {
-        callback(new Error('Not allowed by Socket.IO CORS'));
+        callback(new Error(`Not allowed by Socket.IO CORS: ${origin}`));
       }
     },
     methods: ['GET', 'POST'],

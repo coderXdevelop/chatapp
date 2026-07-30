@@ -584,7 +584,7 @@ export const useChatStore = create<ChatState>()(
 
     const newSocket = io(socketUrl, {
       auth: { token },
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
