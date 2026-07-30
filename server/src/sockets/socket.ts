@@ -333,6 +333,7 @@ export function setupSockets(io: Server) {
           message.status = 'delivered';
           await message.save();
           io.to(`chat:${chatId}`).emit('message_delivered', { chatId, messageId, status: 'delivered' });
+          io.to(`user:${message.sender.toString()}`).emit('message_delivered', { chatId, messageId, status: 'delivered' });
         }
       } catch (e) {
         console.error('Socket mark_delivered error:', e);

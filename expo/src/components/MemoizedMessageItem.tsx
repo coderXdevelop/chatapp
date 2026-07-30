@@ -236,12 +236,48 @@ const MemoizedMessageItemComponent: React.FC<MemoizedMessageItemProps> = ({
                   onPress={() => item.replyTo?._id && onPressReplyPreview?.(item.replyTo._id)}
                   activeOpacity={0.75}
                 >
-                  <Text style={styles.bubbleReplySender} numberOfLines={1}>
-                    {item.replyTo.sender._id === userId ? 'You' : item.replyTo.sender.displayName}
-                  </Text>
-                  <Text style={styles.bubbleReplyText} numberOfLines={1}>
-                    {item.replyTo.text}
-                  </Text>
+                  <View style={styles.replyInnerRow}>
+                    <View style={styles.replyInnerTextCol}>
+                      <Text
+                        style={[
+                          styles.bubbleReplySender,
+                          isMe ? styles.myBubbleReplySender : styles.otherBubbleReplySender,
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {item.replyTo.sender?._id === userId
+                          ? 'You'
+                          : item.replyTo.sender?.displayName || 'User'}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.bubbleReplyText,
+                          isMe ? styles.myBubbleReplyText : styles.otherBubbleReplyText,
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {item.replyTo.mediaType && !item.replyTo.text
+                          ? item.replyTo.mediaType === 'image'
+                            ? '📷 Photo'
+                            : item.replyTo.mediaType === 'video'
+                            ? '🎥 Video'
+                            : item.replyTo.mediaType === 'audio'
+                            ? '🎵 Voice Note'
+                            : item.replyTo.mediaType === 'sticker'
+                            ? '🎨 Sticker'
+                            : '📄 File'
+                          : item.replyTo.text || 'Message'}
+                      </Text>
+                    </View>
+                    {item.replyTo.mediaUrl &&
+                      (item.replyTo.mediaType === 'image' || item.replyTo.mediaType === 'video') && (
+                        <Image
+                          source={{ uri: item.replyTo.mediaUrl }}
+                          style={styles.replyThumbImage}
+                          resizeMode="cover"
+                        />
+                      )}
+                  </View>
                 </TouchableOpacity>
               )}
 
@@ -419,7 +455,8 @@ const arePropsEqual = (prevProps: MemoizedMessageItemProps, nextProps: MemoizedM
     prevProps.isMe === nextProps.isMe &&
     prevProps.isGroup === nextProps.isGroup &&
     JSON.stringify(prevProps.item.reactions) === JSON.stringify(nextProps.item.reactions) &&
-    JSON.stringify(prevProps.item.linkPreview) === JSON.stringify(nextProps.item.linkPreview)
+    JSON.stringify(prevProps.item.linkPreview) === JSON.stringify(nextProps.item.linkPreview) &&
+    JSON.stringify(prevProps.item.replyTo) === JSON.stringify(nextProps.item.replyTo)
   );
 };
 
@@ -517,17 +554,56 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3,
     borderLeftColor: COLORS.primary,
     paddingLeft: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
+    paddingRight: 6,
+    paddingVertical: 5,
+    borderRadius: 6,
     marginBottom: 6,
   },
   myBubbleReplyPreview: {
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderLeftColor: '#F59E0B',
+    backgroundColor: 'rgba(0, 0, 0, 0.14)',
+    borderLeftColor: '#070b13',
   },
   otherBubbleReplyPreview: {
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     borderLeftColor: COLORS.primary,
+  },
+  replyInnerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  replyInnerTextCol: {
+    flex: 1,
+    paddingRight: 4,
+  },
+  bubbleReplySender: {
+    fontWeight: '800',
+    fontSize: 11,
+    marginBottom: 2,
+  },
+  myBubbleReplySender: {
+    color: '#070b13',
+  },
+  otherBubbleReplySender: {
+    color: COLORS.primary,
+  },
+  bubbleReplyText: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  myBubbleReplyText: {
+    color: 'rgba(7, 11, 19, 0.85)',
+    fontWeight: '600',
+  },
+  otherBubbleReplyText: {
+    color: COLORS.textSecondary,
+    fontWeight: '500',
+  },
+  replyThumbImage: {
+    width: 34,
+    height: 34,
+    borderRadius: 4,
+    marginLeft: 6,
   },
   statusReplyPreview: {
     flexDirection: 'row',
@@ -575,16 +651,6 @@ const styles = StyleSheet.create({
   statusReplyText: {
     fontSize: 12,
     color: COLORS.textSecondary,
-  },
-  bubbleReplySender: {
-    fontWeight: '700',
-    fontSize: 11,
-    color: COLORS.primary,
-    marginBottom: 1,
-  },
-  bubbleReplyText: {
-    fontSize: 13,
-    color: COLORS.textPrimary,
   },
   forwardedText: {
     fontSize: 11,
@@ -647,19 +713,21 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 10,
-    color: COLORS.textSecondary,
+    color: 'rgba(7, 11, 19, 0.65)',
+    fontWeight: '700',
   },
   statusTextOnlyMedia: {
     fontSize: 10,
-    color: '#FFFFFF',
-  },
-  statusDelivered: {
-    color: COLORS.textSecondary,
+    color: '#CBD5E1',
     fontWeight: '700',
   },
-  statusRead: {
-    color: COLORS.primary,
+  statusDelivered: {
+    color: '#070b13',
     fontWeight: '800',
+  },
+  statusRead: {
+    color: '#0284C7',
+    fontWeight: '900',
   },
   linkPreviewContainer: {
     marginTop: 8,

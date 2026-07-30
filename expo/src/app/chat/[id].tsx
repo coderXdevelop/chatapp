@@ -1500,9 +1500,27 @@ export default function ChatScreen() {
                 Replying to {replyingTo.sender._id === user?.id ? 'yourself' : replyingTo.sender.displayName}
               </Text>
               <Text style={styles.replyBannerText} numberOfLines={1}>
-                {replyingTo.text}
+                {replyingTo.mediaType && !replyingTo.text
+                  ? replyingTo.mediaType === 'image'
+                    ? '📷 Photo'
+                    : replyingTo.mediaType === 'video'
+                    ? '🎥 Video'
+                    : replyingTo.mediaType === 'audio'
+                    ? '🎵 Voice Note'
+                    : replyingTo.mediaType === 'sticker'
+                    ? '🎨 Sticker'
+                    : '📄 File'
+                  : replyingTo.text || 'Message'}
               </Text>
             </View>
+            {replyingTo.mediaUrl &&
+              (replyingTo.mediaType === 'image' || replyingTo.mediaType === 'video') && (
+                <Image
+                  source={{ uri: replyingTo.mediaUrl }}
+                  style={styles.replyBannerThumbnail}
+                  resizeMode="cover"
+                />
+              )}
             <TouchableOpacity onPress={() => setReplyingTo(null)} style={styles.replyCloseButton}>
               <Text style={styles.replyCloseText}>✕</Text>
             </TouchableOpacity>
@@ -2303,6 +2321,12 @@ const styles = StyleSheet.create({
   replyBannerText: {
     color: COLORS.textPrimary,
     fontSize: 14,
+  },
+  replyBannerThumbnail: {
+    width: 36,
+    height: 36,
+    borderRadius: 6,
+    marginRight: 8,
   },
   replyCloseButton: {
     padding: 6,

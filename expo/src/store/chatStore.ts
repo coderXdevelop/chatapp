@@ -49,6 +49,8 @@ export interface Message {
       displayName: string;
     };
     text: string;
+    mediaUrl?: string;
+    mediaType?: string;
   } | null;
   isForwarded?: boolean;
   starredByUsers?: string[];
@@ -309,6 +311,8 @@ export const useChatStore = create<ChatState>()(
             displayName: originalMsg.sender.displayName,
           },
           text: originalMsg.text,
+          mediaUrl: originalMsg.mediaUrl,
+          mediaType: originalMsg.mediaType,
         };
       }
     }
@@ -620,6 +624,11 @@ export const useChatStore = create<ChatState>()(
       const currentUser = useAuthStore.getState().user;
       const currentUserId = currentUser?.id;
       const activeChatId = get().activeChatId;
+
+      // Notify server of delivery if message is from another user
+      if (msg.sender?._id !== currentUserId) {
+        newSocket.emit('mark_delivered', { chatId: msg.chat, messageId: msg._id });
+      }
 
       // Present local notification if user is not currently in this chat room and sender is not current user
       if (msg.sender?._id !== currentUserId && msg.chat !== activeChatId) {
