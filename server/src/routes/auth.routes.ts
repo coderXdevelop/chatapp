@@ -16,7 +16,7 @@ import {
   updatePushToken,
 } from '../controllers/auth.controller.js';
 import { authenticateJWT } from '../middleware/auth.middleware.js';
-import { authRateLimiter, otpRateLimiter } from '../middleware/rateLimiter.middleware.js';
+import { authRateLimiter, otpRateLimiter, refreshRateLimiter } from '../middleware/rateLimiter.middleware.js';
 
 const router = Router();
 
@@ -32,7 +32,7 @@ router.post('/reset-password', authRateLimiter, resetPassword);
 router.post('/send-otp', otpRateLimiter, sendOTP);
 router.post('/verify-otp', authRateLimiter, verifyOTPHandler);
 
-router.post('/refresh', authRateLimiter, refreshSession);
+router.post('/refresh', refreshRateLimiter, refreshSession);
 router.get('/me', authenticateJWT, getMe);
 router.put('/profile', authenticateJWT, updateProfile);
 router.patch('/push-token', authenticateJWT, updatePushToken);

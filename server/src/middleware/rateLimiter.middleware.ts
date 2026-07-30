@@ -75,3 +75,11 @@ export const authRateLimiter = createRateLimiter({
   message: 'Too many authentication attempts. Please try again after 15 minutes.',
   keyPrefix: 'auth',
 });
+
+// 30 Session refresh attempts allowed per 15 minutes
+export const refreshRateLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: 'Too many token refresh attempts. Please try again later.',
+  keyPrefix: 'refresh',
+});
