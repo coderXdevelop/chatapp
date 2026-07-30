@@ -182,8 +182,11 @@ interface ChatState {
   globalSearchAll: (query: string) => Promise<{ chats: Chat[]; messages: Message[] }>;
 }
 
-// Extract base URL from Axios instance configuration
-const SOCKET_URL = api.defaults.baseURL || 'https://chatapp-4cpr.onrender.com';
+// Extract and sanitize base URL for Socket.IO connection (strips trailing /api)
+const getSocketUrl = (): string => {
+  const raw = api.defaults.baseURL || process.env.EXPO_PUBLIC_API_URL || 'https://chatapp-4cpr.onrender.com';
+  return raw.replace(/\/api\/?$/, '');
+};
 
 export const useChatStore = create<ChatState>()(
   persist(
@@ -562,12 +565,24 @@ export const useChatStore = create<ChatState>()(
   },
 
   connectSocket: () => {
-    if (get().socket) return; // Socket is already initialized
+    const existingSocket = get().socket;
+    if (existingSocket) {
+      if (!existingSocket.connected) {
+        const token = useAuthStore.getState().token;
+        if (token) {
+          existingSocket.auth = { token };
+          existingSocket.connect();
+        }
+      }
+      return;
+    }
 
     const token = useAuthStore.getState().token;
     if (!token) return;
 
-    const newSocket = io(SOCKET_URL, {
+    const socketUrl = getSocketUrl();
+
+    const newSocket = io(socketUrl, {
       auth: { token },
       transports: ['websocket', 'polling'],
       reconnection: true,
@@ -575,19 +590,30 @@ export const useChatStore = create<ChatState>()(
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
       randomizationFactor: 0.5,
-      timeout: 20000,
+      timeout: 30000, // 30s timeout for Render cold-starts
     });
 
     newSocket.on('connect', () => {
       set({ socketConnected: true });
+      newSocket.emit('join_chats');
       const currentActiveId = get().activeChatId;
       if (currentActiveId) {
         newSocket.emit('join_chat_room', { chatId: currentActiveId });
       }
     });
 
-    newSocket.on('disconnect', () => {
+    newSocket.on('connect_error', (err) => {
       set({ socketConnected: false });
+      console.warn('[Socket] Connect error:', err.message);
+      const latestToken = useAuthStore.getState().token;
+      if (latestToken && newSocket.auth) {
+        newSocket.auth.token = latestToken;
+      }
+    });
+
+    newSocket.on('disconnect', (reason) => {
+      set({ socketConnected: false });
+      console.log('[Socket] Disconnected:', reason);
     });
 
     newSocket.on('new_message', (msg: Message) => {

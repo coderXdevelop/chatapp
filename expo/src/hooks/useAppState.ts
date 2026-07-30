@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
 import { useChatStore } from '../store/chatStore';
 import { useAuthStore } from '../store/authStore';
+import { api } from '../services/api';
 
 export function useAppState() {
   const appState = useRef(AppState.currentState);
@@ -18,6 +19,7 @@ export function useAppState() {
         nextAppState === 'active'
       ) {
         console.log('App came to foreground, connecting socket...');
+        api.get('/keep-alive').catch(() => {});
         connectSocket();
       } else if (
         appState.current === 'active' &&
