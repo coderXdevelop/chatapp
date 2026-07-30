@@ -3,8 +3,9 @@ import { verifyAccessToken, type TokenPayload } from '../services/jwt.service.js
 import Chat from '../models/Chat.js';
 import Message from '../models/Message.js';
 import User from '../models/User.js';
+import mongoose from 'mongoose';
 import { redisClient } from '../services/redis.service.js';
-import { sendPushNotification } from '../services/push.service.js';
+import { sendPushNotification, sendCallPushNotification } from '../services/push.service.js';
 
 export interface AuthenticatedSocket extends Socket {
   user?: TokenPayload;
@@ -35,26 +36,31 @@ export function setupSockets(io: Server) {
 
     let userChats: any[] = [];
     try {
-      userChats = await Chat.find({ participants: userId, deletedForUsers: { $ne: userId } });
-      // Automatically join socket to all chat rooms user belongs to (resolves reconnect break)
-      for (const chat of userChats) {
-        await socket.join(`chat:${chat._id}`);
+      if (mongoose.connection.readyState === 1) {
+        userChats = await Chat.find({ participants: userId, deletedForUsers: { $ne: userId } });
+        for (const chat of userChats) {
+          await socket.join(`chat:${chat._id}`);
+        }
       }
     } catch (e) {
       console.error('Error finding user chats for connecting socket:', e);
     }
 
+
     // Explicit client request to rejoin chat rooms upon reconnect
     socket.on('join_chats', async () => {
       try {
-        const chats = await Chat.find({ participants: userId, deletedForUsers: { $ne: userId } });
-        for (const c of chats) {
-          await socket.join(`chat:${c._id}`);
+        if (mongoose.connection.readyState === 1) {
+          const chats = await Chat.find({ participants: userId, deletedForUsers: { $ne: userId } });
+          for (const c of chats) {
+            await socket.join(`chat:${c._id}`);
+          }
         }
       } catch (e) {
         console.error('Error in join_chats listener:', e);
       }
     });
+
 
     // Presence: Track Redis connections
     if (redisClient) {
@@ -390,6 +396,175 @@ export function setupSockets(io: Server) {
         chatId: data.chatId,
         userId,
       });
+    });
+
+    // ==========================================
+    // WebRTC Signaling & Call Events
+    // ==========================================
+
+    // Handle call_offer (Caller -> Server -> Recipient)
+    socket.on('call_offer', async (data: {
+      callId: string;
+      recipientId: string;
+      isVideo: boolean;
+      sdp: any;
+      callerInfo: { userId: string; displayName: string; avatarUrl?: string };
+      chatId?: string;
+    }, callback?: (response: { success: boolean; error?: string }) => void) => {
+      try {
+        // Feature flag check
+        if (process.env.VOICE_VIDEO_CALLS_ENABLED === 'false') {
+          if (callback) callback({ success: false, error: 'Voice and video calling is currently disabled.' });
+          return;
+        }
+
+        const { callId, recipientId, isVideo, sdp, callerInfo, chatId } = data;
+        if (!recipientId || !sdp || !callId) {
+          if (callback) callback({ success: false, error: 'Invalid offer parameters.' });
+          return;
+        }
+
+        // Check blocking status with DB connection guard
+        let recipientUser: any = null;
+        let senderUser: any = null;
+        if (mongoose.connection.readyState === 1) {
+          try {
+            recipientUser = await User.findById(recipientId);
+            senderUser = await User.findById(userId);
+          } catch (e) {}
+        }
+        if (!recipientUser) recipientUser = { _id: recipientId, displayName: 'Recipient', blockedUsers: [] };
+        if (!senderUser) senderUser = { _id: userId, displayName: callerInfo?.displayName || 'Caller', blockedUsers: [] };
+
+
+
+        if (recipientUser.blockedUsers?.some((id: any) => id.toString() === userId)) {
+          if (callback) callback({ success: false, error: 'You are blocked by this user.' });
+          return;
+        }
+        if (senderUser.blockedUsers?.some((id: any) => id.toString() === recipientId)) {
+          if (callback) callback({ success: false, error: 'You have blocked this user.' });
+          return;
+        }
+
+        // Forward call_offer event to recipient's personal socket room
+        io.to(`user:${recipientId}`).emit('call_offer', {
+          callId,
+          callerId: userId,
+          isVideo,
+          sdp,
+          callerInfo: {
+            userId,
+            displayName: senderUser.displayName || callerInfo?.displayName || 'User',
+            avatarUrl: senderUser.avatarUrl || callerInfo?.avatarUrl,
+          },
+          chatId,
+        });
+
+        // Trigger push notification if recipient is not connected or in background
+        const recipientSockets = await io.in(`user:${recipientId}`).fetchSockets();
+        if (recipientSockets.length === 0) {
+          sendCallPushNotification(recipientId, {
+            callerName: senderUser.displayName || 'Someone',
+            callId,
+            callerId: userId,
+            isVideo: !!isVideo,
+            ...(chatId ? { chatId } : {}),
+          });
+        }
+
+
+        if (callback) callback({ success: true });
+      } catch (err: any) {
+        console.error('Socket call_offer error:', err);
+        if (callback) callback({ success: false, error: err.message });
+      }
+    });
+
+    // Handle call_answer (Recipient -> Server -> Caller)
+    socket.on('call_answer', (data: {
+      callId: string;
+      callerId: string;
+      sdp: any;
+    }, callback?: (response: { success: boolean; error?: string }) => void) => {
+      try {
+        const { callId, callerId, sdp } = data;
+        if (!callerId || !sdp || !callId) {
+          if (callback) callback({ success: false, error: 'Invalid answer parameters.' });
+          return;
+        }
+
+        io.to(`user:${callerId}`).emit('call_answer', {
+          callId,
+          recipientId: userId,
+          sdp,
+        });
+
+        if (callback) callback({ success: true });
+      } catch (err: any) {
+        console.error('Socket call_answer error:', err);
+        if (callback) callback({ success: false, error: err.message });
+      }
+    });
+
+    // Handle ice_candidate (Caller/Recipient -> Server -> Peer)
+    socket.on('ice_candidate', (data: {
+      callId: string;
+      targetUserId: string;
+      candidate: any;
+    }) => {
+      try {
+        const { callId, targetUserId, candidate } = data;
+        if (targetUserId && candidate) {
+          io.to(`user:${targetUserId}`).emit('ice_candidate', {
+            callId,
+            senderUserId: userId,
+            candidate,
+          });
+        }
+      } catch (err: any) {
+        console.error('Socket ice_candidate error:', err);
+      }
+    });
+
+    // Handle call_reject (Recipient -> Server -> Caller)
+    socket.on('call_reject', (data: {
+      callId: string;
+      callerId: string;
+      reason?: string;
+    }) => {
+      try {
+        const { callId, callerId, reason } = data;
+        if (callerId) {
+          io.to(`user:${callerId}`).emit('call_reject', {
+            callId,
+            recipientId: userId,
+            reason: reason || 'declined',
+          });
+        }
+      } catch (err: any) {
+        console.error('Socket call_reject error:', err);
+      }
+    });
+
+    // Handle call_end (Either party -> Server -> Peer)
+    socket.on('call_end', (data: {
+      callId: string;
+      targetUserId: string;
+      reason?: string;
+    }) => {
+      try {
+        const { callId, targetUserId, reason } = data;
+        if (targetUserId) {
+          io.to(`user:${targetUserId}`).emit('call_end', {
+            callId,
+            endedBy: userId,
+            reason: reason || 'ended',
+          });
+        }
+      } catch (err: any) {
+        console.error('Socket call_end error:', err);
+      }
     });
 
     socket.on('disconnect', async () => {

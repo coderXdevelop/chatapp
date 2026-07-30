@@ -20,6 +20,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useChatStore, Message } from '../../store/chatStore';
 import { useAuthStore } from '../../store/authStore';
+import { useCallContext } from '../../store/CallContext';
 import { api } from '../../services/api';
 import { COLORS, globalStyles } from '../../styles/theme';
 import { isSameUser } from '../../utils/user';
@@ -77,6 +78,7 @@ export default function ChatScreen() {
     togglePinMessage,
     clearChat,
   } = useChatStore();
+  const { startCall, isCallFeatureEnabled } = useCallContext();
 
   const [text, setText] = useState('');
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
@@ -1430,6 +1432,40 @@ export default function ChatScreen() {
             </TouchableOpacity>
             
             <View style={styles.headerRight}>
+              {!currentChat?.isGroup && recipient && isCallFeatureEnabled && (
+                <>
+                  <TouchableOpacity
+                    onPress={() =>
+                      startCall({
+                        recipientId: recipient._id,
+                        displayName: recipient.displayName,
+                        avatarUrl: recipient.avatarUrl,
+                        isVideo: false,
+                        chatId,
+                      })
+                    }
+                    style={styles.headerIconButton}
+                  >
+                    <Ionicons name="call" size={20} color={COLORS.accent} />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() =>
+                      startCall({
+                        recipientId: recipient._id,
+                        displayName: recipient.displayName,
+                        avatarUrl: recipient.avatarUrl,
+                        isVideo: true,
+                        chatId,
+                      })
+                    }
+                    style={styles.headerIconButton}
+                  >
+                    <Ionicons name="videocam" size={20} color={COLORS.accent} />
+                  </TouchableOpacity>
+                </>
+              )}
+
               <TouchableOpacity onPress={() => setIsSearchOpen(true)} style={styles.headerIconButton}>
                 <Ionicons name="search" size={20} color={COLORS.accent} />
               </TouchableOpacity>

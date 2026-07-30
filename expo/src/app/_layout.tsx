@@ -6,6 +6,9 @@ import { ActivityIndicator, StyleSheet, View, Image, Text } from "react-native";
 import { useAuthStore } from "../store/authStore";
 import { useAppState } from "../hooks/useAppState";
 
+import { CallProvider } from "../store/CallContext";
+import { CallScreenModal } from "../components/CallScreenModal";
+
 export default function RootLayout() {
   const { user, isInitialized, checkAuth } = useAuthStore();
   const segments = useSegments();
@@ -104,16 +107,19 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="login" />
-        <Stack.Screen name="home" />
-        <Stack.Screen name="profile" />
-        <Stack.Screen name="storage-settings" />
-        <Stack.Screen name="chat/[id]" />
-        <Stack.Screen name="chat/group/create" />
-        <Stack.Screen name="chat/group/settings" />
-      </Stack>
+      <CallProvider>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="index" />
+          <Stack.Screen name="login" />
+          <Stack.Screen name="home" />
+          <Stack.Screen name="profile" />
+          <Stack.Screen name="storage-settings" />
+          <Stack.Screen name="chat/[id]" />
+          <Stack.Screen name="chat/group/create" />
+          <Stack.Screen name="chat/group/settings" />
+        </Stack>
+        <CallScreenModal />
+      </CallProvider>
 
       {!isInitialized && (
         <View style={StyleSheet.absoluteFill}>
@@ -132,6 +138,7 @@ export default function RootLayout() {
     </GestureHandlerRootView>
   );
 }
+
 
 const styles = StyleSheet.create({
   splashContainer: {
