@@ -606,8 +606,8 @@ export const useChatStore = create<ChatState>()(
       set({ socketConnected: false });
       console.warn('[Socket] Connect error:', err.message);
       const latestToken = useAuthStore.getState().token;
-      if (latestToken && newSocket.auth) {
-        newSocket.auth.token = latestToken;
+      if (latestToken) {
+        newSocket.auth = { token: latestToken };
       }
     });
 
