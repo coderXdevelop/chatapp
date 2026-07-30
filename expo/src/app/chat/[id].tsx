@@ -1282,7 +1282,9 @@ export default function ChatScreen() {
 
   const renderMessageItem = useCallback(
     ({ item }: { item: Message }) => {
-      const isMe = item.sender._id === user?.id;
+      const senderId = typeof item.sender === 'object' ? item.sender?._id : item.sender;
+      const currentUserId = user?.id || (user as any)?._id;
+      const isMe = Boolean(senderId && currentUserId && String(senderId) === String(currentUserId));
       const isSelected = selectedMessageIds.includes(item._id);
 
       return (

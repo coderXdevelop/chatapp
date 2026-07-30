@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { api } from '../services/api';
 import { getItem, removeItem, setItem } from '../services/storage';
+import { useChatStore } from './chatStore';
 
 export interface UserProfile {
   id: string;
@@ -286,6 +287,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   logout: async () => {
     set({ isLoading: true });
+    try {
+      useChatStore.getState().disconnectSocket();
+    } catch (e) {
+      console.error('Error disconnecting socket on logout:', e);
+    }
     await removeItem('access_token');
     await removeItem('refresh_token');
     set({ user: null, token: null, isLoading: false, isInitialized: true });
@@ -295,6 +301,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true });
     try {
       await api.delete('/api/auth/account');
+      try {
+        useChatStore.getState().disconnectSocket();
+      } catch (e) {}
       await removeItem('access_token');
       await removeItem('refresh_token');
       set({ user: null, token: null, isLoading: false, isInitialized: true });

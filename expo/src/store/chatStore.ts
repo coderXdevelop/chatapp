@@ -569,20 +569,23 @@ export const useChatStore = create<ChatState>()(
   },
 
   connectSocket: () => {
-    const existingSocket = get().socket;
-    if (existingSocket) {
-      if (!existingSocket.connected) {
-        const token = useAuthStore.getState().token;
-        if (token) {
-          existingSocket.auth = { token };
-          existingSocket.connect();
-        }
-      }
-      return;
-    }
-
     const token = useAuthStore.getState().token;
     if (!token) return;
+
+    const existingSocket = get().socket;
+    if (existingSocket) {
+      const existingToken = (existingSocket.auth as any)?.token;
+      if (existingToken === token) {
+        if (!existingSocket.connected) {
+          existingSocket.connect();
+        }
+        return;
+      }
+      // Token changed (user switched account)! Disconnect stale socket instance.
+      existingSocket.removeAllListeners();
+      existingSocket.disconnect();
+      set({ socket: null, socketConnected: false });
+    }
 
     const socketUrl = getSocketUrl();
 
@@ -800,8 +803,11 @@ export const useChatStore = create<ChatState>()(
   disconnectSocket: () => {
     const socket = get().socket;
     if (socket) {
+      socket.removeAllListeners();
       socket.disconnect();
-      set({ socket: null, socketConnected: false, typingStates: {} });
+      set({ socket: null, socketConnected: false, typingStates: {}, messages: {}, chats: [], activeChatId: null });
+    } else {
+      set({ socketConnected: false, typingStates: {}, messages: {}, chats: [], activeChatId: null });
     }
   },
 
