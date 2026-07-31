@@ -5,6 +5,8 @@ import {
   toggleAudioTrack,
   toggleVideoTrack,
   DEFAULT_ICE_SERVERS,
+  getRTCSessionDescriptionClass,
+  getRTCIceCandidateClass,
 } from '../services/webrtcService';
 import { useChatStore } from '../store/chatStore';
 
@@ -51,7 +53,7 @@ export function useWebRTC(options: UseWebRTCOptions = {}) {
       pcRef.current = pc;
 
       // Handle ICE Candidates
-      pc.onicecandidate = (event) => {
+      pc.onicecandidate = (event: any) => {
         if (event.candidate && socket) {
           socket.emit('ice_candidate', {
             callId,
@@ -62,7 +64,7 @@ export function useWebRTC(options: UseWebRTCOptions = {}) {
       };
 
       // Handle Remote Stream Tracks
-      pc.ontrack = (event) => {
+      pc.ontrack = (event: any) => {
         if (event.streams && event.streams[0]) {
           setRemoteStream(event.streams[0]);
           if (options.onRemoteStream) {
@@ -92,7 +94,7 @@ export function useWebRTC(options: UseWebRTCOptions = {}) {
       const stream = await getUserMediaStream(isVideo);
       if (stream) {
         setLocalStream(stream);
-        stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+        stream.getTracks().forEach((track: any) => pc.addTrack(track, stream));
       }
 
       const offer = await pc.createOffer({
@@ -136,16 +138,19 @@ export function useWebRTC(options: UseWebRTCOptions = {}) {
       const stream = await getUserMediaStream(isVideo);
       if (stream) {
         setLocalStream(stream);
-        stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+        stream.getTracks().forEach((track: any) => pc.addTrack(track, stream));
       }
 
-      await pc.setRemoteDescription(new RTCSessionDescription(offerSdp));
+      const SessionDesc = getRTCSessionDescriptionClass();
+      const IceCandidate = getRTCIceCandidateClass();
+
+      await pc.setRemoteDescription(SessionDesc ? new SessionDesc(offerSdp) : offerSdp);
 
       // Process queued candidates
       while (candidateQueueRef.current.length > 0) {
         const candidate = candidateQueueRef.current.shift();
         try {
-          await pc.addIceCandidate(new RTCIceCandidate(candidate));
+          await pc.addIceCandidate(IceCandidate ? new IceCandidate(candidate) : candidate);
         } catch (e) {
           console.error('[WebRTC] Failed to add queued ICE candidate:', e);
         }
@@ -172,13 +177,16 @@ export function useWebRTC(options: UseWebRTCOptions = {}) {
     const pc = pcRef.current;
     if (!pc) return;
 
-    await pc.setRemoteDescription(new RTCSessionDescription(answerSdp));
+    const SessionDesc = getRTCSessionDescriptionClass();
+    const IceCandidate = getRTCIceCandidateClass();
+
+    await pc.setRemoteDescription(SessionDesc ? new SessionDesc(answerSdp) : answerSdp);
 
     // Process queued candidates
     while (candidateQueueRef.current.length > 0) {
       const candidate = candidateQueueRef.current.shift();
       try {
-        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        await pc.addIceCandidate(IceCandidate ? new IceCandidate(candidate) : candidate);
       } catch (e) {
         console.error('[WebRTC] Failed to add queued ICE candidate:', e);
       }
@@ -188,9 +196,10 @@ export function useWebRTC(options: UseWebRTCOptions = {}) {
   // Handle incoming ICE candidate
   const handleIceCandidateReceived = useCallback(async (candidate: any) => {
     const pc = pcRef.current;
+    const IceCandidate = getRTCIceCandidateClass();
     if (pc && pc.remoteDescription) {
       try {
-        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        await pc.addIceCandidate(IceCandidate ? new IceCandidate(candidate) : candidate);
       } catch (e) {
         console.error('[WebRTC] Error adding ICE candidate:', e);
       }

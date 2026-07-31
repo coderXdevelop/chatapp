@@ -447,6 +447,7 @@ export function setupSockets(io: Server) {
           return;
         }
 
+        console.log(`[Socket Calling] Forwarding call_offer from ${userId} to user:${recipientId} (callId: ${callId})`);
         // Forward call_offer event to recipient's personal socket room
         io.to(`user:${recipientId}`).emit('call_offer', {
           callId,
@@ -464,6 +465,7 @@ export function setupSockets(io: Server) {
         // Trigger push notification if recipient is not connected or in background
         const recipientSockets = await io.in(`user:${recipientId}`).fetchSockets();
         if (recipientSockets.length === 0) {
+          console.log(`[Socket Calling] Recipient user:${recipientId} offline/background. Triggering push notification.`);
           sendCallPushNotification(recipientId, {
             callerName: senderUser.displayName || 'Someone',
             callId,
@@ -472,7 +474,6 @@ export function setupSockets(io: Server) {
             ...(chatId ? { chatId } : {}),
           });
         }
-
 
         if (callback) callback({ success: true });
       } catch (err: any) {
@@ -494,6 +495,7 @@ export function setupSockets(io: Server) {
           return;
         }
 
+        console.log(`[Socket Calling] Forwarding call_answer from ${userId} to user:${callerId} (callId: ${callId})`);
         io.to(`user:${callerId}`).emit('call_answer', {
           callId,
           recipientId: userId,
@@ -516,6 +518,7 @@ export function setupSockets(io: Server) {
       try {
         const { callId, targetUserId, candidate } = data;
         if (targetUserId && candidate) {
+          console.log(`[Socket Calling] Forwarding ice_candidate from ${userId} to user:${targetUserId}`);
           io.to(`user:${targetUserId}`).emit('ice_candidate', {
             callId,
             senderUserId: userId,

@@ -1,32 +1,84 @@
-// WebRTC Service Abstraction for Cross-Platform & Native Compatibility
-export const DEFAULT_ICE_SERVERS = {
-  iceServers: [
+import { Platform } from 'react-native';
+
+export const getIceServers = () => {
+  const turnUrl = process.env.EXPO_PUBLIC_TURN_URL;
+  const turnUsername = process.env.EXPO_PUBLIC_TURN_USERNAME;
+  const turnPassword = process.env.EXPO_PUBLIC_TURN_PASSWORD;
+
+  const iceServers: Array<{ urls: string | string[]; username?: string; credential?: string }> = [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
-  ],
+  ];
+
+  if (turnUrl && turnUsername && turnPassword) {
+    iceServers.push({
+      urls: turnUrl,
+      username: turnUsername,
+      credential: turnPassword,
+    });
+  }
+
+  return { iceServers };
 };
+
+export const DEFAULT_ICE_SERVERS = getIceServers();
 
 export interface WebRTCConfiguration {
   iceServers?: Array<{ urls: string | string[]; username?: string; credential?: string }>;
 }
 
-export function getRTCPeerConnectionClass(): typeof RTCPeerConnection | null {
-  if (typeof window !== 'undefined' && 'RTCPeerConnection' in window) {
-    return window.RTCPeerConnection;
+let mediaDevicesImpl: any = null;
+let RTCPeerConnectionImpl: any = null;
+let RTCViewImpl: any = null;
+let RTCSessionDescriptionImpl: any = null;
+let RTCIceCandidateImpl: any = null;
+
+if (Platform.OS !== 'web') {
+  try {
+    const webrtc = require('react-native-webrtc');
+    mediaDevicesImpl = webrtc.mediaDevices;
+    RTCPeerConnectionImpl = webrtc.RTCPeerConnection;
+    RTCViewImpl = webrtc.RTCView;
+    RTCSessionDescriptionImpl = webrtc.RTCSessionDescription;
+    RTCIceCandidateImpl = webrtc.RTCIceCandidate;
+    console.log('[WebRTC] Initialized react-native-webrtc native driver successfully.');
+  } catch (err) {
+    console.warn('[WebRTC] Could not load react-native-webrtc natively:', err);
   }
-  if (typeof globalThis !== 'undefined' && 'RTCPeerConnection' in globalThis) {
-    return (globalThis as any).RTCPeerConnection;
+} else {
+  if (typeof window !== 'undefined') {
+    mediaDevicesImpl = navigator?.mediaDevices || null;
+    RTCPeerConnectionImpl = (window as any).RTCPeerConnection || null;
+    RTCSessionDescriptionImpl = (window as any).RTCSessionDescription || null;
+    RTCIceCandidateImpl = (window as any).RTCIceCandidate || null;
+    console.log('[WebRTC] Initialized browser WebRTC driver successfully.');
   }
-  return null;
 }
 
-export function createPeerConnection(config: WebRTCConfiguration = DEFAULT_ICE_SERVERS): RTCPeerConnection | null {
+export function getRTCPeerConnectionClass(): any {
+  return RTCPeerConnectionImpl;
+}
+
+export function getRTCSessionDescriptionClass(): any {
+  return RTCSessionDescriptionImpl || (typeof RTCSessionDescription !== 'undefined' ? RTCSessionDescription : null);
+}
+
+export function getRTCIceCandidateClass(): any {
+  return RTCIceCandidateImpl || (typeof RTCIceCandidate !== 'undefined' ? RTCIceCandidate : null);
+}
+
+export function getRTCViewComponent(): any {
+  return RTCViewImpl;
+}
+
+export function createPeerConnection(config: WebRTCConfiguration = DEFAULT_ICE_SERVERS): any {
   const PeerConn = getRTCPeerConnectionClass();
   if (!PeerConn) {
-    console.warn('[WebRTC] RTCPeerConnection is not available on this platform.');
+    console.warn('[WebRTC] RTCPeerConnection is not available on platform:', Platform.OS);
     return null;
   }
+  console.log('[WebRTC] Creating RTCPeerConnection on platform:', Platform.OS);
   return new PeerConn(config as any);
 }
 
@@ -36,30 +88,37 @@ export interface MediaControls {
   isFrontCamera: boolean;
 }
 
-export function toggleAudioTrack(stream: MediaStream | null, enabled: boolean): boolean {
+export function toggleAudioTrack(stream: any, enabled: boolean): boolean {
   if (!stream) return false;
-  stream.getAudioTracks().forEach((track) => {
+  const tracks = stream.getAudioTracks ? stream.getAudioTracks() : [];
+  tracks.forEach((track: any) => {
     track.enabled = enabled;
   });
   return enabled;
 }
 
-export function toggleVideoTrack(stream: MediaStream | null, enabled: boolean): boolean {
+export function toggleVideoTrack(stream: any, enabled: boolean): boolean {
   if (!stream) return false;
-  stream.getVideoTracks().forEach((track) => {
+  const tracks = stream.getVideoTracks ? stream.getVideoTracks() : [];
+  tracks.forEach((track: any) => {
     track.enabled = enabled;
   });
   return enabled;
 }
 
-export async function getUserMediaStream(isVideo: boolean): Promise<MediaStream | null> {
+export async function getUserMediaStream(isVideo: boolean): Promise<any> {
   try {
-    if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
-      const constraints: MediaStreamConstraints = {
+    if (mediaDevicesImpl && mediaDevicesImpl.getUserMedia) {
+      const constraints = {
         audio: true,
         video: isVideo ? { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } } : false,
       };
-      return await navigator.mediaDevices.getUserMedia(constraints);
+      console.log('[WebRTC] Requesting getUserMedia stream with constraints:', constraints);
+      const stream = await mediaDevicesImpl.getUserMedia(constraints);
+      console.log('[WebRTC] Obtained media stream successfully:', stream?.id);
+      return stream;
+    } else {
+      console.warn('[WebRTC] mediaDevices.getUserMedia is not available on platform:', Platform.OS);
     }
   } catch (err) {
     console.warn('[WebRTC] getUserMedia failed or restricted:', err);

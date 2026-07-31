@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useCallContext } from '../store/CallContext';
+import { getRTCViewComponent } from '../services/webrtcService';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -22,6 +23,8 @@ export const CallScreenModal: React.FC = () => {
     isCaller,
     peerInfo,
     formattedDuration,
+    localStream,
+    remoteStream,
     isMuted,
     isVideoOff,
     isFrontCamera,
@@ -32,6 +35,10 @@ export const CallScreenModal: React.FC = () => {
     toggleVideo,
     switchCamera,
   } = useCallContext();
+
+  const RTCView = getRTCViewComponent();
+  const remoteStreamUrl = (remoteStream as any)?.toURL ? (remoteStream as any).toURL() : null;
+  const localStreamUrl = (localStream as any)?.toURL ? (localStream as any).toURL() : null;
 
   if (callState === 'IDLE') {
     return null;
@@ -58,9 +65,13 @@ export const CallScreenModal: React.FC = () => {
         <View style={styles.mediaContainer}>
 
           {isVideo && isConnected && !isVideoOff ? (
-            <View style={styles.videoFullPlaceholder}>
-              <Text style={styles.videoStreamText}>Remote Video Stream</Text>
-            </View>
+            RTCView && remoteStreamUrl ? (
+              <RTCView streamURL={remoteStreamUrl} style={styles.videoFullPlaceholder} objectFit="cover" />
+            ) : (
+              <View style={styles.videoFullPlaceholder}>
+                <Text style={styles.videoStreamText}>Remote Video Connected</Text>
+              </View>
+            )
           ) : (
             <View style={styles.avatarWrapper}>
               <View style={[styles.avatarPulseRing, isDialing && styles.pulsingRing]}>
@@ -80,10 +91,14 @@ export const CallScreenModal: React.FC = () => {
           {/* PIP Local Video Preview overlay if in video call */}
           {isVideo && isConnected && (
             <View style={styles.pipContainer}>
-              <View style={styles.pipPlaceholder}>
-                <Ionicons name={isVideoOff ? 'videocam-off' : 'videocam'} size={18} color="#F59E0B" />
-                <Text style={styles.pipText}>{isVideoOff ? 'Off' : 'You'}</Text>
-              </View>
+              {RTCView && localStreamUrl && !isVideoOff ? (
+                <RTCView streamURL={localStreamUrl} style={styles.pipPlaceholder} objectFit="cover" mirror={isFrontCamera} />
+              ) : (
+                <View style={styles.pipPlaceholder}>
+                  <Ionicons name={isVideoOff ? 'videocam-off' : 'videocam'} size={18} color="#F59E0B" />
+                  <Text style={styles.pipText}>{isVideoOff ? 'Off' : 'You'}</Text>
+                </View>
+              )}
             </View>
           )}
         </View>

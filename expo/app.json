@@ -66,6 +66,13 @@
           "icon": "./assets/images/Linkup.png",
           "color": "#F59E0B"
         }
+      ],
+      [
+        "@config-plugins/react-native-webrtc",
+        {
+          "cameraPermission": "Allow LinkUP to access your camera for video calls.",
+          "microphonePermission": "Allow LinkUP to access your microphone for voice calls."
+        }
       ]
     ],
     "experiments": {
