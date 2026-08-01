@@ -62,7 +62,13 @@ export function setupSockets(io: Server) {
     });
 
 
-    // Presence: Track Redis connections
+    // Presence: Track user presence in DB & Redis
+    try {
+      await User.findByIdAndUpdate(userId, { isOnline: true });
+    } catch (err) {
+      console.error('Error updating DB online status on connect:', err);
+    }
+
     if (redisClient) {
       try {
         const connKey = `user:connections:${userId}`;
@@ -96,6 +102,24 @@ export function setupSockets(io: Server) {
         }
       } catch (err) {
         console.error('Redis presence connect error:', err);
+      }
+    } else {
+      // Broadcast online status even if Redis is not configured
+      for (const chat of userChats) {
+        if (chat.isGroup) {
+          socket.to(`chat:${chat._id}`).emit('presence_change', {
+            userId,
+            isOnline: true,
+          });
+        } else {
+          const recipientId = chat.participants.find((pId: any) => pId.toString() !== userId);
+          if (recipientId) {
+            io.to(`user:${recipientId}`).emit('presence_change', {
+              userId,
+              isOnline: true,
+            });
+          }
+        }
       }
     }
 
@@ -685,6 +709,9 @@ export function setupSockets(io: Server) {
 
     socket.on('disconnect', async () => {
       console.log(`Socket client disconnected: ${userId}`);
+      let shouldBroadcastOffline = true;
+      const lastSeenDate = new Date();
+
       if (redisClient) {
         try {
           const connKey = `user:connections:${userId}`;
@@ -694,37 +721,48 @@ export function setupSockets(io: Server) {
           if (remainingConnections <= 0) {
             await redisClient.del(connKey);
             await redisClient.del(presenceKey);
-            
-            const lastSeenDate = new Date();
-            await User.findByIdAndUpdate(userId, { lastSeen: lastSeenDate });
+          } else {
+            shouldBroadcastOffline = false;
+          }
+        } catch (err) {
+          console.error('Redis presence disconnect error:', err);
+        }
+      }
 
-            // Broadcast offline state to all active chats of the user
-            for (const chat of userChats) {
-              if (chat.isGroup) {
-                io.to(`chat:${chat._id}`).emit('presence_change', {
-                  userId,
-                  isOnline: false,
-                  lastSeen: lastSeenDate.toISOString(),
-                });
-              } else {
-                const recipientId = chat.participants.find((p: any) => p.toString() !== userId);
-                if (recipientId) {
-                  const recipientUser = await User.findById(recipientId);
-                  const senderUser = await User.findById(userId);
-                  const hasBlock = (recipientUser?.blockedUsers?.includes(userId as any)) || (senderUser?.blockedUsers?.includes(recipientId as any));
-                  if (!hasBlock) {
-                    io.to(`user:${recipientId}`).emit('presence_change', {
-                      userId,
-                      isOnline: false,
-                      lastSeen: lastSeenDate.toISOString(),
-                    });
-                  }
+      if (shouldBroadcastOffline) {
+        try {
+          await User.findByIdAndUpdate(userId, { isOnline: false, lastSeen: lastSeenDate });
+        } catch (err) {
+          console.error('Error updating DB offline status on disconnect:', err);
+        }
+
+        try {
+          const currentChats = await Chat.find({ participants: userId, deletedForUsers: { $ne: userId } });
+          for (const chat of currentChats) {
+            if (chat.isGroup) {
+              io.to(`chat:${chat._id}`).emit('presence_change', {
+                userId,
+                isOnline: false,
+                lastSeen: lastSeenDate.toISOString(),
+              });
+            } else {
+              const recipientId = chat.participants.find((p: any) => p.toString() !== userId);
+              if (recipientId) {
+                const recipientUser = await User.findById(recipientId);
+                const senderUser = await User.findById(userId);
+                const hasBlock = (recipientUser?.blockedUsers?.includes(userId as any)) || (senderUser?.blockedUsers?.includes(recipientId as any));
+                if (!hasBlock) {
+                  io.to(`user:${recipientId}`).emit('presence_change', {
+                    userId,
+                    isOnline: false,
+                    lastSeen: lastSeenDate.toISOString(),
+                  });
                 }
               }
             }
           }
         } catch (err) {
-          console.error('Redis presence disconnect error:', err);
+          console.error('Error broadcasting offline presence change:', err);
         }
       }
     });

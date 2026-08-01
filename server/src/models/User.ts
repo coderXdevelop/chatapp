@@ -15,6 +15,7 @@ export interface IUser extends Document {
   avatarUrl?: string;
   avatarPublicId?: string;
   status: string;
+  isOnline?: boolean;
   pushToken?: string;
   lastSeen?: Date;
   blockedUsers: mongoose.Types.ObjectId[];
@@ -66,6 +67,10 @@ const UserSchema: Schema = new Schema(
     status: {
       type: String,
       default: 'Hey there! I am using ChatConnect.',
+    },
+    isOnline: {
+      type: Boolean,
+      default: false,
     },
     pushToken: {
       type: String,

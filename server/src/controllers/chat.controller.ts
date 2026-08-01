@@ -18,7 +18,7 @@ export async function getChats(req: AuthenticatedRequest, res: Response) {
       participants: userId,
       deletedForUsers: { $ne: userId },
     })
-      .populate('participants', 'displayName email avatarUrl status connectId age lastSeen')
+      .populate('participants', 'displayName email avatarUrl status connectId age isOnline lastSeen')
       .populate({
         path: 'lastMessage',
         populate: { path: 'sender', select: 'displayName' },
@@ -38,7 +38,9 @@ export async function getChats(req: AuthenticatedRequest, res: Response) {
         const keys = uniqueParticipantIds.map((id) => `user:presence:${id}`);
         const results = await redisClient.mget(...keys);
         uniqueParticipantIds.forEach((id, idx) => {
-          presenceMap.set(id, results[idx] === 'online');
+          if (results[idx] !== null) {
+            presenceMap.set(id, results[idx] === 'online');
+          }
         });
       } catch (err) {
         console.error('Error fetching presence from Redis MGET:', err);
@@ -47,10 +49,14 @@ export async function getChats(req: AuthenticatedRequest, res: Response) {
 
     const chatsWithPresence = chats.map((chat) => {
       const chatObj = chat.toObject();
-      chatObj.participants = chatObj.participants.map((p: any) => ({
-        ...p,
-        isOnline: presenceMap.get(p._id.toString()) || false,
-      }));
+      chatObj.participants = chatObj.participants.map((p: any) => {
+        const pIdStr = p._id.toString();
+        const isOnlineInRedis = presenceMap.has(pIdStr) ? presenceMap.get(pIdStr) : undefined;
+        return {
+          ...p,
+          isOnline: isOnlineInRedis !== undefined ? isOnlineInRedis : !!p.isOnline,
+        };
+      });
       chatObj.isFavourite = (chat.favourites || []).some(
         (fId: any) => fId.toString() === userId.toString()
       );
@@ -103,7 +109,7 @@ export async function createChat(req: AuthenticatedRequest, res: Response) {
     });
 
     const enrichPresenceSingle = async (chatDoc: any) => {
-      const populated = await chatDoc.populate('participants', 'displayName email avatarUrl status connectId age lastSeen');
+      const populated = await chatDoc.populate('participants', 'displayName email avatarUrl status connectId age isOnline lastSeen');
       const chatObj = populated.toObject();
       const presenceKeys = chatObj.participants.map((p: any) => `user:presence:${p._id.toString()}`);
       if (redisClient && presenceKeys.length > 0) {
@@ -111,15 +117,19 @@ export async function createChat(req: AuthenticatedRequest, res: Response) {
           const results = await redisClient.mget(...presenceKeys);
           chatObj.participants = chatObj.participants.map((p: any, idx: number) => ({
             ...p,
-            isOnline: results[idx] === 'online',
+            isOnline: results[idx] !== null ? results[idx] === 'online' : !!p.isOnline,
           }));
         } catch (err) {
           console.error('Error fetching presence for single chat:', err);
+          chatObj.participants = chatObj.participants.map((p: any) => ({
+            ...p,
+            isOnline: !!p.isOnline,
+          }));
         }
       } else {
         chatObj.participants = chatObj.participants.map((p: any) => ({
           ...p,
-          isOnline: false,
+          isOnline: !!p.isOnline,
         }));
       }
       return chatObj;
