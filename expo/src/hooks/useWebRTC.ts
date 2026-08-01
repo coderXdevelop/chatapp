@@ -4,7 +4,7 @@ import {
   getUserMediaStream,
   toggleAudioTrack,
   toggleVideoTrack,
-  DEFAULT_ICE_SERVERS,
+  getIceServers,
   getRTCSessionDescriptionClass,
   getRTCIceCandidateClass,
 } from '../services/webrtcService';
@@ -47,7 +47,7 @@ export function useWebRTC(options: UseWebRTCOptions = {}) {
     (targetUserId: string, callId: string) => {
       if (pcRef.current) return pcRef.current;
 
-      const pc = createPeerConnection(DEFAULT_ICE_SERVERS);
+      const pc = createPeerConnection(getIceServers());
       if (!pc) return null;
 
       pcRef.current = pc;

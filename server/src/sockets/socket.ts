@@ -63,10 +63,12 @@ export function setupSockets(io: Server) {
 
 
     // Presence: Track user presence in DB & Redis
-    try {
-      await User.findByIdAndUpdate(userId, { isOnline: true });
-    } catch (err) {
-      console.error('Error updating DB online status on connect:', err);
+    if (mongoose.connection.readyState === 1) {
+      try {
+        await User.findByIdAndUpdate(userId, { isOnline: true });
+      } catch (err) {
+        console.error('Error updating DB online status on connect:', err);
+      }
     }
 
     if (redisClient) {
@@ -87,9 +89,14 @@ export function setupSockets(io: Server) {
             } else {
               const recipientId = chat.participants.find((pId: any) => pId.toString() !== userId);
               if (recipientId) {
-                const recipientUser = await User.findById(recipientId);
-                const senderUser = await User.findById(userId);
-                const hasBlock = (recipientUser?.blockedUsers?.includes(userId as any)) || (senderUser?.blockedUsers?.includes(recipientId as any));
+                let hasBlock = false;
+                if (mongoose.connection.readyState === 1) {
+                  try {
+                    const recipientUser = await User.findById(recipientId);
+                    const senderUser = await User.findById(userId);
+                    hasBlock = (recipientUser?.blockedUsers?.includes(userId as any)) || (senderUser?.blockedUsers?.includes(recipientId as any));
+                  } catch (e) {}
+                }
                 if (!hasBlock) {
                   io.to(`user:${recipientId}`).emit('presence_change', {
                     userId,
@@ -730,39 +737,41 @@ export function setupSockets(io: Server) {
       }
 
       if (shouldBroadcastOffline) {
-        try {
-          await User.findByIdAndUpdate(userId, { isOnline: false, lastSeen: lastSeenDate });
-        } catch (err) {
-          console.error('Error updating DB offline status on disconnect:', err);
-        }
+        if (mongoose.connection.readyState === 1) {
+          try {
+            await User.findByIdAndUpdate(userId, { isOnline: false, lastSeen: lastSeenDate });
+          } catch (err) {
+            console.error('Error updating DB offline status on disconnect:', err);
+          }
 
-        try {
-          const currentChats = await Chat.find({ participants: userId, deletedForUsers: { $ne: userId } });
-          for (const chat of currentChats) {
-            if (chat.isGroup) {
-              io.to(`chat:${chat._id}`).emit('presence_change', {
-                userId,
-                isOnline: false,
-                lastSeen: lastSeenDate.toISOString(),
-              });
-            } else {
-              const recipientId = chat.participants.find((p: any) => p.toString() !== userId);
-              if (recipientId) {
-                const recipientUser = await User.findById(recipientId);
-                const senderUser = await User.findById(userId);
-                const hasBlock = (recipientUser?.blockedUsers?.includes(userId as any)) || (senderUser?.blockedUsers?.includes(recipientId as any));
-                if (!hasBlock) {
-                  io.to(`user:${recipientId}`).emit('presence_change', {
-                    userId,
-                    isOnline: false,
-                    lastSeen: lastSeenDate.toISOString(),
-                  });
+          try {
+            const currentChats = await Chat.find({ participants: userId, deletedForUsers: { $ne: userId } });
+            for (const chat of currentChats) {
+              if (chat.isGroup) {
+                io.to(`chat:${chat._id}`).emit('presence_change', {
+                  userId,
+                  isOnline: false,
+                  lastSeen: lastSeenDate.toISOString(),
+                });
+              } else {
+                const recipientId = chat.participants.find((p: any) => p.toString() !== userId);
+                if (recipientId) {
+                  const recipientUser = await User.findById(recipientId);
+                  const senderUser = await User.findById(userId);
+                  const hasBlock = (recipientUser?.blockedUsers?.includes(userId as any)) || (senderUser?.blockedUsers?.includes(recipientId as any));
+                  if (!hasBlock) {
+                    io.to(`user:${recipientId}`).emit('presence_change', {
+                      userId,
+                      isOnline: false,
+                      lastSeen: lastSeenDate.toISOString(),
+                    });
+                  }
                 }
               }
             }
+          } catch (err) {
+            console.error('Error broadcasting offline presence change:', err);
           }
-        } catch (err) {
-          console.error('Error broadcasting offline presence change:', err);
         }
       }
     });

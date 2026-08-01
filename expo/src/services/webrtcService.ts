@@ -12,11 +12,21 @@ export const getIceServers = () => {
   ];
 
   if (turnUrl && turnUsername && turnPassword) {
-    iceServers.push({
-      urls: turnUrl,
-      username: turnUsername,
-      credential: turnPassword,
-    });
+    const cleanedUrl = turnUrl.replace(/^["']|["']$/g, '').trim();
+    const cleanedUser = turnUsername.replace(/^["']|["']$/g, '').trim();
+    const cleanedPass = turnPassword.replace(/^["']|["']$/g, '').trim();
+
+    if (cleanedUrl && cleanedUser && cleanedPass) {
+      const urls = cleanedUrl.includes(',')
+        ? cleanedUrl.split(',').map((u) => u.trim()).filter(Boolean)
+        : cleanedUrl;
+
+      iceServers.push({
+        urls,
+        username: cleanedUser,
+        credential: cleanedPass,
+      });
+    }
   }
 
   return { iceServers };
@@ -72,14 +82,15 @@ export function getRTCViewComponent(): any {
   return RTCViewImpl;
 }
 
-export function createPeerConnection(config: WebRTCConfiguration = DEFAULT_ICE_SERVERS): any {
+export function createPeerConnection(config?: WebRTCConfiguration): any {
+  const finalConfig = config && config.iceServers && config.iceServers.length > 0 ? config : getIceServers();
   const PeerConn = getRTCPeerConnectionClass();
   if (!PeerConn) {
     console.warn('[WebRTC] RTCPeerConnection is not available on platform:', Platform.OS);
     return null;
   }
-  console.log('[WebRTC] Creating RTCPeerConnection on platform:', Platform.OS);
-  return new PeerConn(config as any);
+  console.log('[WebRTC] Creating RTCPeerConnection on platform:', Platform.OS, `with ${finalConfig.iceServers?.length || 0} ICE servers.`);
+  return new PeerConn(finalConfig as any);
 }
 
 export interface MediaControls {
