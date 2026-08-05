@@ -54,5 +54,7 @@ ios/
 *.env
 server/.env
 
+google-services.json
+google-services*.json
 
 .graphify

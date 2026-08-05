@@ -19,7 +19,8 @@
         "monochromeImage": "./assets/images/Linkup.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.nandan.linkup"
+      "package": "com.nandan.linkup",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "output": "static",

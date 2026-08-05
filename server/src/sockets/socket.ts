@@ -94,7 +94,7 @@ export function setupSockets(io: Server) {
                   try {
                     const recipientUser = await User.findById(recipientId);
                     const senderUser = await User.findById(userId);
-                    hasBlock = (recipientUser?.blockedUsers?.includes(userId as any)) || (senderUser?.blockedUsers?.includes(recipientId as any));
+                    hasBlock = Boolean(recipientUser?.blockedUsers?.includes(userId as any) || senderUser?.blockedUsers?.includes(recipientId as any));
                   } catch (e) {}
                 }
                 if (!hasBlock) {
