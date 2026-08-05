@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useChatStore } from './chatStore';
 import { useAuthStore } from './authStore';
 import { useWebRTC } from '../hooks/useWebRTC';
+import { useMediaStream } from '../hooks/useMediaStream';
 
 export type CallState = 'IDLE' | 'DIALING' | 'RINGING' | 'ACCEPTED' | 'REJECTED' | 'ENDED';
 
@@ -19,8 +20,8 @@ export interface CallContextType {
   peerInfo: PeerInfo | null;
   callDurationSeconds: number;
   formattedDuration: string;
-  localStream: MediaStream | null;
-  remoteStream: MediaStream | null;
+  localStream: any;
+  remoteStream: any;
   isMuted: boolean;
   isVideoOff: boolean;
   isFrontCamera: boolean;
@@ -42,38 +43,85 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isVideo, setIsVideo] = useState<boolean>(false);
   const [isCaller, setIsCaller] = useState<boolean>(false);
   const [peerInfo, setPeerInfo] = useState<PeerInfo | null>(null);
-  const [incomingOfferSdp, setIncomingOfferSdp] = useState<any>(null);
   const [chatId, setChatId] = useState<string | undefined>(undefined);
   const [callDurationSeconds, setCallDurationSeconds] = useState<number>(0);
 
   const timerRef = useRef<any>(null);
+  const ringTimeoutRef = useRef<any>(null);
+
   const socket = useChatStore((state) => state.socket);
   const currentUser = useAuthStore((state) => state.user);
 
   // Feature Flag Check
   const isCallFeatureEnabled = process.env.EXPO_PUBLIC_FEATURE_CALLS_ENABLED !== 'false';
 
-  const handleCallEndedEvent = useCallback((reason?: string) => {
-    console.log('[CallContext] Call ended reason:', reason);
-    setCallState('ENDED');
+  // Hardware Media Stream Hook
+  const {
+    localStream,
+    isAudioMuted,
+    isVideoOff,
+    isFrontCamera,
+    acquireLocalStream,
+    toggleMuteAudio,
+    toggleVideo,
+    switchCamera,
+    stopLocalStream,
+  } = useMediaStream();
+
+  // Socket Ice Candidate Relaying callback for useWebRTC
+  const handleLocalIceCandidate = useCallback(
+    (candidate: any) => {
+      if (socket && callId && peerInfo) {
+        socket.emit('ice-candidate', {
+          callId,
+          targetUserId: peerInfo.userId,
+          candidate,
+        });
+      }
+    },
+    [socket, callId, peerInfo]
+  );
+
+  // WebRTC PeerConnection Hook
+  const {
+    remoteStream,
+    initPeerConnection,
+    createOffer,
+    handleOfferAndCreateAnswer,
+    handleAnswer,
+    addIceCandidate,
+    restartIce,
+    closePeerConnection,
+  } = useWebRTC({
+    onIceCandidate: handleLocalIceCandidate,
+  });
+
+  /**
+   * Reset active call state and release hardware resources
+   */
+  const cleanupCallState = useCallback(() => {
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
+    if (ringTimeoutRef.current) {
+      clearTimeout(ringTimeoutRef.current);
+      ringTimeoutRef.current = null;
+    }
+
+    closePeerConnection();
+    stopLocalStream();
+
     setTimeout(() => {
       setCallState('IDLE');
       setCallId(null);
       setPeerInfo(null);
-      setIncomingOfferSdp(null);
+      setChatId(undefined);
       setCallDurationSeconds(0);
-    }, 1500);
-  }, []);
+    }, 1200);
+  }, [closePeerConnection, stopLocalStream]);
 
-  const webrtc = useWebRTC({
-    onCallEnded: handleCallEndedEvent,
-  });
-
-  // Start Stopwatch Timer when call is accepted
+  // Stopwatch timer for call duration
   const startTimer = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
     setCallDurationSeconds(0);
@@ -82,22 +130,23 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, 1000);
   }, []);
 
-  // Format Duration string MM:SS or HH:MM:SS
-  const formattedDuration = React.useMemo(() => {
+  const formattedDuration = useMemo(() => {
     const mins = Math.floor(callDurationSeconds / 60);
     const secs = callDurationSeconds % 60;
     const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`);
     return `${pad(mins)}:${pad(secs)}`;
   }, [callDurationSeconds]);
 
-  // Initiate Outgoing Call
+  /**
+   * Initiate Outgoing Call (Caller)
+   */
   const startCall = useCallback(
     async (payload: { recipientId: string; displayName: string; avatarUrl?: string; isVideo: boolean; chatId?: string }) => {
       if (!isCallFeatureEnabled) {
         alert('Voice and video calls are currently disabled.');
         return;
       }
-      if (!currentUser) return;
+      if (!currentUser || !socket) return;
 
       const newCallId = `call_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
       setCallId(newCallId);
@@ -111,41 +160,69 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setChatId(payload.chatId);
       setCallState('DIALING');
 
-      await webrtc.initiateCall({
+      // Acquire mic/camera stream
+      const stream = await acquireLocalStream(payload.isVideo);
+      await initPeerConnection(stream);
+
+      // Emit call-user event to signaling server
+      socket.emit('call-user', {
         callId: newCallId,
         recipientId: payload.recipientId,
         isVideo: payload.isVideo,
-        callerInfo: {
-          userId: currentUser.id,
-          displayName: currentUser.displayName,
-          avatarUrl: currentUser.avatarUrl,
-        },
         chatId: payload.chatId,
       });
+
+      // 30 seconds ring timeout if recipient does not answer
+      if (ringTimeoutRef.current) clearTimeout(ringTimeoutRef.current);
+      ringTimeoutRef.current = setTimeout(() => {
+        if (socket && newCallId) {
+          socket.emit('call-timeout', {
+            callId: newCallId,
+            recipientId: payload.recipientId,
+            isVideo: payload.isVideo,
+            chatId: payload.chatId,
+          });
+        }
+        setCallState('ENDED');
+        cleanupCallState();
+      }, 30000);
     },
-    [isCallFeatureEnabled, currentUser, webrtc]
+    [isCallFeatureEnabled, currentUser, socket, acquireLocalStream, initPeerConnection, cleanupCallState]
   );
 
-  // Accept Incoming Call
+  /**
+   * Accept Incoming Call (Recipient)
+   */
   const acceptCall = useCallback(async () => {
-    if (!callId || !peerInfo || !incomingOfferSdp) return;
+    if (!callId || !peerInfo || !socket) return;
+
+    if (ringTimeoutRef.current) {
+      clearTimeout(ringTimeoutRef.current);
+      ringTimeoutRef.current = null;
+    }
 
     setCallState('ACCEPTED');
     startTimer();
 
-    await webrtc.answerCall({
+    // Acquire local media stream and initialize peer connection
+    const stream = await acquireLocalStream(isVideo);
+    await initPeerConnection(stream);
+
+    // Notify caller that call was accepted
+    socket.emit('accept-call', {
       callId,
       callerId: peerInfo.userId,
       isVideo,
-      offerSdp: incomingOfferSdp,
     });
-  }, [callId, peerInfo, incomingOfferSdp, isVideo, startTimer, webrtc]);
+  }, [callId, peerInfo, socket, isVideo, startTimer, acquireLocalStream, initPeerConnection]);
 
-  // Reject Incoming Call
+  /**
+   * Reject Incoming Call (Recipient)
+   */
   const rejectCall = useCallback(
     (reason = 'declined') => {
       if (socket && callId && peerInfo) {
-        socket.emit('call_reject', {
+        socket.emit('reject-call', {
           callId,
           callerId: peerInfo.userId,
           isVideo,
@@ -154,73 +231,73 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
       }
       setCallState('REJECTED');
-      webrtc.cleanupWebRTC();
-      setTimeout(() => {
-        setCallState('IDLE');
-        setCallId(null);
-        setPeerInfo(null);
-        setIncomingOfferSdp(null);
-      }, 1000);
+      cleanupCallState();
     },
-    [socket, callId, peerInfo, isVideo, chatId, webrtc]
+    [socket, callId, peerInfo, isVideo, chatId, cleanupCallState]
   );
 
-  // End Active Call
+  /**
+   * End Active Call (Either Party)
+   */
   const endCall = useCallback(
     (reason = 'ended') => {
       if (socket && callId && peerInfo) {
-        socket.emit('call_end', {
-          callId,
-          targetUserId: peerInfo.userId,
-          reason,
-        });
-
-        // Save call log message if call was accepted and active
-        if (callState === 'ACCEPTED') {
-          socket.emit('save_call_log', {
-            chatId,
-            recipientId: peerInfo.userId,
+        if (callState === 'DIALING' || callState === 'RINGING') {
+          if (isCaller) {
+            socket.emit('cancel-call', {
+              callId,
+              recipientId: peerInfo.userId,
+              isVideo,
+              chatId,
+            });
+          } else {
+            socket.emit('reject-call', {
+              callId,
+              callerId: peerInfo.userId,
+              isVideo,
+              chatId,
+              reason: 'declined',
+            });
+          }
+        } else {
+          socket.emit('end-call', {
             callId,
+            targetUserId: peerInfo.userId,
             isVideo,
-            callStatus: 'accepted',
+            chatId,
             durationSeconds: callDurationSeconds,
           });
         }
       }
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
       setCallState('ENDED');
-      webrtc.cleanupWebRTC();
-      setTimeout(() => {
-        setCallState('IDLE');
-        setCallId(null);
-        setPeerInfo(null);
-        setIncomingOfferSdp(null);
-        setCallDurationSeconds(0);
-      }, 1200);
+      cleanupCallState();
     },
-    [socket, callId, peerInfo, callState, chatId, isVideo, callDurationSeconds, webrtc]
+    [socket, callId, peerInfo, isVideo, chatId, callState, isCaller, callDurationSeconds, cleanupCallState]
   );
 
-
-  // Listen to Global Socket Call Events
+  /**
+   * Register Global Signaling Socket Listeners
+   */
   useEffect(() => {
     if (!socket) return;
 
-    // Incoming Call Offer
-    const handleIncomingOffer = (data: {
+    // Incoming Call (Recipient)
+    const handleIncomingCall = (data: {
       callId: string;
       callerId: string;
+      callerName: string;
+      callerAvatar?: string;
       isVideo: boolean;
-      sdp: any;
-      callerInfo: { userId: string; displayName: string; avatarUrl?: string };
       chatId?: string;
     }) => {
       if (callState !== 'IDLE') {
-        // Auto reject if already in a call
-        socket.emit('call_reject', { callId: data.callId, callerId: data.callerId, reason: 'busy' });
+        socket.emit('reject-call', {
+          callId: data.callId,
+          callerId: data.callerId,
+          isVideo: data.isVideo,
+          chatId: data.chatId,
+          reason: 'busy',
+        });
         return;
       }
 
@@ -228,66 +305,151 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsVideo(data.isVideo);
       setIsCaller(false);
       setPeerInfo({
-        userId: data.callerInfo.userId,
-        displayName: data.callerInfo.displayName,
-        avatarUrl: data.callerInfo.avatarUrl,
+        userId: data.callerId,
+        displayName: data.callerName,
+        avatarUrl: data.callerAvatar,
       });
-      setIncomingOfferSdp(data.sdp);
       setChatId(data.chatId);
       setCallState('RINGING');
     };
 
-    // Call Answer Received (Caller side)
-    const handleCallAnswer = (data: { callId: string; recipientId: string; sdp: any }) => {
-      if (data.callId === callId) {
+    // Caller receives accept-call -> sends SDP Offer
+    const handleAcceptCall = async (data: { callId: string; recipientId: string; isVideo: boolean }) => {
+      if (data.callId === callId && peerInfo) {
+        if (ringTimeoutRef.current) {
+          clearTimeout(ringTimeoutRef.current);
+          ringTimeoutRef.current = null;
+        }
+
         setCallState('ACCEPTED');
         startTimer();
-        webrtc.handleAnswerReceived(data.sdp);
+
+        try {
+          const offer = await createOffer({ isVideo: data.isVideo });
+          socket.emit('offer', {
+            callId: data.callId,
+            targetUserId: peerInfo.userId,
+            sdp: offer,
+            isVideo: data.isVideo,
+          });
+        } catch (e) {
+          console.error('[CallContext] Failed to create and send offer:', e);
+        }
       }
     };
 
-    // ICE Candidate Received
-    const handleIceCandidate = (data: { callId: string; senderUserId: string; candidate: any }) => {
+    // Recipient receives SDP Offer -> sends SDP Answer
+    const handleOffer = async (data: { callId: string; senderId: string; sdp: any; isVideo: boolean }) => {
       if (data.callId === callId) {
-        webrtc.handleIceCandidateReceived(data.candidate);
+        try {
+          const answer = await handleOfferAndCreateAnswer(data.sdp);
+          socket.emit('answer', {
+            callId: data.callId,
+            targetUserId: data.senderId,
+            sdp: answer,
+          });
+        } catch (e) {
+          console.error('[CallContext] Failed to process offer and create answer:', e);
+        }
       }
     };
 
-    // Call Rejected Received
-    const handleCallReject = (data: { callId: string; recipientId: string; reason?: string }) => {
+    // Caller receives SDP Answer
+    const handleAnswerEvent = async (data: { callId: string; senderId: string; sdp: any }) => {
+      if (data.callId === callId) {
+        await handleAnswer(data.sdp);
+      }
+    };
+
+    // Receive ICE Candidate trickling
+    const handleIceCandidateEvent = async (data: { callId: string; senderId: string; candidate: any }) => {
+      if (data.callId === callId) {
+        await addIceCandidate(data.candidate);
+      }
+    };
+
+    // Handle user-busy signal
+    const handleUserBusy = (data: { callId: string }) => {
       if (data.callId === callId) {
         setCallState('REJECTED');
-        webrtc.cleanupWebRTC();
-        setTimeout(() => {
-          setCallState('IDLE');
-          setCallId(null);
-          setPeerInfo(null);
-          setIncomingOfferSdp(null);
-        }, 1200);
+        alert('User is currently busy on another call.');
+        cleanupCallState();
       }
     };
 
-    // Call Ended Received
-    const handleCallEnd = (data: { callId: string; endedBy: string; reason?: string }) => {
+    // Handle reject-call, cancel-call, end-call, call-timeout
+    const handleRejectCall = (data: { callId: string }) => {
       if (data.callId === callId) {
-        handleCallEndedEvent(data.reason);
+        setCallState('REJECTED');
+        cleanupCallState();
       }
     };
 
-    socket.on('call_offer', handleIncomingOffer);
-    socket.on('call_answer', handleCallAnswer);
-    socket.on('ice_candidate', handleIceCandidate);
-    socket.on('call_reject', handleCallReject);
-    socket.on('call_end', handleCallEnd);
+    const handleCancelCall = (data: { callId: string }) => {
+      if (data.callId === callId) {
+        setCallState('ENDED');
+        cleanupCallState();
+      }
+    };
+
+    const handleEndCall = (data: { callId: string }) => {
+      if (data.callId === callId) {
+        setCallState('ENDED');
+        cleanupCallState();
+      }
+    };
+
+    const handleCallTimeout = (data: { callId: string }) => {
+      if (data.callId === callId) {
+        setCallState('ENDED');
+        cleanupCallState();
+      }
+    };
+
+    const handleReconnectCall = (data: { callId: string }) => {
+      if (data.callId === callId) {
+        restartIce();
+      }
+    };
+
+    socket.on('incoming-call', handleIncomingCall);
+    socket.on('accept-call', handleAcceptCall);
+    socket.on('offer', handleOffer);
+    socket.on('answer', handleAnswerEvent);
+    socket.on('ice-candidate', handleIceCandidateEvent);
+    socket.on('user-busy', handleUserBusy);
+    socket.on('reject-call', handleRejectCall);
+    socket.on('cancel-call', handleCancelCall);
+    socket.on('end-call', handleEndCall);
+    socket.on('call-timeout', handleCallTimeout);
+    socket.on('reconnect-call', handleReconnectCall);
 
     return () => {
-      socket.off('call_offer', handleIncomingOffer);
-      socket.off('call_answer', handleCallAnswer);
-      socket.off('ice_candidate', handleIceCandidate);
-      socket.off('call_reject', handleCallReject);
-      socket.off('call_end', handleCallEnd);
+      socket.off('incoming-call', handleIncomingCall);
+      socket.off('accept-call', handleAcceptCall);
+      socket.off('offer', handleOffer);
+      socket.off('answer', handleAnswerEvent);
+      socket.off('ice-candidate', handleIceCandidateEvent);
+      socket.off('user-busy', handleUserBusy);
+      socket.off('reject-call', handleRejectCall);
+      socket.off('cancel-call', handleCancelCall);
+      socket.off('end-call', handleEndCall);
+      socket.off('call-timeout', handleCallTimeout);
+      socket.off('reconnect-call', handleReconnectCall);
     };
-  }, [socket, callState, callId, startTimer, webrtc, handleCallEndedEvent]);
+  }, [
+    socket,
+    callState,
+    callId,
+    peerInfo,
+    startTimer,
+    createOffer,
+    handleOfferAndCreateAnswer,
+    handleAnswer,
+    addIceCandidate,
+    restartIce,
+    cleanupCallState,
+  ]);
 
   return (
     <CallContext.Provider
@@ -299,18 +461,18 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         peerInfo,
         callDurationSeconds,
         formattedDuration,
-        localStream: webrtc.localStream,
-        remoteStream: webrtc.remoteStream,
-        isMuted: webrtc.isMuted,
-        isVideoOff: webrtc.isVideoOff,
-        isFrontCamera: webrtc.isFrontCamera,
+        localStream,
+        remoteStream,
+        isMuted: isAudioMuted,
+        isVideoOff,
+        isFrontCamera,
         startCall,
         acceptCall,
         rejectCall,
         endCall,
-        toggleMute: webrtc.toggleMute,
-        toggleVideo: webrtc.toggleVideo,
-        switchCamera: webrtc.switchCamera,
+        toggleMute: toggleMuteAudio,
+        toggleVideo,
+        switchCamera,
         isCallFeatureEnabled,
       }}
     >

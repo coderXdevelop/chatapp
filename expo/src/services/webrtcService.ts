@@ -43,6 +43,7 @@ let RTCPeerConnectionImpl: any = null;
 let RTCViewImpl: any = null;
 let RTCSessionDescriptionImpl: any = null;
 let RTCIceCandidateImpl: any = null;
+let MediaStreamImpl: any = null;
 
 if (Platform.OS !== 'web') {
   try {
@@ -52,6 +53,7 @@ if (Platform.OS !== 'web') {
     RTCViewImpl = webrtc.RTCView;
     RTCSessionDescriptionImpl = webrtc.RTCSessionDescription;
     RTCIceCandidateImpl = webrtc.RTCIceCandidate;
+    MediaStreamImpl = webrtc.MediaStream;
     console.log('[WebRTC] Initialized react-native-webrtc native driver successfully.');
   } catch (err) {
     console.warn('[WebRTC] Could not load react-native-webrtc natively:', err);
@@ -62,6 +64,7 @@ if (Platform.OS !== 'web') {
     RTCPeerConnectionImpl = (window as any).RTCPeerConnection || null;
     RTCSessionDescriptionImpl = (window as any).RTCSessionDescription || null;
     RTCIceCandidateImpl = (window as any).RTCIceCandidate || null;
+    MediaStreamImpl = (window as any).MediaStream || null;
     console.log('[WebRTC] Initialized browser WebRTC driver successfully.');
   }
 }
@@ -78,9 +81,14 @@ export function getRTCIceCandidateClass(): any {
   return RTCIceCandidateImpl || (typeof RTCIceCandidate !== 'undefined' ? RTCIceCandidate : null);
 }
 
+export function getMediaStreamClass(): any {
+  return MediaStreamImpl || (typeof MediaStream !== 'undefined' ? MediaStream : null);
+}
+
 export function getRTCViewComponent(): any {
   return RTCViewImpl;
 }
+
 
 export function createPeerConnection(config?: WebRTCConfiguration): any {
   const finalConfig = config && config.iceServers && config.iceServers.length > 0 ? config : getIceServers();

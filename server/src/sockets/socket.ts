@@ -6,6 +6,7 @@ import User from '../models/User.js';
 import mongoose from 'mongoose';
 import { redisClient } from '../services/redis.service.js';
 import { sendPushNotification, sendCallPushNotification } from '../services/push.service.js';
+import { setupCallingSockets } from './calling.socket.js';
 
 export interface AuthenticatedSocket extends Socket {
   user?: TokenPayload;
@@ -33,6 +34,10 @@ export function setupSockets(io: Server) {
 
     console.log(`Socket client connected: ${userId}`);
     await socket.join(`user:${userId}`);
+
+    // Register WebRTC Voice & Video calling socket event handlers
+    setupCallingSockets(io, socket);
+
 
     let userChats: any[] = [];
     try {

@@ -113,3 +113,21 @@ export async function presentLocalNotification(title: string, body: string, data
   }
 }
 
+export async function addCallNotificationListener(onIncomingCallNotification: (data: any) => void) {
+  const Notifications = await getNotificationsModule();
+  if (!Notifications) return () => {};
+
+  const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+    const data = response.notification.request.content.data;
+    if (data && data.type === 'INCOMING_CALL') {
+      console.log('[PushNotification] User tapped incoming call notification:', data);
+      onIncomingCallNotification(data);
+    }
+  });
+
+  return () => {
+    subscription.remove();
+  };
+}
+
+

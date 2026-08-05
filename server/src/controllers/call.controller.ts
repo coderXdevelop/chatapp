@@ -2,9 +2,31 @@ import type { Response } from 'express';
 import type { AuthenticatedRequest } from '../middleware/auth.middleware.js';
 import Message from '../models/Message.js';
 import Chat from '../models/Chat.js';
+import { getXirsysIceServers } from '../services/xirsys.service.js';
+
+/**
+ * GET /api/calls/ice-servers
+ * Returns dynamic WebRTC ICE servers (Xirsys TURN/STUN) for authenticated users.
+ */
+export async function getIceServers(req: AuthenticatedRequest, res: Response) {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const iceServers = await getXirsysIceServers();
+    return res.json({
+      success: true,
+      iceServers,
+    });
+  } catch (error: any) {
+    console.error('Error fetching ICE servers:', error);
+    return res.status(500).json({ error: 'Failed to retrieve ICE server configuration' });
+  }
+}
 
 export async function getCallLogs(req: AuthenticatedRequest, res: Response) {
-
   try {
     const userId = req.user?.userId;
     if (!userId) {
@@ -58,3 +80,4 @@ export async function getCallLogs(req: AuthenticatedRequest, res: Response) {
     return res.status(500).json({ error: 'Failed to fetch call logs' });
   }
 }
+

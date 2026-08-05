@@ -568,7 +568,7 @@ export default function ProfileScreen() {
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Reset Password</Text>
             <Text style={styles.modalSubtitle}>
-              We've sent a 6-digit verification code to {user.email}.
+              {"We've sent a 6-digit verification code to "}{user.email}.
             </Text>
 
             {/* OTP Input */}

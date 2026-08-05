@@ -46,7 +46,7 @@ export default function StarredMessagesScreen() {
             <Text style={styles.emptyIcon}>⭐</Text>
             <Text style={styles.emptyTitle}>No Starred Messages</Text>
             <Text style={styles.emptySubtitle}>
-              Long-press any message in a chat and select "Star Message" to save it here for quick access.
+              {'Long-press any message in a chat and select "Star Message" to save it here for quick access.'}
             </Text>
           </View>
         }

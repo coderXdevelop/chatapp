@@ -72,10 +72,41 @@ export default function ViewStatusScreen() {
     buttons: [],
   });
 
-  const progressAnim = useRef(new Animated.Value(0)).current;
+  const [progressAnim] = useState(() => new Animated.Value(0));
   const isOwner = currentUser?.id === userStoryGroup?.user?._id;
 
   const currentItem = items[currentIndex];
+
+  const triggerFloatingEmoji = (emoji: string) => {
+    const id = `emoji_${Date.now()}_${Math.random()}`;
+    const animY = new Animated.Value(0);
+    const animOpacity = new Animated.Value(1);
+
+    setFloatingEmojis((prev) => [...prev, { id, emoji, animY, animOpacity }]);
+
+    Animated.parallel([
+      Animated.timing(animY, {
+        toValue: -250,
+        duration: 1800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(animOpacity, {
+        toValue: 0,
+        duration: 1800,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setFloatingEmojis((prev) => prev.filter((e) => e.id !== id));
+    });
+  };
+
+  const loadViewers = async () => {
+    if (!currentItem) return;
+    setIsLoadingViewers(true);
+    const list = await fetchStatusViewers(currentItem._id);
+    setViewersList(list);
+    setIsLoadingViewers(false);
+  };
 
   // Record view on status change
   useEffect(() => {
@@ -128,29 +159,6 @@ export default function ViewStatusScreen() {
     return () => animation.stop();
   }, [currentIndex, items, isPaused, showViewersModal]);
 
-  const triggerFloatingEmoji = (emoji: string) => {
-    const id = `emoji_${Date.now()}_${Math.random()}`;
-    const animY = new Animated.Value(0);
-    const animOpacity = new Animated.Value(1);
-
-    setFloatingEmojis((prev) => [...prev, { id, emoji, animY, animOpacity }]);
-
-    Animated.parallel([
-      Animated.timing(animY, {
-        toValue: -250,
-        duration: 1800,
-        useNativeDriver: true,
-      }),
-      Animated.timing(animOpacity, {
-        toValue: 0,
-        duration: 1800,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setFloatingEmojis((prev) => prev.filter((e) => e.id !== id));
-    });
-  };
-
   const handleSendReaction = async (emoji: string) => {
     if (!currentItem) return;
     triggerFloatingEmoji(emoji);
@@ -170,14 +178,6 @@ export default function ViewStatusScreen() {
     if (success) {
       router.back();
     }
-  };
-
-  const loadViewers = async () => {
-    if (!currentItem) return;
-    setIsLoadingViewers(true);
-    const list = await fetchStatusViewers(currentItem._id);
-    setViewersList(list);
-    setIsLoadingViewers(false);
   };
 
   const handleOpenViewers = () => {

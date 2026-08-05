@@ -755,7 +755,8 @@ export default function LoginScreen() {
               {mode === 'LOGIN' && (
                 <TouchableOpacity style={globalStyles.secondaryButton} onPress={() => handleModeChange('REGISTER')}>
                   <Text style={globalStyles.secondaryButtonText}>
-                    Don't have an account? <Text style={globalStyles.secondaryButtonTextActive}>Sign up</Text>
+                    {"Don't have an account? "}
+                    <Text style={globalStyles.secondaryButtonTextActive}>Sign up</Text>
                   </Text>
                 </TouchableOpacity>
               )}
