@@ -92,7 +92,8 @@ app.get('/api/keep-alive', (_, res) => res.status(200).json({ status: 'active', 
 // Setup Sockets
 setupSockets(io);
 
-const MONGO_URI = process.env.MONGO_URI || process.env.MONGODB_URI || '';
+const rawUri = process.env.MONGO_URI || process.env.MONGODB_URI || '';
+const MONGO_URI = rawUri.replace(/^["']|["']$/g, '').trim();
 
 if (MONGO_URI) {
   mongoose
