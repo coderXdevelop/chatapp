@@ -52,28 +52,3 @@ export async function sendPushNotification(recipientId: string, payload: PushNot
   }
 }
 
-export async function sendCallPushNotification(
-  recipientId: string,
-  payload: {
-    callerName: string;
-    callId: string;
-    callerId: string;
-    isVideo: boolean;
-    chatId?: string;
-  }
-) {
-  const { callerName, callId, callerId, isVideo, chatId } = payload;
-  return sendPushNotification(recipientId, {
-    title: `Incoming ${isVideo ? 'Video' : 'Voice'} Call`,
-    body: `${callerName} is calling...`,
-    data: {
-      type: 'INCOMING_CALL',
-      callId,
-      callerId,
-      callerName,
-      isVideo,
-      chatId,
-    },
-  });
-}
-
