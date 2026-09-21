@@ -25,12 +25,15 @@ export const CallScreenModal: React.FC = () => {
     isMuted,
     isVideoOff,
     isFrontCamera,
+    connectionQuality,
+    isSpeakerOn,
     acceptCall,
     rejectCall,
     endCall,
     toggleMute,
     toggleVideo,
     switchCamera,
+    toggleSpeaker,
   } = useCallContext();
 
   if (callState === 'IDLE') {
@@ -51,15 +54,21 @@ export const CallScreenModal: React.FC = () => {
     return '';
   };
 
+  const getQualityColor = () => {
+    if (connectionQuality === 'Good') return '#10B981';
+    if (connectionQuality === 'Fair') return '#F59E0B';
+    return '#EF4444';
+  };
+
   return (
     <Modal visible animationType="slide" transparent={false} statusBarTranslucent>
       <SafeAreaView style={styles.container}>
         {/* Background / Video view */}
         <View style={styles.mediaContainer}>
-
           {isVideo && isConnected && !isVideoOff ? (
             <View style={styles.videoFullPlaceholder}>
-              <Text style={styles.videoStreamText}>Remote Video Stream</Text>
+              <Ionicons name="videocam" size={48} color="#F59E0B" style={{ marginBottom: 10 }} />
+              <Text style={styles.videoStreamText}>Remote Video Stream Connected</Text>
             </View>
           ) : (
             <View style={styles.avatarWrapper}>
@@ -82,7 +91,7 @@ export const CallScreenModal: React.FC = () => {
             <View style={styles.pipContainer}>
               <View style={styles.pipPlaceholder}>
                 <Ionicons name={isVideoOff ? 'videocam-off' : 'videocam'} size={18} color="#F59E0B" />
-                <Text style={styles.pipText}>{isVideoOff ? 'Off' : 'You'}</Text>
+                <Text style={styles.pipText}>{isVideoOff ? 'Off' : isFrontCamera ? 'Front' : 'Rear'}</Text>
               </View>
             </View>
           )}
@@ -91,11 +100,23 @@ export const CallScreenModal: React.FC = () => {
         {/* Top Header Overlay */}
         <View style={styles.topHeader}>
           <View style={styles.callTypeTag}>
-            <Ionicons name={isVideo ? 'videocam' : 'call'} size={14} color="#F59E0B" style={styles.callTypeIcon} />
+            <Ionicons
+              name={isVideo ? 'videocam' : 'call'}
+              size={14}
+              color="#F59E0B"
+              style={styles.callTypeIcon}
+            />
             <Text style={styles.callTypeText}>{isVideo ? 'VIDEO CALL' : 'VOICE CALL'}</Text>
           </View>
           <Text style={styles.peerName}>{peerInfo?.displayName || 'Unknown User'}</Text>
           <Text style={styles.statusText}>{getStatusText()}</Text>
+
+          {isConnected && (
+            <View style={styles.qualityRow}>
+              <View style={[styles.qualityDot, { backgroundColor: getQualityColor() }]} />
+              <Text style={styles.qualityText}>{connectionQuality} Network</Text>
+            </View>
+          )}
         </View>
 
         {/* Bottom Action Controls */}
@@ -103,12 +124,20 @@ export const CallScreenModal: React.FC = () => {
           {isRinging ? (
             <View style={styles.ringingButtonsRow}>
               {/* Decline Button */}
-              <TouchableOpacity style={[styles.actionBtn, styles.declineBtn]} onPress={() => rejectCall('declined')}>
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.declineBtn]}
+                onPress={() => rejectCall('declined')}
+                activeOpacity={0.8}
+              >
                 <Ionicons name="call" size={28} color="#FFFFFF" style={styles.declineIcon} />
               </TouchableOpacity>
 
               {/* Accept Button */}
-              <TouchableOpacity style={[styles.actionBtn, styles.acceptBtn]} onPress={acceptCall}>
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.acceptBtn]}
+                onPress={acceptCall}
+                activeOpacity={0.8}
+              >
                 <Ionicons name="call" size={28} color="#FFFFFF" />
               </TouchableOpacity>
             </View>
@@ -119,34 +148,63 @@ export const CallScreenModal: React.FC = () => {
                 style={[styles.toolBtn, isMuted && styles.toolBtnActive]}
                 onPress={toggleMute}
                 disabled={isEnded}
+                activeOpacity={0.8}
               >
-                <Ionicons name={isMuted ? 'mic-off' : 'mic'} size={22} color={isMuted ? '#0F172A' : '#F1F5F9'} />
+                <Ionicons
+                  name={isMuted ? 'mic-off' : 'mic'}
+                  size={22}
+                  color={isMuted ? '#0F172A' : '#F1F5F9'}
+                />
               </TouchableOpacity>
 
-              {/* Toggle Video Button */}
+              {/* Speakerphone Toggle (Voice or Video) */}
+              <TouchableOpacity
+                style={[styles.toolBtn, isSpeakerOn && styles.toolBtnActive]}
+                onPress={toggleSpeaker}
+                disabled={isEnded}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name={isSpeakerOn ? 'volume-high' : 'volume-mute'}
+                  size={22}
+                  color={isSpeakerOn ? '#0F172A' : '#F1F5F9'}
+                />
+              </TouchableOpacity>
+
+              {/* Toggle Video Button (Only for Video Calls) */}
               {isVideo && (
                 <TouchableOpacity
                   style={[styles.toolBtn, isVideoOff && styles.toolBtnActive]}
                   onPress={toggleVideo}
                   disabled={isEnded}
+                  activeOpacity={0.8}
                 >
-                  <Ionicons name={isVideoOff ? 'videocam-off' : 'videocam'} size={22} color={isVideoOff ? '#0F172A' : '#F1F5F9'} />
+                  <Ionicons
+                    name={isVideoOff ? 'videocam-off' : 'videocam'}
+                    size={22}
+                    color={isVideoOff ? '#0F172A' : '#F1F5F9'}
+                  />
                 </TouchableOpacity>
               )}
 
-              {/* Switch Camera Button */}
+              {/* Switch Camera Button (Only for Video Calls) */}
               {isVideo && (
                 <TouchableOpacity
                   style={styles.toolBtn}
                   onPress={switchCamera}
                   disabled={isEnded}
+                  activeOpacity={0.8}
                 >
                   <Ionicons name="camera-reverse-outline" size={22} color="#F1F5F9" />
                 </TouchableOpacity>
               )}
 
-              {/* Hang up End Call Button */}
-              <TouchableOpacity style={[styles.actionBtn, styles.declineBtn]} onPress={() => endCall('user_hung_up')}>
+              {/* Hang up / End Call Button */}
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.declineBtn]}
+                onPress={() => endCall('user_hung_up')}
+                activeOpacity={0.8}
+              >
                 <Ionicons name="call" size={28} color="#FFFFFF" style={styles.declineIcon} />
               </TouchableOpacity>
             </View>
@@ -181,7 +239,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-
   videoStreamText: {
     color: '#94A3B8',
     fontSize: 16,
@@ -290,6 +347,25 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: Platform.OS === 'ios' ? 'DM Mono' : 'monospace',
   },
+  qualityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+    backgroundColor: 'rgba(30, 41, 59, 0.6)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  qualityDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 6,
+  },
+  qualityText: {
+    color: '#94A3B8',
+    fontSize: 11,
+  },
   bottomControlsContainer: {
     position: 'absolute',
     bottom: 40,
@@ -313,7 +389,7 @@ const styles = StyleSheet.create({
     borderRadius: 36,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
-    width: '90%',
+    width: '95%',
   },
   actionBtn: {
     width: 64,

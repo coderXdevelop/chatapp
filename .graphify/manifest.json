@@ -1,0 +1,406 @@
+{
+  "C:/Users/Nanda/chatapp/expo/eslint.config.js": {
+    "mtime": 1785046672417.427,
+    "hash": "b713dd66aa3ad59ed5098d7b9f8dc202"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/app/_layout.tsx": {
+    "mtime": 1785430562377.4297,
+    "hash": "1a23be8acd2e723ee133d227013fd24a"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/app/chat/[id].tsx": {
+    "mtime": 1785430562382.4822,
+    "hash": "5a9574e80a4c906ae165e3e80c35b642"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/app/chat/group/create.tsx": {
+    "mtime": 1785083101530.6233,
+    "hash": "e1b6513b3f5849ecd0174661721fd624"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/app/chat/group/settings.tsx": {
+    "mtime": 1785216876545.2026,
+    "hash": "75a4b6ced28628651c186f7f45b48d6e"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/app/forward.tsx": {
+    "mtime": 1785219479723.367,
+    "hash": "f05fce325c6b782e2a0787ba0393fa04"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/app/home.tsx": {
+    "mtime": 1785431940147.1885,
+    "hash": "e1ce9bdcdfc9ec5c2cf758b43a43a73f"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/app/index.tsx": {
+    "mtime": 1784710554936.1921,
+    "hash": "fd2b4c379ec5468a353a518b68a321ae"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/app/login.tsx": {
+    "mtime": 1785083069211.2942,
+    "hash": "ded6c52a367bf1f46a9f4ed6ba138333"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/app/profile.tsx": {
+    "mtime": 1785088193693.1086,
+    "hash": "b41c56e91c88f05a41b8d87c0da36eea"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/app/starred-messages.tsx": {
+    "mtime": 1785086990133.8613,
+    "hash": "24e4df24094247956e4f76928e1dda61"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/app/status/create.tsx": {
+    "mtime": 1785219435209.455,
+    "hash": "54cb6590f14b00e0821bcd6b1f340aed"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/app/status/view.tsx": {
+    "mtime": 1785219388356.2146,
+    "hash": "f95f01b65332c2157d79659701e5de64"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/app/storage-settings.tsx": {
+    "mtime": 1785089276195.2397,
+    "hash": "788db12cd0e35254ea01398c79e77247"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/components/CallScreenModal.tsx": {
+    "mtime": 1785430562385.4834,
+    "hash": "ef3f33b84edd9fff449b6b76186e6a44"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/components/CallsScreen.tsx": {
+    "mtime": 1785431940148.11,
+    "hash": "8f092274f9bf522e662c832d5b245f6c"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/components/CustomActionSheetModal.tsx": {
+    "mtime": 1785088092546.0366,
+    "hash": "09e4827119914fb89bf5b0be0af6e431"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/components/CustomConfirmModal.tsx": {
+    "mtime": 1785088098138.1262,
+    "hash": "6752151bb21d253907e5d20dca87f275"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/components/EmojiGifStickerPicker.tsx": {
+    "mtime": 1785215003380.1921,
+    "hash": "9d0b616e8d616ffab22c2a68c946f418"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/components/FullscreenVideoViewer.tsx": {
+    "mtime": 1785000296998.296,
+    "hash": "413e0b21fd8e115fb70336332c885f8f"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/components/MediaMessage.tsx": {
+    "mtime": 1785050263162.377,
+    "hash": "8771c03444a20c933554877c0b36bc75"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/components/MemoizedMessageItem.tsx": {
+    "mtime": 1785431940150.1753,
+    "hash": "012760d40f5404752eabb41996774704"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/components/MultiMediaPreviewModal.tsx": {
+    "mtime": 1785041057370.0723,
+    "hash": "870dc9d1e72d67138d0f8eaa9c45086d"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/components/QRCodeModal.tsx": {
+    "mtime": 1785087292452.489,
+    "hash": "7f1b3d8d3bce187eab90839f058a219a"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/components/ScrollToBottomButton.tsx": {
+    "mtime": 1785042677262.9587,
+    "hash": "4d19f87a1a3dccb9a3df1762d9206d53"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/components/SkeletonLoaders.tsx": {
+    "mtime": 1785049038511.3997,
+    "hash": "22a8b45b234e9e4b37b189cda13f8bcb"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/components/StatusPrivacyModal.tsx": {
+    "mtime": 1785218109886.9094,
+    "hash": "2f508eb1505826460e515d12cea86ffe"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/components/WhatsAppEmojiSelector.tsx": {
+    "mtime": 1785214936673.741,
+    "hash": "4b91c70df600bc885f56c9a0f135d984"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/components/ZoomableImageViewer.tsx": {
+    "mtime": 1785000225453.937,
+    "hash": "67a8b9bcc8f0756e11ca5916e264077f"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/hooks/useAppState.ts": {
+    "mtime": 1785416784422.952,
+    "hash": "e7d8b12defec50c144ebad4cdeb9a226"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/hooks/useVoiceRecorder.ts": {
+    "mtime": 1784877477508.9126,
+    "hash": "6b5496e769c46cb1550fb85ac790f9a7"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/hooks/useWebRTC.ts": {
+    "mtime": 1785430562387.5674,
+    "hash": "27378ec34f633bf0339731b946e2fa53"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/services/api.ts": {
+    "mtime": 1785217302855.1814,
+    "hash": "0360374ce6a733081ace14aa96a36ab7"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/services/documentViewer.ts": {
+    "mtime": 1785046618655.158,
+    "hash": "7513ba5b0a14563799984f3e52d7771b"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/services/emojiDataset.ts": {
+    "mtime": 1785045055354.4202,
+    "hash": "c2efd6222e3fbc7cdee4c707d09e48a6"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/services/giphyService.ts": {
+    "mtime": 1785046022906.382,
+    "hash": "989f175375c6c68c7101d0afa413221a"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/services/mediaRecentsService.ts": {
+    "mtime": 1785214911106.602,
+    "hash": "c72dda1bd5d2a9ccfbd7ec96e282eb31"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/services/mediaUpload.ts": {
+    "mtime": 1785041541463.1487,
+    "hash": "e5392ff6fe5b0420e624afcc0073322e"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/services/notifications.ts": {
+    "mtime": 1785083462704.716,
+    "hash": "dcab0ff27a6236c91ea2d8200e0a6f18"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/services/stickerPacks.ts": {
+    "mtime": 1785043128692.031,
+    "hash": "45cf1c116fd4f5b2c885610a48d1f278"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/services/storage.ts": {
+    "mtime": 1784548736142.1438,
+    "hash": "d8cef4658457d809ee2aae750f536c87"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/services/storageManager.ts": {
+    "mtime": 1785047127818.4026,
+    "hash": "c80b9f2f59e5a2c46afbfbc650b662b8"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/services/webrtcService.ts": {
+    "mtime": 1785430562389.4812,
+    "hash": "74dbf623f58643f5576683d3088d5863"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/store/CallContext.tsx": {
+    "mtime": 1785431940152.1782,
+    "hash": "5386d3de6923c73b8a11555aad38f06f"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/store/authStore.ts": {
+    "mtime": 1785419023761.54,
+    "hash": "5d320ef6041f0b93e1ee5793bf26f824"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/store/chatStore.ts": {
+    "mtime": 1785432122930.5198,
+    "hash": "5a50b7903391ecc5181240be3583db2c"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/styles/theme.ts": {
+    "mtime": 1784699420361.973,
+    "hash": "cbe714b6a0085a1e0536856d55f3bd3c"
+  },
+  "C:/Users/Nanda/chatapp/expo/src/utils/user.ts": {
+    "mtime": 1785418909013.7478,
+    "hash": "aa3153cdcd85e01952b739020625db55"
+  },
+  "C:/Users/Nanda/chatapp/scripts/run-server.js": {
+    "mtime": 1784543838183.8562,
+    "hash": "2cb42584ba9969d10385cbc529705767"
+  },
+  "C:/Users/Nanda/chatapp/server/src/controllers/admin.controller.ts": {
+    "mtime": 1785047767001.7202,
+    "hash": "b8c57c5daed720c5ac8cf0198c443aa3"
+  },
+  "C:/Users/Nanda/chatapp/server/src/controllers/auth.controller.ts": {
+    "mtime": 1785415527335.6729,
+    "hash": "8ec9c7085c0881dbafe55c7814342b84"
+  },
+  "C:/Users/Nanda/chatapp/server/src/controllers/call.controller.ts": {
+    "mtime": 1785431940158.2012,
+    "hash": "6a5303b2cd6497dc8d463fb99e693d8c"
+  },
+  "C:/Users/Nanda/chatapp/server/src/controllers/chat.controller.ts": {
+    "mtime": 1785216818107.8035,
+    "hash": "78e46147476b26b071e5c90e5b0385d1"
+  },
+  "C:/Users/Nanda/chatapp/server/src/controllers/media.controller.ts": {
+    "mtime": 1785415404052.243,
+    "hash": "f4fae4329dadfe6185e524dc3f8073c9"
+  },
+  "C:/Users/Nanda/chatapp/server/src/controllers/status.controller.ts": {
+    "mtime": 1785218712470.131,
+    "hash": "48c4ddb38c06e80da77184ff8fbfe734"
+  },
+  "C:/Users/Nanda/chatapp/server/src/controllers/user.controller.ts": {
+    "mtime": 1785217972827.318,
+    "hash": "aaa36f22a220a4f17a685e83c7cd19f3"
+  },
+  "C:/Users/Nanda/chatapp/server/src/index.tsx": {
+    "mtime": 1785431940160.2039,
+    "hash": "5987cbc295f9445585e622689ee0f997"
+  },
+  "C:/Users/Nanda/chatapp/server/src/middleware/admin.middleware.ts": {
+    "mtime": 1785415312830.633,
+    "hash": "c76a7f64a0d21e375ad09d972c1499e4"
+  },
+  "C:/Users/Nanda/chatapp/server/src/middleware/auth.middleware.ts": {
+    "mtime": 1784548817136.4883,
+    "hash": "ea4eaf06843ed572cc5375dea5426933"
+  },
+  "C:/Users/Nanda/chatapp/server/src/middleware/rateLimiter.middleware.ts": {
+    "mtime": 1785416112932.4058,
+    "hash": "9cba9d42098f437a50e64a77dd2380d5"
+  },
+  "C:/Users/Nanda/chatapp/server/src/models/Chat.ts": {
+    "mtime": 1785216804461.6653,
+    "hash": "d07fe0417385e3dd536af8b9d4ddc4b6"
+  },
+  "C:/Users/Nanda/chatapp/server/src/models/Message.ts": {
+    "mtime": 1785431940163.2026,
+    "hash": "36ec8fb651223c7e02b971a4fdd01d82"
+  },
+  "C:/Users/Nanda/chatapp/server/src/models/Report.ts": {
+    "mtime": 1784903027136.021,
+    "hash": "2eb10408243efe9cef78225e6b5b62be"
+  },
+  "C:/Users/Nanda/chatapp/server/src/models/Status.ts": {
+    "mtime": 1785217934567.6604,
+    "hash": "586ec821406f216b5145c0871efacd76"
+  },
+  "C:/Users/Nanda/chatapp/server/src/models/User.ts": {
+    "mtime": 1785217945583.4907,
+    "hash": "cd2711f47913820d503b4f60c37cfd48"
+  },
+  "C:/Users/Nanda/chatapp/server/src/routes/admin.routes.ts": {
+    "mtime": 1785415325893.352,
+    "hash": "6633fe87bccb8416b5a05a3540b5e0d4"
+  },
+  "C:/Users/Nanda/chatapp/server/src/routes/auth.routes.ts": {
+    "mtime": 1785416122505.5876,
+    "hash": "a30af17e8b49ab10a060ddfd1facd443"
+  },
+  "C:/Users/Nanda/chatapp/server/src/routes/call.routes.ts": {
+    "mtime": 1785431940164.2085,
+    "hash": "147f5e40e9826e0fb3a74f3e1481fe39"
+  },
+  "C:/Users/Nanda/chatapp/server/src/routes/chat.routes.ts": {
+    "mtime": 1785216552865.5652,
+    "hash": "a241fb318a99cc02db052d5d0607a412"
+  },
+  "C:/Users/Nanda/chatapp/server/src/routes/media.routes.ts": {
+    "mtime": 1785050206303.731,
+    "hash": "d89be8078d1f4c7ebabd329f54d62557"
+  },
+  "C:/Users/Nanda/chatapp/server/src/routes/status.routes.ts": {
+    "mtime": 1785217999280.3245,
+    "hash": "371be35c5a98db5b3df72ad66c8598e7"
+  },
+  "C:/Users/Nanda/chatapp/server/src/routes/user.routes.ts": {
+    "mtime": 1785217977874.4106,
+    "hash": "519c06566b0d9302f06c0f216569d3f1"
+  },
+  "C:/Users/Nanda/chatapp/server/src/scripts/migrate-connect-ids.ts": {
+    "mtime": 1785415539976.1875,
+    "hash": "30ed4b8fc64d32ec8ae28f20e3edbc2e"
+  },
+  "C:/Users/Nanda/chatapp/server/src/services/cloudinary.service.ts": {
+    "mtime": 1785047708118.0686,
+    "hash": "d6453f12f7f0dfc3761ebc8353b98fcc"
+  },
+  "C:/Users/Nanda/chatapp/server/src/services/cloudinaryMaintenance.service.ts": {
+    "mtime": 1785047779034.6162,
+    "hash": "537dbddad35bcceda61da08539a42b08"
+  },
+  "C:/Users/Nanda/chatapp/server/src/services/cron.service.ts": {
+    "mtime": 1785047744837.9146,
+    "hash": "d856cefc9a4d6bcfe39d51ac9e01bf44"
+  },
+  "C:/Users/Nanda/chatapp/server/src/services/email.service.ts": {
+    "mtime": 1784643269301.1782,
+    "hash": "ae6e3b71ddbe2ea2471fb6efb74e79d2"
+  },
+  "C:/Users/Nanda/chatapp/server/src/services/env.service.ts": {
+    "mtime": 1785415269170.3787,
+    "hash": "6da322ed8bec1cf6997f541d5ef59d29"
+  },
+  "C:/Users/Nanda/chatapp/server/src/services/jwt.service.ts": {
+    "mtime": 1785416107654.4377,
+    "hash": "40429cca3b37353100abe24fb396c0b5"
+  },
+  "C:/Users/Nanda/chatapp/server/src/services/otp.service.ts": {
+    "mtime": 1784875755122.5684,
+    "hash": "74eddf180f892753569608c545dd0ff7"
+  },
+  "C:/Users/Nanda/chatapp/server/src/services/push.service.ts": {
+    "mtime": 1785430562398.5562,
+    "hash": "915cabfa0ff2a855e00a21792c5015ff"
+  },
+  "C:/Users/Nanda/chatapp/server/src/services/redis.service.ts": {
+    "mtime": 1784875748050.8167,
+    "hash": "96a6cd4d8212a65bb0642ed8ea8c9461"
+  },
+  "C:/Users/Nanda/chatapp/server/src/sockets/calling.test.ts": {
+    "mtime": 1785430562400.4995,
+    "hash": "79739cfd956b837e6491c3032be6a895"
+  },
+  "C:/Users/Nanda/chatapp/server/src/sockets/socket.ts": {
+    "mtime": 1785431940168.7444,
+    "hash": "02166b2aebf6ea0392c9c1bc2ac5f36b"
+  },
+  "C:/Users/Nanda/chatapp/server/src/utils/ssrfGuard.ts": {
+    "mtime": 1785415367185.4834,
+    "hash": "c533f4c136a820f17cfced178eb1731f"
+  },
+  "C:/Users/Nanda/chatapp/server/src/utils/validators.ts": {
+    "mtime": 1785415468958.8489,
+    "hash": "7fd22e46bfa71c7b412897d42fda28dc"
+  },
+  "C:/Users/Nanda/chatapp/AGENTS.md": {
+    "mtime": 1784894723636.0664,
+    "hash": "f4f9b517e264da4d8bb71a09a72b2fbb"
+  },
+  "C:/Users/Nanda/chatapp/CLAUDE.md": {
+    "mtime": 1785516419105.1487,
+    "hash": "080b006b12c936e56a4b2a7395861f79"
+  },
+  "C:/Users/Nanda/chatapp/README.md": {
+    "mtime": 1784525084494.8774,
+    "hash": "db37e01139db6cec80a338779325d5ae"
+  },
+  "C:/Users/Nanda/chatapp/design/Authpages.webp": {
+    "mtime": 1784699420357.0527,
+    "hash": "c86feea1e4919f848b4a660f12605908"
+  },
+  "C:/Users/Nanda/chatapp/design/contact.webp": {
+    "mtime": 1784709945918.8013,
+    "hash": "3117d367aa40bb2cb574a4535f26c1f1"
+  },
+  "C:/Users/Nanda/chatapp/design/profile.webp": {
+    "mtime": 1784701901062.902,
+    "hash": "045b73cf53acf0d94d7b17e32702fd44"
+  },
+  "C:/Users/Nanda/chatapp/expo/assets/expo.icon/Assets/expo-symbol 2.svg": {
+    "mtime": 1784525084562.1045,
+    "hash": "6979b664c1ce82c10426a051082412a7"
+  },
+  "C:/Users/Nanda/chatapp/expo/assets/expo.icon/Assets/grid.png": {
+    "mtime": 1784525084524.8777,
+    "hash": "37cdeda9d1af5d7432716d9671b098da"
+  },
+  "C:/Users/Nanda/chatapp/expo/assets/images/Linkup.png": {
+    "mtime": 1785082857855.5364,
+    "hash": "69415212a24cd306753604eb50b92449"
+  },
+  "C:/Users/Nanda/chatapp/expo/assets/images/android-icon-background.png": {
+    "mtime": 1784525084496.8767,
+    "hash": "2d65569cc0e2afdcea0af9f9902d4173"
+  },
+  "C:/Users/Nanda/chatapp/expo/assets/images/android-icon-foreground.png": {
+    "mtime": 1784525084498.877,
+    "hash": "72e71a9c846c6aa4ae32476641a00e18"
+  },
+  "C:/Users/Nanda/chatapp/expo/assets/images/android-icon-monochrome.png": {
+    "mtime": 1784525084500.8784,
+    "hash": "1e097dab989759fc0b69440092ca22cd"
+  },
+  "C:/Users/Nanda/chatapp/expo/assets/images/favicon.png": {
+    "mtime": 1784525084520.8816,
+    "hash": "d9f444efbdfbe7931aa93beada07318a"
+  },
+  "C:/Users/Nanda/chatapp/expo/assets/images/icon.png": {
+    "mtime": 1784525084543.6199,
+    "hash": "8d892ef03dbd43e8d899c1d605ad42df"
+  },
+  "C:/Users/Nanda/chatapp/expo/assets/images/splash-icon.png": {
+    "mtime": 1784525084559.103,
+    "hash": "5ee5db91d59518c45ebcc99a2f5afc57"
+  }
+}

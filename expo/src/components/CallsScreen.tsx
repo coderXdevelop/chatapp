@@ -8,6 +8,7 @@ import {
   Image,
   ActivityIndicator,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../services/api';
@@ -42,10 +43,13 @@ export const CallsScreen: React.FC = () => {
     try {
       const res = await api.get('/api/calls/logs');
       if (res.data && res.data.success) {
-        setLogs(res.data.logs);
+        setLogs(res.data.logs || []);
       }
-    } catch (e) {
-      console.error('Fetch call logs error:', e);
+    } catch (e: any) {
+      if (e?.response?.status !== 404) {
+        console.warn('[CallsScreen] Fetch call logs error:', e?.message || e);
+      }
+      setLogs([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -61,16 +65,34 @@ export const CallsScreen: React.FC = () => {
     fetchLogs();
   }, [fetchLogs]);
 
+  const handleDeleteLog = (logId: string) => {
+    Alert.alert('Delete Call Log', 'Are you sure you want to remove this call entry from your history?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await api.delete(`/api/calls/logs/${logId}`);
+            setLogs((prev) => prev.filter((item) => item._id !== logId));
+          } catch (err) {
+            console.error('Failed to delete call log:', err);
+          }
+        },
+      },
+    ]);
+  };
+
   const formatTimestamp = (dateStr: string) => {
     const date = new Date(dateStr);
     const now = new Date();
     const isToday = date.toDateString() === now.toDateString();
-    
+
     const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     if (isToday) {
       return `Today, ${timeStr}`;
     }
-    
+
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     if (date.toDateString() === yesterday.toDateString()) {
@@ -96,7 +118,11 @@ export const CallsScreen: React.FC = () => {
     }
 
     return (
-      <View style={styles.logCard}>
+      <TouchableOpacity
+        style={styles.logCard}
+        onLongPress={() => handleDeleteLog(item._id)}
+        activeOpacity={0.9}
+      >
         {/* User Avatar */}
         <View style={styles.avatarWrapper}>
           {item.peer.avatarUrl ? (
@@ -162,7 +188,7 @@ export const CallsScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
         )}
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -212,7 +238,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-
   headerBanner: {
     paddingHorizontal: 20,
     paddingTop: 16,

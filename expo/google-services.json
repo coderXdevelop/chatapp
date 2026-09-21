@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "281135675258",
+    "project_id": "chatapp-47b9d",
+    "storage_bucket": "chatapp-47b9d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:281135675258:android:8261dfd0d51c28203508c3",
+        "android_client_info": {
+          "package_name": "com.nandan.linkup"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAVHe5PE6oEpHMR940KhIRLa3g8kY9_8so"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

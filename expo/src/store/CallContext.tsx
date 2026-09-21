@@ -24,6 +24,8 @@ export interface CallContextType {
   isMuted: boolean;
   isVideoOff: boolean;
   isFrontCamera: boolean;
+  connectionQuality: 'Good' | 'Fair' | 'Poor';
+  isSpeakerOn: boolean;
   startCall: (payload: { recipientId: string; displayName: string; avatarUrl?: string; isVideo: boolean; chatId?: string }) => Promise<void>;
   acceptCall: () => Promise<void>;
   rejectCall: (reason?: string) => void;
@@ -31,6 +33,7 @@ export interface CallContextType {
   toggleMute: () => void;
   toggleVideo: () => void;
   switchCamera: () => void;
+  toggleSpeaker: () => void;
   isCallFeatureEnabled: boolean;
 }
 
@@ -45,6 +48,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [incomingOfferSdp, setIncomingOfferSdp] = useState<any>(null);
   const [chatId, setChatId] = useState<string | undefined>(undefined);
   const [callDurationSeconds, setCallDurationSeconds] = useState<number>(0);
+  const [isSpeakerOn, setIsSpeakerOn] = useState<boolean>(true);
 
   const timerRef = useRef<any>(null);
   const socket = useChatStore((state) => state.socket);
@@ -204,6 +208,10 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     [socket, callId, peerInfo, callState, chatId, isVideo, callDurationSeconds, webrtc]
   );
 
+  // Toggle Speakerphone
+  const toggleSpeaker = useCallback(() => {
+    setIsSpeakerOn((prev) => !prev);
+  }, []);
 
   // Listen to Global Socket Call Events
   useEffect(() => {
@@ -304,6 +312,8 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isMuted: webrtc.isMuted,
         isVideoOff: webrtc.isVideoOff,
         isFrontCamera: webrtc.isFrontCamera,
+        connectionQuality: webrtc.connectionQuality,
+        isSpeakerOn,
         startCall,
         acceptCall,
         rejectCall,
@@ -311,6 +321,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         toggleMute: webrtc.toggleMute,
         toggleVideo: webrtc.toggleVideo,
         switchCamera: webrtc.switchCamera,
+        toggleSpeaker,
         isCallFeatureEnabled,
       }}
     >

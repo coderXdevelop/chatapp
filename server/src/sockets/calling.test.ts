@@ -7,6 +7,8 @@ import { io as Client, Socket as ClientSocket } from 'socket.io-client';
 process.env.JWT_ACCESS_SECRET = 'test_jwt_secret_key_calling_12345';
 process.env.JWT_REFRESH_SECRET = 'test_jwt_refresh_secret_key_calling_12345';
 process.env.VOICE_VIDEO_CALLS_ENABLED = 'true';
+delete process.env.REDIS_URL;
+delete process.env.MONGODB_URI;
 
 async function runCallingIntegrationTests() {
   console.log('\n--- Running WebRTC Calling Integration Tests ---');
