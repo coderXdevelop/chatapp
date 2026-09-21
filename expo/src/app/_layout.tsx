@@ -5,6 +5,9 @@ import { useEffect } from "react";
 import { ActivityIndicator, StyleSheet, View, Image, Text } from "react-native";
 import { useAuthStore } from "../store/authStore";
 import { useAppState } from "../hooks/useAppState";
+import { CallProvider } from "../store/CallContext";
+import { CallScreenModal } from "../components/CallScreenModal";
+
 export default function RootLayout() {
   const { user, isInitialized, checkAuth } = useAuthStore();
   const segments = useSegments();
@@ -103,31 +106,35 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="login" />
-        <Stack.Screen name="home" />
-        <Stack.Screen name="profile" />
-        <Stack.Screen name="storage-settings" />
-        <Stack.Screen name="chat/[id]" />
-        <Stack.Screen name="chat/group/create" />
-        <Stack.Screen name="chat/group/settings" />
-      </Stack>
+      <CallProvider>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="index" />
+          <Stack.Screen name="login" />
+          <Stack.Screen name="home" />
+          <Stack.Screen name="profile" />
+          <Stack.Screen name="storage-settings" />
+          <Stack.Screen name="chat/[id]" />
+          <Stack.Screen name="chat/group/create" />
+          <Stack.Screen name="chat/group/settings" />
+        </Stack>
 
-      {!isInitialized && (
-        <View style={StyleSheet.absoluteFill}>
-          <View style={styles.splashContainer}>
-            <Image
-              source={require("../../assets/images/Linkup.png")}
-              style={styles.splashLogo}
-              resizeMode="contain"
-            />
-            <Text style={styles.splashTitle}>LinkUP</Text>
-            <Text style={styles.splashSubtitle}>Connecting People Real-Time</Text>
-            <ActivityIndicator size="large" color="#F59E0B" style={{ marginTop: 24 }} />
+        <CallScreenModal />
+
+        {!isInitialized && (
+          <View style={StyleSheet.absoluteFill}>
+            <View style={styles.splashContainer}>
+              <Image
+                source={require("../../assets/images/Linkup.png")}
+                style={styles.splashLogo}
+                resizeMode="contain"
+              />
+              <Text style={styles.splashTitle}>LinkUP</Text>
+              <Text style={styles.splashSubtitle}>Connecting People Real-Time</Text>
+              <ActivityIndicator size="large" color="#F59E0B" style={{ marginTop: 24 }} />
+            </View>
           </View>
-        </View>
-      )}
+        )}
+      </CallProvider>
     </GestureHandlerRootView>
   );
 }

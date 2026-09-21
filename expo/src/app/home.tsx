@@ -20,6 +20,7 @@ import { useChatStore } from '../store/chatStore';
 import { api } from '../services/api';
 import { COLORS, globalStyles } from '../styles/theme';
 import ProfileScreen from './profile';
+import { CallsScreen } from '../components/CallsScreen';
 import { ChatListSkeleton } from '../components/SkeletonLoaders';
 
 import { CustomActionSheetModal, ActionOption } from '../components/CustomActionSheetModal';
@@ -40,7 +41,7 @@ export default function HomeScreen() {
   const { user } = useAuthStore();
   const { chats, fetchChats, connectSocket, socketConnected, activeStatuses, fetchStatusFeed } = useChatStore();
 
-  const [activeTab, setActiveTab] = useState<'HOME' | 'PROFILE' | 'HELP'>('HOME');
+  const [activeTab, setActiveTab] = useState<'HOME' | 'CALLS' | 'PROFILE' | 'HELP'>('HOME');
 
   const [filterTab, setFilterTab] = useState<'ALL' | 'CHATS' | 'GROUPS' | 'FAVOURITES'>('ALL');
   const [selectedChatIds, setSelectedChatIds] = useState<string[]>([]);
@@ -506,6 +507,8 @@ export default function HomeScreen() {
           </View>
         )}
 
+        {activeTab === 'CALLS' && <CallsScreen />}
+
         {activeTab === 'PROFILE' && <ProfileScreen />}
 
 
@@ -613,14 +616,20 @@ export default function HomeScreen() {
 
       {/* Bottom Nav Bar */}
       <View style={styles.navBar}>
-
         <TouchableOpacity
           onPress={() => setActiveTab('HOME')}
           style={[styles.navItem, activeTab === 'HOME' && styles.navItemActive]}
         >
-
           <Text style={styles.navIcon}>💬</Text>
           <Text style={[styles.navText, activeTab === 'HOME' && styles.navTextActive]}>Chats</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => setActiveTab('CALLS')}
+          style={[styles.navItem, activeTab === 'CALLS' && styles.navItemActive]}
+        >
+          <Text style={styles.navIcon}>📞</Text>
+          <Text style={[styles.navText, activeTab === 'CALLS' && styles.navTextActive]}>Calls</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
