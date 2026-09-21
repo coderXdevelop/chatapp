@@ -38,6 +38,7 @@ import * as Clipboard from 'expo-clipboard';
 import { MemoizedMessageItem } from '../../components/MemoizedMessageItem';
 import { ScrollToBottomButton } from '../../components/ScrollToBottomButton';
 import { ZoomableImageViewer } from '../../components/ZoomableImageViewer';
+import { useCallContext } from '../../store/CallContext';
 import { FullscreenVideoViewer } from '../../components/FullscreenVideoViewer';
 import { MultiMediaPreviewModal } from '../../components/MultiMediaPreviewModal';
 import { EmojiGifStickerPicker } from '../../components/EmojiGifStickerPicker';
@@ -77,6 +78,8 @@ export default function ChatScreen() {
     togglePinMessage,
     clearChat,
   } = useChatStore();
+
+  const { startCall, isCallFeatureEnabled } = useCallContext();
 
   const [text, setText] = useState('');
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
@@ -1071,6 +1074,34 @@ export default function ChatScreen() {
     const isCurrentlyBlocked = blockedUsers.some((u) => u._id === recipient?._id);
 
     const options: ActionOption[] = [];
+
+    if (!currentChat?.isGroup && recipient && isCallFeatureEnabled) {
+      options.push(
+        {
+          text: '📞 Voice Call',
+          onPress: () =>
+            startCall({
+              recipientId: recipient._id,
+              displayName: recipient.displayName,
+              avatarUrl: recipient.avatarUrl,
+              isVideo: false,
+              chatId,
+            }),
+        },
+        {
+          text: '🎥 Video Call',
+          onPress: () =>
+            startCall({
+              recipientId: recipient._id,
+              displayName: recipient.displayName,
+              avatarUrl: recipient.avatarUrl,
+              isVideo: true,
+              chatId,
+            }),
+        }
+      );
+    }
+
     if (currentChat?.isGroup) {
       options.push({
         text: '👥 Group Info & Settings',
@@ -1430,6 +1461,40 @@ export default function ChatScreen() {
             </TouchableOpacity>
             
             <View style={styles.headerRight}>
+              {!currentChat?.isGroup && recipient && isCallFeatureEnabled && (
+                <>
+                  <TouchableOpacity
+                    onPress={() =>
+                      startCall({
+                        recipientId: recipient._id,
+                        displayName: recipient.displayName,
+                        avatarUrl: recipient.avatarUrl,
+                        isVideo: false,
+                        chatId,
+                      })
+                    }
+                    style={styles.headerIconButton}
+                  >
+                    <Ionicons name="call" size={20} color={COLORS.accent} />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() =>
+                      startCall({
+                        recipientId: recipient._id,
+                        displayName: recipient.displayName,
+                        avatarUrl: recipient.avatarUrl,
+                        isVideo: true,
+                        chatId,
+                      })
+                    }
+                    style={styles.headerIconButton}
+                  >
+                    <Ionicons name="videocam" size={20} color={COLORS.accent} />
+                  </TouchableOpacity>
+                </>
+              )}
+
               <TouchableOpacity onPress={() => setIsSearchOpen(true)} style={styles.headerIconButton}>
                 <Ionicons name="search" size={20} color={COLORS.accent} />
               </TouchableOpacity>
@@ -2154,6 +2219,17 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 2,
   },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  headerIconButton: {
+    padding: 6,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   headerRightPlaceholder: {
     width: 60,
   },
@@ -2783,16 +2859,6 @@ const styles = StyleSheet.create({
     width: '100%',
     paddingHorizontal: 20,
     alignItems: 'center',
-  },
-  headerIconButton: {
-    padding: 6,
-    marginLeft: 8,
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: 60,
-    justifyContent: 'flex-end',
   },
   groupSenderName: {
     color: COLORS.accent,

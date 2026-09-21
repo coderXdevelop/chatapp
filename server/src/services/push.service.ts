@@ -6,6 +6,14 @@ export interface PushNotificationPayload {
   data?: Record<string, any>;
 }
 
+export interface CallPushNotificationPayload {
+  callerName: string;
+  callId: string;
+  callerId: string;
+  isVideo: boolean;
+  chatId?: string;
+}
+
 export async function sendPushNotification(recipientId: string, payload: PushNotificationPayload) {
   try {
     const user = await User.findById(recipientId);
@@ -52,3 +60,46 @@ export async function sendPushNotification(recipientId: string, payload: PushNot
   }
 }
 
+export async function sendCallPushNotification(
+  recipientId: string,
+  payload: CallPushNotificationPayload
+) {
+  try {
+    const user = await User.findById(recipientId);
+    if (!user || !user.pushToken) return;
+
+    if (user.notificationsEnabled === false) return;
+
+    const { callerName, callId, callerId, isVideo, chatId } = payload;
+    const callTypeStr = isVideo ? 'Video Call' : 'Voice Call';
+
+    const response = await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        'Accept-Encoding': 'gzip, deflate',
+      },
+      body: JSON.stringify({
+        to: user.pushToken,
+        sound: 'default',
+        priority: 'high',
+        title: `Incoming ${callTypeStr}`,
+        body: `${callerName} is calling you...`,
+        data: {
+          type: 'incoming_call',
+          callId,
+          callerId,
+          isVideo,
+          chatId,
+          callerName,
+        },
+      }),
+    });
+
+    const result = await response.json();
+    console.log(`Call push notification sent to ${user.displayName}:`, result);
+  } catch (error) {
+    console.error('Error sending call push notification:', error);
+  }
+}

@@ -650,30 +650,44 @@ export default function HomeScreen() {
       </View>
 
 
-      {/* Floating Action Button (FAB) for starting conversation options */}
-      {activeTab === 'HOME' && (
+      {/* Floating Action Button (FAB) for starting conversation or calls */}
+      {(activeTab === 'HOME' || activeTab === 'CALLS') && (
         <TouchableOpacity
           style={styles.fab}
           onPress={() => {
-            setActionSheetConfig({
-              visible: true,
-              title: 'New Conversation',
-              subtitle: 'Start a direct message or group chat',
-              options: [
-                {
-                  text: '💬 New Direct Message',
-                  onPress: () => setIsAddModalOpen(true),
-                },
-                {
-                  text: '👥 Create Group Chat',
-                  onPress: () => router.push('/chat/group/create' as any),
-                },
-              ],
-            });
+            if (activeTab === 'CALLS') {
+              setActionSheetConfig({
+                visible: true,
+                title: 'Start a Call',
+                subtitle: 'Open or start a conversation to call contacts',
+                options: [
+                  {
+                    text: '📞 New Voice or Video Call',
+                    onPress: () => setIsAddModalOpen(true),
+                  },
+                ],
+              });
+            } else {
+              setActionSheetConfig({
+                visible: true,
+                title: 'New Conversation',
+                subtitle: 'Start a direct message or group chat',
+                options: [
+                  {
+                    text: '💬 New Direct Message',
+                    onPress: () => setIsAddModalOpen(true),
+                  },
+                  {
+                    text: '👥 Create Group Chat',
+                    onPress: () => router.push('/chat/group/create' as any),
+                  },
+                ],
+              });
+            }
           }}
           activeOpacity={0.8}
         >
-          <Text style={styles.fabText}>+</Text>
+          <Text style={styles.fabText}>{activeTab === 'CALLS' ? '📞' : '+'}</Text>
         </TouchableOpacity>
       )}
 
